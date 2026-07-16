@@ -9664,196 +9664,368 @@
               "groupIndex": 0,
               "images": [
                 {
-                  "objID": "efed82f3-9af4-403f-b884-1d3d39e714ec",
+                  "objID": "6bf706a4-9167-4303-b1a1-cb18c48d3143",
                   "image": "helga_sit_scoot1"
                 },
                 {
-                  "objID": "e2579888-a94d-43d8-d5af-cda84481f566",
+                  "objID": "ee8b7408-8310-4fdd-b828-a059fb7f2da0",
                   "image": "helga_sit_scoot2"
                 },
                 {
-                  "objID": "cefd1bd8-166c-4471-b6d2-acab67a7c286",
+                  "objID": "3c524f9a-58ee-46ff-8ba4-471e10652477",
                   "image": "helga_walk1"
                 },
                 {
-                  "objID": "a0efd187-5e3a-4bfa-a685-43450031dbd6",
+                  "objID": "b1565ad8-2f6c-463c-a3a3-6dae6138ed5c",
                   "image": "helga_walk2"
                 },
                 {
-                  "objID": "38857b18-55e6-4abe-b920-db3a1c9e160e",
+                  "objID": "7a3b101c-d823-4338-8f44-10cd9561af86",
                   "image": "helga_walk3"
                 },
                 {
-                  "objID": "c34f3113-cc64-4592-bef3-62d6f2f5d24b",
+                  "objID": "03f44949-08a7-4357-d47a-5ba3841854d3",
                   "image": "helga_walk4"
                 },
                 {
-                  "objID": "e13298f6-1b6a-42e4-836a-6d9095484577",
+                  "objID": "fa7b5f1f-93f0-4890-9f2d-6e2a35796aec",
                   "image": "helga_dance_party1"
                 },
                 {
-                  "objID": "49a0c79d-e7c2-4ea1-d679-ac3920d2b8d6",
+                  "objID": "47e2da63-9557-442c-d545-22179ceccd58",
                   "image": "helga_dance_party2"
                 },
                 {
-                  "objID": "a6029e49-acb9-41cc-9e9d-0b7681c83244",
+                  "objID": "840ea34c-11d0-4ec5-dc3d-7bc17b97fae5",
                   "image": "helga_dance_party3"
                 },
                 {
-                  "objID": "1a093775-1db2-4701-a823-1b75cbf64fee",
+                  "objID": "91ea8a97-089b-49b0-a96d-7d89f53a22b0",
                   "image": "helga_dance_party4"
                 },
                 {
-                  "objID": "2f879879-ebbe-4f84-d7ea-5a8125db0e25",
+                  "objID": "df4874df-8602-4237-b126-d351226aeeee",
                   "image": "helga_dance_party5"
                 },
                 {
-                  "objID": "83314155-c622-4ec5-be64-e8fb99cbcfb9",
+                  "objID": "d3aaaf9e-1b51-4507-8e54-7594ab9f8727",
                   "image": "helga_dance_party6"
                 },
                 {
-                  "objID": "fc54d941-751c-4040-893c-dd3b45e7f591",
+                  "objID": "6f53e69c-60a6-42cc-ff62-ade53c6e4e26",
                   "image": "helga_dance_party7"
                 },
                 {
-                  "objID": "e6e27345-baf2-4914-9d79-f968f90f8e9b",
+                  "objID": "9fd533d8-ba15-4d03-a2b8-ef242bc4ad2d",
                   "image": "helga_dance_party8"
                 },
                 {
-                  "objID": "d9ed148f-d583-4694-f1b4-f30ae77c5607",
+                  "objID": "0971a31d-df1d-4025-b99a-bb38e2b10160",
                   "image": "helga_dance1"
                 },
                 {
-                  "objID": "e378b10e-d8d7-4d33-baf3-04a2617e8639",
+                  "objID": "5e171323-d8ff-4b5d-e937-5662f9b344a3",
                   "image": "helga_dance2"
                 },
                 {
-                  "objID": "10f7dfa1-1940-45f6-f003-ed1c863914b1",
+                  "objID": "9ae33c31-6445-4193-d8d8-a82cd0653ada",
                   "image": "helga_dance3"
                 },
                 {
-                  "objID": "c5a132e9-7215-4691-c38b-55d6c53b5c9c",
+                  "objID": "c0c6c67b-025a-4347-f70c-b2778110e2c2",
                   "image": "helga_dance4"
                 },
                 {
-                  "objID": "77605ea8-5cc6-4c11-85a1-185a52042500",
+                  "objID": "3b765ae9-4e66-4cd5-cf28-b0eeed3b01f9",
                   "image": "helga_dance5"
                 },
                 {
-                  "objID": "785a7ab3-7b8f-40ae-cff1-ebc5406fa60c",
+                  "objID": "93fbdc64-2038-4821-b6ec-753916103b2f",
                   "image": "helga_dance6"
                 },
                 {
-                  "objID": "0fdf9545-3ad5-481e-ba11-bcec539ad79d",
+                  "objID": "e3f563a2-3d0a-469f-e9b8-3d945ac51d4b",
                   "image": "helga_dance7"
                 },
                 {
-                  "objID": "af54ed2a-406e-4591-e626-d7a08426b18a",
+                  "objID": "66b1002f-c33d-485f-ecd3-9c1a89498df3",
                   "image": "helga_dance8"
                 },
                 {
-                  "objID": "d406c2e6-ac41-4cc5-c3aa-ee741244a5ee",
+                  "objID": "ce237835-7c51-4a39-dad8-ab0c9151c787",
                   "image": "helga_sniff_alert1"
                 },
                 {
-                  "objID": "6ba10f6d-c6ca-4cfe-e7ed-1500213d5f85",
+                  "objID": "7362d9b3-6897-47b5-851d-334bf7874673",
                   "image": "helga_sniff_alert2"
                 },
                 {
-                  "objID": "44767ffb-0028-4fe5-bc06-d29bc48b75e0",
+                  "objID": "d032fa59-6575-4ba3-e8f4-eb1fbe8ff029",
                   "image": "helga_sniff_alert3"
                 },
                 {
-                  "objID": "cdbd6564-3365-4916-e4da-633729f6afe7",
+                  "objID": "36eaf067-558e-4f32-903e-3dba7eb47e5e",
                   "image": "helga_sniff_alert4"
                 },
                 {
-                  "objID": "376a7fdf-7fea-4d7b-d69e-6ad9dab217ec",
+                  "objID": "58fbf7fd-cb97-4bf0-ea10-83969b68b38e",
                   "image": "helga_sniff_end1"
                 },
                 {
-                  "objID": "34c6a165-aa5f-4ee7-cc21-aa1702f3d0da",
+                  "objID": "6d8141d2-17ea-483a-9abf-e007f1df54bf",
                   "image": "helga_sniff_end2"
                 },
                 {
-                  "objID": "2f5446b4-af7e-40a8-eb41-6b9c68ddc794",
+                  "objID": "b938c96d-c9c6-4ecf-a16a-31eefa51b02b",
                   "image": "helga_sniff_end3"
                 },
                 {
-                  "objID": "59b7ceaf-b829-4c5d-9d96-6e53ded6e04b",
+                  "objID": "74321857-e04e-4e12-f3b4-c238100425d5",
                   "image": "helga_sniff_loop1"
                 },
                 {
-                  "objID": "9355b95e-e798-40bc-abee-04e6bf003b6a",
+                  "objID": "c4148c14-9dac-4da1-93ff-409e02f24200",
                   "image": "helga_sniff_loop2"
                 },
                 {
-                  "objID": "e93c4cf7-a7c1-4653-9052-73972e6ba0ea",
+                  "objID": "e1bd557d-77b3-47c0-c1c1-3c4110fcc326",
                   "image": "helga_sniff_loop3"
                 },
                 {
-                  "objID": "dcf223ae-5a59-4298-ae85-f1c0a79984cc",
+                  "objID": "d8c54f5b-6fdd-467b-ac94-87007a029391",
                   "image": "helga_sniff_loop4"
                 },
                 {
-                  "objID": "539c26a3-d32c-4d9b-cad4-a8b2e100b46c",
+                  "objID": "0a549300-7395-4655-96e3-9a31c2055639",
                   "image": "helga_sniff_start1"
                 },
                 {
-                  "objID": "033a62d4-1507-4ad5-d2eb-11384a689429",
+                  "objID": "2de12aa7-a85a-420b-f78a-bbcc7b60e592",
                   "image": "helga_sniff_start2"
                 },
                 {
-                  "objID": "e81f3c90-05c8-48e7-c1f6-a62a1d3e2b99",
+                  "objID": "518cdd4d-116e-454a-873a-df959bf88b6f",
                   "image": "helga_brush1"
                 },
                 {
-                  "objID": "ebc21b66-a714-4cf7-baf3-c78667c2c9d1",
+                  "objID": "bcba47a4-2b67-446c-ff48-badbe7b18540",
                   "image": "helga_brush2"
                 },
                 {
-                  "objID": "167d26db-f690-4b5d-9197-54e7b0155499",
+                  "objID": "e5ae6ef9-25ee-4016-f839-3d3fc65b146c",
                   "image": "helga_brush3"
                 },
                 {
-                  "objID": "94f3636d-d714-47bf-ac70-3d328d34092e",
+                  "objID": "f82ebaaf-1523-4351-b47b-382982437243",
                   "image": "helga_brush4"
                 },
                 {
-                  "objID": "c6167abe-230a-4554-f1bc-df1c658bd29e",
+                  "objID": "130bb5eb-0695-42e3-c2b9-871efdbe512e",
                   "image": "helga_brush5"
                 },
                 {
-                  "objID": "0f3e7474-8a39-457d-8d79-0c7abb96f1af",
+                  "objID": "a5281407-8cce-4dd1-e568-abcd9c876b00",
                   "image": "helga_idle1"
                 },
                 {
-                  "objID": "32b74b9f-3c1c-4903-9e02-d34814fc03b1",
+                  "objID": "ca4d4624-c8be-450e-a542-c99128440765",
                   "image": "helga_idle2"
                 },
                 {
-                  "objID": "e7afcb1c-6e9d-4266-c8da-eb9e8f3118f0",
+                  "objID": "78d65fa4-3bbd-44d5-f336-b57ad90a5c4f",
                   "image": "helga_idle3"
                 },
                 {
-                  "objID": "c350a63c-ec51-4d6a-eb8f-b2fdea79f21b",
+                  "objID": "db292779-a819-4bc0-ae8c-272f51ed0fab",
                   "image": "helga_idle4"
                 },
                 {
-                  "objID": "5d8b4c5b-d5bd-49de-a7f8-8a58d47882bf",
+                  "objID": "af1f98a7-4d5b-4e38-9cab-867122e6393b",
                   "image": "helga_idle5"
                 },
                 {
-                  "objID": "5e544339-10f2-49d6-912c-32d60132aa13",
+                  "objID": "53c6b4a3-d15c-4e33-a1b0-0d10b2baeb34",
                   "image": "helga_idle6"
                 },
                 {
-                  "objID": "80f68d52-3ac1-4191-ea61-296335c95183",
+                  "objID": "9ff673b3-8196-4ad4-bdff-309539e796e8",
                   "image": "helga_idle7"
                 },
                 {
-                  "objID": "da23f50a-3dc1-419b-abdd-6e8a6f546900",
+                  "objID": "014244fa-38d3-4f70-f6bc-9eb5c4a86292",
                   "image": "helga_idle8"
+                },
+                {
+                  "objID": "5097be3f-c686-4ee1-e397-e2fe94fdb73f",
+                  "image": "helga_idle_fidget1"
+                },
+                {
+                  "objID": "23760462-0329-4893-9965-04f571919c36",
+                  "image": "helga_idle_fidget2"
+                },
+                {
+                  "objID": "fafa9abd-dd11-4fcc-8924-b8724b11a4fe",
+                  "image": "helga_idle_fidget3"
+                },
+                {
+                  "objID": "2113f19c-f126-475c-a101-1db057be3bdf",
+                  "image": "helga_idle_fidget4"
+                },
+                {
+                  "objID": "1604967a-abf0-457e-bbe3-37e89b1c5e7b",
+                  "image": "helga_idle_fidget5"
+                },
+                {
+                  "objID": "5e6af79e-d81d-44d2-8d29-1c857c1e35ec",
+                  "image": "helga_idle_fidget6"
+                },
+                {
+                  "objID": "f27bc406-33fa-43eb-a0ab-1b5ebdb9bd71",
+                  "image": "helga_idle_fidget7"
+                },
+                {
+                  "objID": "c48ee391-9a06-4e6a-d8bc-3f35ce8cea0e",
+                  "image": "helga_idle_fidget8"
+                },
+                {
+                  "objID": "6a7a7c08-842f-41e6-8e72-cc40653c889c",
+                  "image": "helga_idle_sneeze1"
+                },
+                {
+                  "objID": "0cb47a56-2389-4859-8ac1-d976ac3b962f",
+                  "image": "helga_idle_sneeze2"
+                },
+                {
+                  "objID": "86873d13-437e-4e58-e6e0-9470e292d766",
+                  "image": "helga_idle_sneeze3"
+                },
+                {
+                  "objID": "7858937b-edd1-4577-bc23-06cb086d9c71",
+                  "image": "helga_idle_sneeze4"
+                },
+                {
+                  "objID": "7311fadb-72bc-436d-809a-aafecf38ac1c",
+                  "image": "helga_idle_sneeze5"
+                },
+                {
+                  "objID": "94bcce9d-b381-4692-f6a6-9ccff5acfb61",
+                  "image": "helga_idle_sneeze6"
+                },
+                {
+                  "objID": "9eb3b12a-fb49-414b-93cd-43dfb11450ca",
+                  "image": "helga_idle_sneeze7"
+                },
+                {
+                  "objID": "de085d78-d105-4d3e-dcb0-803945b58feb",
+                  "image": "helga_idle_sneeze8"
+                },
+                {
+                  "objID": "1df6a7f7-9962-431b-f1e7-af8006ff13d7",
+                  "image": "helga_idle_wag1"
+                },
+                {
+                  "objID": "9589f75e-62d1-4886-f5af-f2692fcd3915",
+                  "image": "helga_idle_wag2"
+                },
+                {
+                  "objID": "5e2e2017-4bda-476c-b9fd-3c3d20c0b62a",
+                  "image": "helga_idle_wag3"
+                },
+                {
+                  "objID": "b829522c-7632-4071-9658-2292c4d367f0",
+                  "image": "helga_idle_wag4"
+                },
+                {
+                  "objID": "5101b114-8816-41f8-e7c0-8f4cf5ab6a32",
+                  "image": "helga_idle_wag5"
+                },
+                {
+                  "objID": "3735d686-0d10-40d9-8e8b-b24877033c0a",
+                  "image": "helga_idle_wag6"
+                },
+                {
+                  "objID": "72449878-ca7a-4c8a-bb19-b421559baeb7",
+                  "image": "helga_idle_wag7"
+                },
+                {
+                  "objID": "1c985edf-e814-47fe-e3b7-677b3de0a6d9",
+                  "image": "helga_idle_wag8"
+                },
+                {
+                  "objID": "1d2191cb-e775-4fdb-ad00-0d0fed49e15b",
+                  "image": "helga_idle_head_tilt1"
+                },
+                {
+                  "objID": "a04e43ae-e1da-4d88-bffe-722d3393af39",
+                  "image": "helga_idle_head_tilt2"
+                },
+                {
+                  "objID": "c6088b54-0d0b-41ef-b689-dbd842a9d9a2",
+                  "image": "helga_idle_head_tilt3"
+                },
+                {
+                  "objID": "8f3b766b-2197-4769-b491-1b41ec05ee38",
+                  "image": "helga_idle_head_tilt4"
+                },
+                {
+                  "objID": "6f1c9f9e-adea-4a2f-b5d0-0ecbe0a4f339",
+                  "image": "helga_idle_head_tilt5"
+                },
+                {
+                  "objID": "4ff102dc-11ca-4fb7-c33d-66583d7fc62a",
+                  "image": "helga_idle_head_tilt6"
+                },
+                {
+                  "objID": "376e767b-94f8-43a1-8031-cf250a33facd",
+                  "image": "helga_idle_head_tilt7"
+                },
+                {
+                  "objID": "8706ce90-2c26-4003-ecb7-16fca8ff61a2",
+                  "image": "helga_idle_head_tilt8"
+                },
+                {
+                  "objID": "94e5be70-bc7f-4fb1-ea45-24502e4bdf20",
+                  "image": "helga_sleep1"
+                },
+                {
+                  "objID": "11e91e5c-5e7c-4bb2-c3d0-e06ad6fe9607",
+                  "image": "helga_sleep2"
+                },
+                {
+                  "objID": "5d387387-2c02-4a89-a21f-19810b22749b",
+                  "image": "helga_sleep3"
+                },
+                {
+                  "objID": "7233bd36-2d24-4ec9-b744-7749956a7356",
+                  "image": "helga_sleep4"
+                },
+                {
+                  "objID": "9a83c42e-ebea-4c3e-9c84-6a13f563b4a5",
+                  "image": "helga_sleep5"
+                },
+                {
+                  "objID": "116f3548-6865-47b8-f283-20c44cd38216",
+                  "image": "helga_sleep6"
+                },
+                {
+                  "objID": "2fc88e70-4c12-4779-9656-c78ce87684c1",
+                  "image": "helga_sleep_start1"
+                },
+                {
+                  "objID": "1ff23522-c0d8-4177-b7da-a7b8d6553b4c",
+                  "image": "helga_sleep_start2"
+                },
+                {
+                  "objID": "0f1eedf3-ed3a-403a-ec93-1d6c300db830",
+                  "image": "helga_sleep_start3"
+                },
+                {
+                  "objID": "79abba5f-8332-45e5-8f9f-93b66ab1c76f",
+                  "image": "helga_dance_transition1"
+                },
+                {
+                  "objID": "4ef2acb4-f4bc-41ef-d69c-7a326940d765",
+                  "image": "helga_dance_transition2"
                 }
               ],
               "duration": 12000,

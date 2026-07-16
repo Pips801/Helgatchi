@@ -10026,6 +10026,14 @@
                 {
                   "objID": "4ef2acb4-f4bc-41ef-d69c-7a326940d765",
                   "image": "helga_dance_transition2"
+                },
+                {
+                  "objID": "4f48f84b-795d-4598-d75c-80bd83805de1",
+                  "image": "helga_dance_trans_out1"
+                },
+                {
+                  "objID": "7b414a72-1c86-4fd9-f9a3-201dc7b2ebc2",
+                  "image": "helga_dance_trans_out2"
                 }
               ],
               "duration": 12000,
@@ -12037,6 +12045,24 @@
       "objID": "847f0dcb-0a1f-43a7-9f48-f09409e498c2",
       "name": "helga_dance_transition2",
       "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAvdJREFUaIHtWT2K20AYfRvnBAkOgYAP4DbkDr5AGglcrDuBi9QxMV68JzCokwqDfQYXyxZpTVo3CykMDiZmTdLHKM1+2vFoZvTNSKNt/MCgnR/pvfn+ZmaBCy6ohKumP5gGYaZqv14unLi8rsyICSLei2N1P5C5iGjEAmkQZjriIlZRBFhaozELcEAibazxyjcp7uq7wrsAAFjv9ljv9oVn1Rjq0wW7DG8xoCLw9us3PN7e5M8iqJ36Pn14z4oJLwJUbrPe7fF4e4P+dAAAmI+Ss35qpz5x/iqKtCIaCWIi34tj4PijQFg3hwNvAkQContw0J8OMB89zzG5kBcB18vFVQoYg/D3m48AgHdPFlG1cVKptyxEH+/Fsbb6UpDq/ubAiwXKtg11ohYLpEH4GQC+L5ZfKANxyMtjXAQ7p1FdoTGRWEURenF85vc6zEcJKwYquZCcCikIbSHWhP508PSexDiH0MhWQoYslBairDaoUDmIzytqUnChzeGEbrsFAOhMZnmmKbpakgszVV4ZtcSATfCRIFPKbOw84JI1yBq6uZvDyeo8YC1AzvGii6jI6PrqgpULVTmccMVsDicAwHY89J9G64RKoFxrVILYaVR+Ga0UF6bVl8lvx8P8uSy1sixAriNmDvGDVX29226dvYNbrVGlkIkWkMW4vIdE2KLUArrAtQlI01i5bzseYqsYV8uRkiqpKRPJhFxcy6aQObnQ5nDKfyaY6oOqjZs6RTgJ6LZbpVnFps+VPDguROfbzmRW6NOJkNvFDKMKeFfyqOJCNjBZqwp5cINYvGXInyczp0wkiq9KHi57IXoWXcpGCKEO8rARQOTFq0E5LlRC5BUn1EEeNlsJKPYlRIiEmLYUda24DFYlhuLyFcIqUnx0JjOlq6DGFbdCGoRZGoTZv5/3+c90b0/j7x6O2d3DMUuDMPv1569xjnfYilDN8SmgtA6Q6eX7fM4cEb5EsAqZKMJGCMHlvoeLRv/F5COQG7uZe5EsdEED+A8lD+gPa/tQ5AAAAABJRU5ErkJggg==",
+      "bpp": 16,
+      "alwaysBuild": false,
+      "lvglBinaryOutputFormat": 3,
+      "lvglDither": false
+    },
+    {
+      "objID": "de46fc57-c5d5-47c9-dbfe-429783e30b80",
+      "name": "helga_dance_trans_out1",
+      "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAvdJREFUaIHtWT2K20AYfRvnBAkOgYAP4DbkDr5AGglcrDuBi9QxMV68JzCokwqDfQYXyxZpTVo3CykMDiZmTdLHKM1+2vFoZvTNSKNt/MCgnR/pvfn+ZmaBCy6ohKumP5gGYaZqv14unLi8rsyICSLei2N1P5C5iGjEAmkQZjriIlZRBFhaozELcEAibazxyjcp7uq7wrsAAFjv9ljv9oVn1Rjq0wW7DG8xoCLw9us3PN7e5M8iqJ36Pn14z4oJLwJUbrPe7fF4e4P+dAAAmI+Ss35qpz5x/iqKtCIaCWIi34tj4PijQFg3hwNvAkQContw0J8OMB89zzG5kBcB18vFVQoYg/D3m48AgHdPFlG1cVKptyxEH+/Fsbb6UpDq/ubAiwXKtg11ohYLpEH4GQC+L5ZfKANxyMtjXAQ7p1FdoTGRWEURenF85vc6zEcJKwYquZCcCikIbSHWhP508PSexDiH0MhWQoYslBairDaoUDmIzytqUnChzeGEbrsFAOhMZnmmKbpakgszVV4ZtcSATfCRIFPKbOw84JI1yBq6uZvDyeo8YC1AzvGii6jI6PrqgpULVTmccMVsDicAwHY89J9G64RKoFxrVILYaVR+Ga0UF6bVl8lvx8P8uSy1sixAriNmDvGDVX29226dvYNbrVGlkIkWkMW4vIdE2KLUArrAtQlI01i5bzseYqsYV8uRkiqpKRPJhFxcy6aQObnQ5nDKfyaY6oOqjZs6RTgJ6LZbpVnFps+VPDguROfbzmRW6NOJkNvFDKMKeFfyqOJCNjBZqwp5cINYvGXInyczp0wkiq9KHi57IXoWXcpGCKEO8rARQOTFq0E5LlRC5BUn1EEeNlsJKPYlRIiEmLYUda24DFYlhuLyFcIqUnx0JjOlq6DGFbdCGoRZGoTZv5/3+c90b0/j7x6O2d3DMUuDMPv1569xjnfYilDN8SmgtA6Q6eX7fM4cEb5EsAqZKMJGCMHlvoeLRv/F5COQG7uZe5EsdEED+A8lD+gPa/tQ5AAAAABJRU5ErkJggg==",
+      "bpp": 16,
+      "alwaysBuild": false,
+      "lvglBinaryOutputFormat": 3,
+      "lvglDither": false
+    },
+    {
+      "objID": "9053c539-7a55-43cd-d060-cd37ca5ba6d4",
+      "name": "helga_dance_trans_out2",
+      "image": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAAXNSR0IArs4c6QAAAwdJREFUaIHtWUtq40AQfZ7kBDMkBAJzAG9D7uAz2JCFs2vICcZMiIlPENDOWhjsM2gx5AIhW28CWRgCYYx9ghjNwilRalX/9BnNgB8E5G6p9arqVVW3AhxwwAH/NTptEwCAuD9IpfHhYu7kd9wII08Q8V4UyfNA6jKitQjE/UFqIs6RKAVYotFqBHxARpqi8aUNUr7e90HtEdAT0hT6p7d3AMDl+VnuWrqHr62vV3sOSBWFXirNffvxE5vJOLvmoHGauzw/K+REIzlwdX+dXc9GU8Agm6e3d2wm4+z+2WhsWWcMRFEhJxpN4tloapXQZjLeE9o+FwibntHReBXisuEEuDx8cHV/nYtQ7RIydVMuG9IvjfPfAPD76wUA4PQzItKYHtFKBnDSRDRRKntpL7owGmNColROSolS1udKG2Cq5XXVd1+UamRlG9FyvcNyvbPeo6/rek+wAVW6aPfkCN2Toxw5LrnT7XNO/6YxjiAJ1bkFcIH6Bz4r0N7IaeE+rwjE/UHqS16SiEs2YNWGQIns6g3OrcTf8DqVU/09vAIlSolN0WqARH653mU65tfS7xAs1zusbm+M87WdBzhBnWwoeZIWJXdXcBYAq2GtHmhMBvOcWd3eWM/GxiTWtwY+iVgXQiIpGuBK3DLG2J7RG1zI+gUDfKpO2UT1WS/UOUYJ6QtJpF1etT0vzetjLv1DNyC05uue4wRcUeKEJUf4kIctAqFhtRE2beKqSIeQK6PDxbwTA2kvigre9GlStnnfvLHVfAliH3B5C55d1+cen+2CDQUDKArSCzhMSa13apsR5CjbdtkFMQdCvUAal4hKOk+UQqKUKBfT2doE61Yi+16jFL7fPTi9btvc0WZtpTmIE95/eSju+UsbYCLLifnkARxlMZQ0h9MAWjwL992DlShB/2RiIj9czDuhsuEwap0vqoecy0nfOboI/xOI+4P018s2+6Mj58frY/rx+phW8WgoSp0H9FJbVQZVUPpA45KI9C2/CTTyHxrXl4Q6UeuRsko5POCAlvAHJbvzo074yCoAAAAASUVORK5CYII=",
       "bpp": 16,
       "alwaysBuild": false,
       "lvglBinaryOutputFormat": 3,

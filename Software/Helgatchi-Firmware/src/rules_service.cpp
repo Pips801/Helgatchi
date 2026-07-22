@@ -233,6 +233,7 @@ uint16_t RulesService::reloadFromFs() {
     _loadDir(DIR_USER,    false);
     _loading = false;
     _applyEnabledOverlay();
+    _notifyChanged();
     return _count;
 }
 
@@ -252,6 +253,12 @@ void RulesService::onEvent(const Event& /*e*/) {
 // ---------------------------------------------------------------------------
 // Mutation
 // ---------------------------------------------------------------------------
+
+void RulesService::_notifyChanged() {
+    // No payload — consumers re-read g_rules. Suppressed during bulk FS loads
+    // (begin/reloadFromFs post once when the load completes, not per file).
+    if (_bus && !_loading) _bus->post(EV_RULES_CHANGED);
+}
 
 int RulesService::_findRuleIdx(const char* name) const {
     if (!name) return -1;
@@ -333,6 +340,7 @@ bool RulesService::createRule(const char* name) {
     r.enabled     = true;
     _count++;
     _saveUserRule(r);   // persist immediately so create survives reboot even before criteria added
+    _notifyChanged();
     return true;
 }
 
@@ -350,6 +358,7 @@ bool RulesService::deleteRule(const char* name) {
     memset(&_rules[_count - 1], 0, sizeof(Rule));
     _count--;
     _deleteUserRuleFile(saved_name);
+    _notifyChanged();
     return true;
 }
 
@@ -363,6 +372,7 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
         strncpy(r.title, value, sizeof(r.title) - 1);
         r.title[sizeof(r.title) - 1] = '\0';
         _saveUserRule(r);
+        _notifyChanged();
         return true;
     }
     if (strcasecmp(field, "vibe") == 0) {
@@ -370,6 +380,7 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
         if (p == HAPTIC_PATTERN_COUNT) return false;
         r.vibe = p;
         _saveUserRule(r);
+        _notifyChanged();
         return true;
     }
     if (strcasecmp(field, "led") == 0) {
@@ -377,6 +388,7 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
         if (p == LED_PATTERN_COUNT) return false;
         r.led = p;
         _saveUserRule(r);
+        _notifyChanged();
         return true;
     }
     if (strcasecmp(field, "type") == 0 || strcasecmp(field, "alert_type") == 0) {
@@ -391,6 +403,7 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
                  strcasecmp(value, "infer") == 0)                             r.alert_type = ALERT_TYPE_COUNT;
         else return false;
         _saveUserRule(r);
+        _notifyChanged();
         return true;
     }
     if (strcasecmp(field, "action") == 0) {
@@ -398,6 +411,7 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
         else if (strcasecmp(value, "party") == 0) r.action = RULE_ACTION_PARTY;
         else return false;
         _saveUserRule(r);
+        _notifyChanged();
         return true;
     }
     return false;
@@ -408,6 +422,7 @@ bool RulesService::setEnabled(const char* name, bool enabled) {
     if (idx < 0) return false;
     _rules[idx].enabled = enabled;
     _persistEnabledOverlay();   // NVS overlay survives reboots + FS reflash
+    _notifyChanged();
     return true;
 }
 
@@ -423,6 +438,7 @@ bool RulesService::removeCriterion(const char* name, uint16_t idx) {
     }
     r.criterion_count--;
     _saveUserRule(r);
+    _notifyChanged();
     return true;
 }
 
@@ -437,7 +453,10 @@ int RulesService::addCriteria(const char* name, const char* field, const char* v
     Rule& r = _rules[rIdx];
     if (r.is_factory) return -1;
     const int added = _addCriteriaToRule(r, field, values_csv);
-    if (added > 0) _saveUserRule(r);
+    if (added > 0) {
+        _saveUserRule(r);
+        _notifyChanged();
+    }
     return added;
 }
 

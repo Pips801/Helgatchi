@@ -11,6 +11,7 @@
 #include "devices_screen.h"
 #include "foxhunting_screen.h"
 #include "debug_screen.h"
+#include "rules_screen.h"
 #include "overview_screen.h"
 #include "power_menu_screen.h"
 #include "party_service.h"
@@ -86,6 +87,7 @@ void setup() {
     g_devices_screen.begin(g_bus);  // device cards UI — must follow g_ui + g_scan_service
     g_foxhunting_screen.begin(g_bus); // foxhunt lock-on UI — must follow g_ui + g_scan_service + g_scan_engine
     g_debug_screen.begin(g_bus);    // diagnostics view — must follow g_ui
+    g_rules_screen.begin(g_bus);    // rule cards UI — must follow g_ui + g_rules
     g_overview_screen.begin(g_bus); // Helga character animation — must follow g_ui
     g_party.begin(g_bus);           // party mode — must follow g_ui + g_overview_screen (references objects.*)
     g_admin.begin(g_bus);           // admin mode — must follow g_scan_engine (BLE init + admin queue) + g_ui (objects.*)

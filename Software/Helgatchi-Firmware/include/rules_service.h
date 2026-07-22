@@ -195,6 +195,9 @@ private:
                                           // writes it back (esp. factory rules)
 
     // Mutation helpers
+    // Post EV_RULES_CHANGED so UI consumers re-read the ruleset list. Called
+    // after every successful mutation; suppressed during bulk FS loads.
+    void     _notifyChanged();
     int      _findRuleIdx(const char* name) const;
     bool     _appendCriterion(Rule& r, const Criterion& c);
     bool     _ensureCapacity(Rule& r, uint16_t need);

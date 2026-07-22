@@ -14481,7 +14481,7 @@
               "type": "LVGLLabelWidget",
               "left": 0,
               "top": 0,
-              "width": 79,
+              "width": 187,
               "height": 16,
               "customInputs": [],
               "customOutputs": [],
@@ -14497,7 +14497,7 @@
               "identifier": "Rule label",
               "leftUnit": "px",
               "topUnit": "px",
-              "widthUnit": "content",
+              "widthUnit": "px",
               "heightUnit": "content",
               "children": [],
               "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
@@ -14524,7 +14524,7 @@
               "groupIndex": 0,
               "text": "Rule name",
               "textType": "literal",
-              "longMode": "WRAP",
+              "longMode": "DOT",
               "recolor": false
             },
             {

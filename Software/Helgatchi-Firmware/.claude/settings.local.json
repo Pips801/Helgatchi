@@ -58,7 +58,9 @@
       "Bash(sed -n '280,295p' .pio/libdeps/seeed_xiao_esp32s3/lvgl/src/widgets/msgbox/lv_msgbox.c 2>/dev/null; echo \"---- esp_wifi promiscuous ----\"; grep -rn \"esp_wifi_set_promiscuous_rx_cb\\\\|WIFI_PROMIS_FILTER_MASK_MGMT\\\\|wifi_promiscuous_pkt_t\\\\b\\\\|esp_wifi_set_channel\\(\" ~/.platformio/packages/framework-arduinoespressif32/tools/esp32-arduino-libs/*/esp32s3/include/esp_wifi/include/esp_wifi*.h 2>/dev/null | head; echo \"exit: search done\")",
       "Read(//c/Users/me/.platformio/packages/framework-arduinoespressif32/tools/**)",
       "Bash(rm -f test/test_re_lite.cpp scripts/validate_rules.py docs/TESTING_RULES.md docs/REGEX.md docs/RULES_SCHEMA.md)",
-      "Bash(rmdir test *)"
+      "Bash(rmdir test *)",
+      "Bash(cd /Users/kaydanlindsey/Documents/Github/Helgatchi/Software/Helgatchi-Firmware; find . -path ./node_modules -prune -o -name \"chipsets.h\" -print 2>/dev/null; echo \"---\"; find ~/.platformio -name \"chipsets.h\" 2>/dev/null | head; find . -name \"*.h\" -path \"*FastLED*\" 2>/dev/null | head)",
+      "Read(//Users/kaydanlindsey/.platformio/**)"
     ]
   }
 }

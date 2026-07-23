@@ -227,12 +227,19 @@ void HAL::prepareForReboot() {
 // ---------------------------------------------------------------------------
 
 void HAL::_initLEDs() {
-    // SK6812 chipset for SK6805 LEDs (R2.8+). SK6805 is the small EC15/EC20
-    // package variant of the SK6812 family — same protocol/timing. Using the
-    // WS2812B chipset works on tolerant SK6805 chips but fails intermittently
-    // on stricter parts because the WS2812 T0H (250 ns) is below the SK6805
-    // minimum (300 ns) and the chip latches ambiguous bits.
-    FastLED.addLeds<SK6812, PIN_LED_DATA, GRB>(_leds, HAL_NUM_LEDS);
+    // WS2813 chipset for the Würth WL-ICLED (1313210530000) side-view RGB
+    // IC-LEDs. FastLED's WS2813 timing is <T1,T2,T3> = 375/500/375 ns, which
+    // lands inside every window of the WL-ICLED datasheet (T0H 150/300/450,
+    // T1H 750/900/1050, T0L 750/900/1050, T1L 150/300/450, period 900/1200/1500):
+    //   T0H = T1        = 375 ns   T1H = T1+T2 = 875 ns
+    //   T0L = T2+T3     = 875 ns   T1L = T3    = 375 ns   period = 1250 ns
+    //
+    // Do NOT use SK6812 here: its T1L (T3 = 500 ns) exceeds the WL-ICLED T1L
+    // max of 450 ns and its T1H sits on the 750 ns minimum — out of spec, which
+    // is why the bits looked off. WS2812 also fits the Würth windows, but its
+    // 250 ns T0H is below the 300 ns minimum of the legacy SK6805 parts on
+    // R2.8+ boards; WS2813's 375 ns T0H keeps those working too.
+    FastLED.addLeds<WS2813, PIN_LED_DATA, GRB>(_leds, HAL_NUM_LEDS);
     FastLED.setBrightness(HAL_LED_LEVELS[1]);  // default: MEDIUM
     FastLED.clear(true);
 }

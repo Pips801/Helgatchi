@@ -755,11 +755,11 @@ void SerialConsole::_cmdSelftest() {
     if      (vmv < 20)   Serial.println("(0 V — battery missing or divider open)");
     else if (vmv > 3200) Serial.println("(rail — short to VCC / no divider)");
     else if (g_settings.getBool(SKEY_VSENSE_5V_DIVIDER)) {
-        // R4 populated: VSENSE = (VBATT + V5)/3. Charging → strip the rail's
-        // fixed lift first; then VBATT = eff · calibration (see power_manager.h).
+        // R4 populated: VBATT line = 3·VSENSE − V5 rail (see power_manager.h).
         bool charging = vmv > PM_R4_CHARGING_MV;
-        int32_t eff = (charging && vmv > PM_R4_CHARGE_OFFSET_MV) ? (vmv - PM_R4_CHARGE_OFFSET_MV) : vmv;
-        int32_t vb = eff * PM_R4_VBATT_NUM / PM_R4_VBATT_DEN;
+        int32_t vb = pmR4VbattLineMv((uint16_t)vmv, charging ? g_power.chargeRailMv()
+                                                             : PM_R4_DISCHG_RAIL_MV);
+        if (charging) vb -= PM_R4_CHARGE_LIFT_MV;   // cell estimate
         Serial.printf ("(vbatt~%d mV via 3-resistor +R4 divider, %s)\n",
                        vb, charging ? "charging (5V rail sensed)" : "on battery");
     }
@@ -810,20 +810,26 @@ void SerialConsole::_cmdBattery() {
     bool     r4       = g_settings.getBool(SKEY_VSENSE_5V_DIVIDER);
 
     // Mirror PowerManager::_sampleBattery. R4 boards: VSENSE = (VBATT + V5)/3,
-    // so vsense > threshold → +5V rail present → charging. Strip the rail's
-    // fixed lift, then VBATT = eff · calibration. On USB, below threshold means
-    // no pack. Default boards are always 2*vsense, charge state from USB data.
+    // so vsense > threshold → +5V rail present → charging. VBATT line =
+    // 3·vsense − rail; while charging the ~100mV +BATT lift is stripped for the
+    // cell estimate. On USB, below threshold means no pack. Default boards are
+    // always 2*vsense, charge state from USB data.
     bool     r4_missing  = r4 && usb && (vsense < PM_R4_CHARGING_MV);
     bool     r4_charging = r4 && (vsense > PM_R4_CHARGING_MV);
-    uint16_t eff = (r4_charging && vsense > PM_R4_CHARGE_OFFSET_MV)
-                   ? (uint16_t)(vsense - PM_R4_CHARGE_OFFSET_MV) : vsense;
-    uint16_t vbatt_mv = r4 ? (uint16_t)((uint32_t)eff * PM_R4_VBATT_NUM / PM_R4_VBATT_DEN)
+    uint16_t rail_mv  = r4_charging ? g_power.chargeRailMv() : PM_R4_DISCHG_RAIL_MV;
+    uint16_t line_mv  = r4 ? pmR4VbattLineMv(vsense, rail_mv)
                            : (uint16_t)(vsense * 2);
+    uint16_t vbatt_mv = r4_charging ? (uint16_t)(line_mv - PM_R4_CHARGE_LIFT_MV)
+                                    : line_mv;
     uint8_t  raw_pct  = pmBattPctFromVsenseMv((uint16_t)(vbatt_mv / 2));
 
     Serial.printf("vsense:    %u mV  (raw ADC, post-divider)\n", vsense);
     Serial.printf("vbatt:     %u mV  (= %s)\n", vbatt_mv,
-                  r4 ? (r4_charging ? "(vsense - rail) * cal" : "vsense * cal") : "vsense * 2");
+                  r4 ? (r4_charging ? "3*vsense - rail - lift" : "3*vsense - rail") : "vsense * 2");
+    if (r4) Serial.printf("rail:      %u mV  (%s)\n", rail_mv,
+                          !r4_charging ? "backfed, unplugged"
+                          : g_power.chargeRailLearned() ? "learned (plug-in edge / NVS)"
+                                                        : "fallback, never learned");
     Serial.printf("divider:   %s\n", r4 ? "3-resistor + R4 (+5V sense)" : "2-resistor (R4 cut)");
     if (r4) Serial.printf("sensed:    %s  (ADC %s %u mV threshold%s)\n",
                           r4_missing ? "NO PACK" : (r4_charging ? "CHARGING" : "on battery"),

@@ -12,12 +12,14 @@
 #include "admin_service.h"
 #include "event_payload.h"
 #include <Arduino.h>
+#include <Preferences.h>
 #include <esp_sleep.h>
 
 PowerManager g_power;
 
 static constexpr uint32_t BATTERY_SAMPLE_INTERVAL_MS = 30000;
 static constexpr uint32_t TICK_1S_INTERVAL_MS        =  1000;
+static constexpr uint32_t R4_EDGE_POLL_MS            =   250;  // charge-edge detector cadence
 
 // ---------------------------------------------------------------------------
 // Deep-sleep wake handshake
@@ -112,6 +114,20 @@ void PowerManager::begin(EventBus& bus) {
     _bus = &bus;
     _syncSettings();
 
+    // Restore the last learned charger rail: a reboot while still plugged in
+    // (every firmware flash) has no discharge→charge edge to learn from, and
+    // the fallback constant can sit ~300 mV off the real rail — which lands
+    // 1:1 on the reported cell voltage. NVS survives firmware-only flashes.
+    {
+        Preferences prefs;
+        if (prefs.begin("power", /*readOnly=*/true)) {
+            uint16_t rail = prefs.getUShort("rail", 0);
+            prefs.end();
+            if (rail >= PM_R4_CHG_RAIL_MIN_MV && rail <= PM_R4_CHG_RAIL_MAX_MV)
+                _chg_rail_mv = rail;
+        }
+    }
+
     bus.subscribe(EV_SETTINGS_CHANGED,      this);
     bus.subscribe(EV_UI_ACTIVITY,           this);
     bus.subscribe(EV_ALERT_RAISED,          this);
@@ -166,6 +182,38 @@ void PowerManager::begin(EventBus& bus) {
 void PowerManager::tick() {
     uint32_t now = millis();
 
+    // R4 charge-edge detector (250 ms — the status-bar prefix debounces
+    // step-downs by 500 ms, so state must flip well inside that window).
+    // Two triggers:
+    //   • threshold crossing — plug-in; the flip to CHARGING additionally
+    //     requires a non-falling node, so the slow post-unplug decay hovering
+    //     above the threshold can't flip state back to charging.
+    //   • unplug plunge — a ≥PM_R4_UNPLUG_DROP_MV fall in one poll while
+    //     charging. A charger-driven node never falls that fast; this sees
+    //     cable-out ~1–2 s before the decay crosses the threshold.
+    // The flip posts immediately with the carried cell voltage; the deferred
+    // settled sample (1 s loop below) re-reads the true voltage and state.
+    if (_vsense_5v_divider && now - _last_fast_ms >= R4_EDGE_POLL_MS) {
+        _last_fast_ms = now;
+        uint16_t mv = g_hal.readVsenseMv();
+
+        bool to_charging  = !_is_charging && mv > PM_R4_CHARGING_MV &&
+                            (!_have_fast_mv ||
+                             (uint16_t)(mv + PM_R4_SETTLE_DELTA_MV) >= _fast_prev_mv);
+        bool to_discharge = _is_charging &&
+                            (mv <= PM_R4_CHARGING_MV ||
+                             (_have_fast_mv && _fast_prev_mv > mv &&
+                              (uint16_t)(_fast_prev_mv - mv) >= PM_R4_UNPLUG_DROP_MV));
+        if (to_charging || to_discharge) {
+            _settle_pending = true;
+            _settle_polls   = 0;
+            _last_batt_ms   = now;
+            _flipChargeState(to_charging);
+        }
+        _fast_prev_mv = mv;
+        _have_fast_mv = true;
+    }
+
     // 1-second heartbeat.
     if (now - _last_tick_ms >= TICK_1S_INTERVAL_MS) {
         _last_tick_ms += TICK_1S_INTERVAL_MS;
@@ -189,36 +237,53 @@ void PowerManager::tick() {
             }
         }
 
-        // R4 boards sense charge state off the ADC. A dumb charger gives no
-        // USB-data edge to trigger on, so without this the charge icon would
-        // wait up to the 30 s battery sample. Poll the threshold each second
-        // (a cheap ADC read) and resample the moment it flips, so plug/unplug
-        // registers in ~1 s. The threshold sits in a wide gap between the
-        // battery-only and charging bands, so a plain compare won't flap.
+        // R4 settled-voltage loop: after a charge edge the node keeps slewing
+        // for seconds (unplug leaves the rail cap bleeding through R4) and
+        // sampling it mid-decay reads garbage — the 250 ms detector above
+        // already flipped the state/icon, so the voltage re-read simply waits
+        // here until two consecutive 1 s reads agree. A stuck-unsettled node
+        // (noise) is force-sampled after 10 polls.
         if (_vsense_5v_divider) {
-            bool charging_now = g_hal.readVsenseMv() > PM_R4_CHARGING_MV;
-            if (charging_now != _is_charging) {
-                _last_batt_ms = now;   // reset interval to avoid double-sample
+            uint16_t poll_mv  = g_hal.readVsenseMv();
+            uint16_t delta_mv = (poll_mv > _last_poll_mv) ? (uint16_t)(poll_mv - _last_poll_mv)
+                                                          : (uint16_t)(_last_poll_mv - poll_mv);
+            bool stable   = _have_poll_mv && delta_mv <= PM_R4_SETTLE_DELTA_MV;
+            _last_poll_mv = poll_mv;
+            _have_poll_mv = true;
+
+            if (_settle_pending && (stable || ++_settle_polls >= 10)) {
+                _settle_pending = false;
+                _last_batt_ms   = now;   // reset interval to avoid double-sample
                 _sampleBattery();
             }
         }
     }
 
-    // Periodic battery sample.
-    if (now - _last_batt_ms >= BATTERY_SAMPLE_INTERVAL_MS) {
+    // Periodic battery sample. Held off while an edge settle-wait is pending
+    // (the deferred edge sample lands within seconds and covers it).
+    if (!_settle_pending && now - _last_batt_ms >= BATTERY_SAMPLE_INTERVAL_MS) {
         _last_batt_ms = now;
         _sampleBattery();
     }
 
-    // React immediately to a USB-data attach/detach rather than waiting 30 s.
-    // Tracked against its own edge flag (not _is_charging): on R4 boards
-    // _is_charging is ADC-derived and legitimately differs from usbAttached()
-    // for dumb chargers, which would otherwise resample every tick.
+    // React to a USB-data attach/detach rather than waiting 30 s. Tracked
+    // against its own edge flag (not _is_charging): on R4 boards _is_charging
+    // is ADC-derived and legitimately differs from usbAttached() for dumb
+    // chargers, which would otherwise resample every tick. On R4 boards the
+    // node slews for seconds around the edge, so route through the same
+    // settle-wait as the threshold poll instead of sampling immediately.
     bool usb_now = g_hal.usbAttached();
     if (usb_now != _last_usb_seen) {
         _last_usb_seen = usb_now;
-        _last_batt_ms  = now;  // reset interval to avoid double-sample
-        _sampleBattery();
+        if (_vsense_5v_divider) {
+            if (!_settle_pending) {
+                _settle_pending = true;
+                _settle_polls   = 0;
+            }
+        } else {
+            _last_batt_ms = now;  // reset interval to avoid double-sample
+            _sampleBattery();
+        }
     }
 
     // While hunting, ScanEngine owns the radio directly (lock-on) and _isInhibited
@@ -414,6 +479,9 @@ void PowerManager::_syncSettings() {
     _sleep_while_charging    = g_settings.getBool(SKEY_SLEEP_WHILE_CHARGING);
     _always_on               = (g_settings.get(SKEY_PERF_MODE) == PERF_ALWAYS_ON);
     _vsense_5v_divider       = g_settings.getBool(SKEY_VSENSE_5V_DIVIDER);
+    // Only the R4 threshold poll clears a pending settle-wait; if the divider
+    // setting is switched off mid-wait it would gate the periodic sample forever.
+    if (!_vsense_5v_divider) _settle_pending = false;
 
     if (_scan_duration_s       == 0) _scan_duration_s       = 5;
     if (_sleep_duration_s      == 0) _sleep_duration_s      = 30;
@@ -429,6 +497,7 @@ void PowerManager::_sampleBattery() {
     // default boards fall back to USB-data presence and a plain 2:1 divider.
     bool     charging;
     uint16_t batt_mv;
+    uint16_t line_mv;
     if (_vsense_5v_divider) {
         // VSENSE = (VBATT + V5)/3. On USB the +5V rail lifts a PRESENT pack's
         // node into the charging band; a reading below the charging threshold
@@ -446,15 +515,44 @@ void PowerManager::_sampleBattery() {
         }
 
         charging = (vsense > PM_R4_CHARGING_MV);
-        // Strip the fixed +5V-rail contribution while charging, then the reading
-        // is on the same scale as the discharge case; VBATT = eff · calibration.
-        uint16_t eff = charging
-            ? (vsense > PM_R4_CHARGE_OFFSET_MV ? (uint16_t)(vsense - PM_R4_CHARGE_OFFSET_MV) : 0)
-            : vsense;
-        batt_mv = (uint16_t)((uint32_t)eff * PM_R4_VBATT_NUM / PM_R4_VBATT_DEN);
+
+        // Rail learning is normally armed by _flipChargeState at the edge and
+        // consumed here at the first settled charging sample. Catch edges that
+        // arrive without a flip (first sample after boot, edge landing during
+        // an already-pending settle); any discharge sample ends the session —
+        // the RAM value clears, NVS keeps the last-known rail for boot restore.
+        if (charging && !was_charging && !_rail_learn_armed) {
+            _rail_learn_armed = (_last_batt_pct <= 100 &&
+                                 _last_batt_mv >= 3000 && _last_batt_mv <= 4400);
+        } else if (!charging) {
+            _chg_rail_mv      = 0;
+            _rail_learn_armed = false;
+        }
+
+        if (charging && _rail_learn_armed) {
+            // Learn this charger's rail: the jump in the node reading across
+            // the plug-in edge is all rail (varies ~4.7–5.2 V per charger and
+            // lands 1:1 on the cell estimate, so no fixed constant can work).
+            // _last_batt_mv still holds the pre-plug cell — the edge flip
+            // carried it forward unchanged.
+            _rail_learn_armed = false;
+            uint32_t v3 = (uint32_t)vsense * 3;
+            if (v3 > (uint32_t)_last_batt_mv + PM_R4_CHARGE_LIFT_MV) {
+                uint32_t rail = v3 - _last_batt_mv - PM_R4_CHARGE_LIFT_MV;
+                if (rail >= PM_R4_CHG_RAIL_MIN_MV && rail <= PM_R4_CHG_RAIL_MAX_MV) {
+                    _chg_rail_mv = (uint16_t)rail;
+                    _persistRail((uint16_t)rail);
+                }
+            }
+        }
+        line_mv = pmR4VbattLineMv(vsense, charging ? chargeRailMv()
+                                                   : PM_R4_DISCHG_RAIL_MV);
+        // Report the cell estimate: strip the charger's ~100mV +BATT lift.
+        batt_mv = charging ? (uint16_t)(line_mv - PM_R4_CHARGE_LIFT_MV) : line_mv;
     } else {
         charging = g_hal.usbAttached();
         batt_mv  = (uint16_t)(vsense * 2);
+        line_mv  = batt_mv;
     }
     _is_charging = charging;
 
@@ -462,17 +560,20 @@ void PowerManager::_sampleBattery() {
     // averaged with stale (inflated) charging-voltage samples.
     if (was_charging && !charging) _have_smoothed_pct = false;
 
-    // Curve LUT is expressed in VSENSE-mV at the VBATT/2 scale, i.e. batt_mv/2
-    // for either build. Used for the discharge % and to decide "full" charging.
-    uint8_t raw_pct = pmBattPctFromVsenseMv((uint16_t)(batt_mv / 2));
-
+    // Curve LUT is expressed in VSENSE-mV at the VBATT/2 scale.
     uint8_t pct;
     if (charging) {
         // Sentinels carry charge state; the UI re-derives a level glyph from mv.
         // "Full" is only truly confirmed by resampling with charge paused, which
-        // the HW gives no way to do — ≥95 % on the curve is our best proxy.
-        pct = (raw_pct >= 95) ? BATT_PCT_CHARGED : BATT_PCT_CHARGING;
+        // the HW gives no way to do — ≥98 % on the curve (line ≥ ~4130 mV) is
+        // our best proxy: real terminations read 4160–4240, while a mid-charge
+        // pack only gets there with the cell ≥ ~4.05 V. Gate on the pre-lift
+        // LINE value: the lift-corrected cell estimate tops out ~91 % at
+        // termination and would never latch CHARGED.
+        uint8_t line_pct = pmBattPctFromVsenseMv((uint16_t)(line_mv / 2));
+        pct = (line_pct >= 98) ? BATT_PCT_CHARGED : BATT_PCT_CHARGING;
     } else {
+        uint8_t raw_pct = pmBattPctFromVsenseMv((uint16_t)(batt_mv / 2));
         if (_have_smoothed_pct) {
             pct = (uint8_t)(((uint32_t)_smoothed_pct * 7 + raw_pct + 4) / 8);
         } else {
@@ -489,6 +590,55 @@ void PowerManager::_sampleBattery() {
     p.battery.mv  = batt_mv;
     p.battery.pct = pct;
     _bus->post(EV_BATTERY_UPDATED, p);
+}
+
+void PowerManager::_flipChargeState(bool charging_now) {
+    if (charging_now == _is_charging) return;
+    _is_charging = charging_now;
+
+    if (charging_now) {
+        // Arm rail learning for the settled sample — valid only when the
+        // pre-plug reading is a real discharge percentage.
+        _rail_learn_armed = (_last_batt_pct <= 100 &&
+                             _last_batt_mv >= 3000 && _last_batt_mv <= 4400);
+    } else {
+        _chg_rail_mv       = 0;      // session over — NVS keeps the last-known rail
+        _rail_learn_armed  = false;
+        _have_smoothed_pct = false;  // EMA restarts from the first settled discharge sample
+    }
+
+    // Repost with the carried cell estimate — the cell can't have moved across
+    // a plug/unplug edge, and the node itself is mid-slew and unreadable. With
+    // no usable prior (fresh boot, was MISSING) the settled sample posts instead.
+    if (_last_batt_mv < 3000 || _last_batt_mv > 4400) return;
+
+    uint8_t pct;
+    if (charging_now) {
+        // Same CHARGED gate as _sampleBattery: pre-lift line value, ≥98 %.
+        uint16_t line_mv = (uint16_t)(_last_batt_mv + PM_R4_CHARGE_LIFT_MV);
+        pct = (pmBattPctFromVsenseMv((uint16_t)(line_mv / 2)) >= 98)
+                  ? BATT_PCT_CHARGED : BATT_PCT_CHARGING;
+    } else {
+        pct = pmBattPctFromVsenseMv((uint16_t)(_last_batt_mv / 2));
+    }
+    _last_batt_pct = pct;
+
+    EventPayload p{};
+    p.battery.mv  = _last_batt_mv;
+    p.battery.pct = pct;
+    _bus->post(EV_BATTERY_UPDATED, p);
+}
+
+void PowerManager::_persistRail(uint16_t rail_mv) {
+    // Skip the flash write when the newly learned rail is within noise of the
+    // stored one — plug events are frequent on a dev bench.
+    Preferences prefs;
+    if (!prefs.begin("power", /*readOnly=*/false)) return;
+    uint16_t stored = prefs.getUShort("rail", 0);
+    uint16_t delta  = (stored > rail_mv) ? (uint16_t)(stored - rail_mv)
+                                         : (uint16_t)(rail_mv - stored);
+    if (delta > 25) prefs.putUShort("rail", rail_mv);
+    prefs.end();
 }
 
 uint16_t PowerManager::secondsUntilNextScan() const {

@@ -14,6 +14,14 @@ HAL g_hal;
 void HAL::begin(EventBus& bus) {
     _bus = &bus;
 
+    // Seed the SOF baseline from the live register. It survives resets holding
+    // the pre-reset frame count (nonzero after flashing or any prior USB
+    // session), so comparing against an initial 0 made the FIRST 100 ms check
+    // in tick() always read "attached" — a phantom USB icon on every boot,
+    // host or not. Baselined here, the first check only fires if SOF frames
+    // actually advanced since boot, which requires a live host.
+    _last_sof = USB_SERIAL_JTAG.fram_num.sof_frame_index;
+
     // Release any GPIO pad holds left over from a prior deep-sleep cycle (see
     // prepareForSleep). Without this, the held pins would stay locked LOW —
     // LEDC PWM would silently fail to drive the backlight, and FastLED would

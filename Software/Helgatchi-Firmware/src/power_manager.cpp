@@ -118,6 +118,7 @@ void PowerManager::begin(EventBus& bus) {
     bus.subscribe(CMD_POWER_SLEEP,          this);
     bus.subscribe(CMD_POWER_SHIPPING_RESET, this);
     bus.subscribe(CMD_POWER_FACTORY_RESET,  this);
+    bus.subscribe(CMD_POWER_SCREEN_OFF,     this);
     bus.subscribe(CMD_POWER_REBOOT,         this);
     bus.subscribe(CMD_POWER_DOWN,           this);
     bus.subscribe(CMD_SCAN_LOCKON_START,    this);
@@ -345,6 +346,10 @@ void PowerManager::onEvent(const Event& e) {
             _factoryResetAndReboot();
             break;
 
+        case CMD_POWER_SCREEN_OFF:
+            sleepScreen();
+            break;
+
         case CMD_POWER_REBOOT:
             _reboot();
             break;
@@ -562,6 +567,14 @@ bool PowerManager::_isInhibited() {
 void PowerManager::sleepScreen() {
     _screen_off_override = true;
     _setDisplay(DisplayState::OFF);
+}
+
+void PowerManager::wakeScreen() {
+    // Mirror of the button-press wake path in onEvent.
+    _screen_off_override = false;
+    _user_active         = true;
+    _last_activity_ms    = millis();
+    _setDisplay(DisplayState::ON);
 }
 
 void PowerManager::requestSleepOrScreenOff() {

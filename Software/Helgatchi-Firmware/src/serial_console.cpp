@@ -6,6 +6,7 @@
 #include "vibe_service.h"
 #include "hal.h"
 #include "power_manager.h"
+#include "power_menu_screen.h"
 #include "ui_controller.h"
 #include "alerts_service.h"
 #include "scan_service.h"
@@ -1701,35 +1702,25 @@ void SerialConsole::_cmdPower(char* args) {
 
     char* sub = strtok(args, " ");
 
-    if (sub && strcasecmp(sub, "sleep") == 0) {
-        delay(100);
-        _bus->post(CMD_POWER_SLEEP);
-        return;
-    }
-    if (sub && strcasecmp(sub, "sleepscreen") == 0) {
-        g_power.sleepScreen();
-        Serial.println("OK: screen off; button press or wake-screen alert restores it");
-        return;
-    }
-    if (sub && strcasecmp(sub, "reboot") == 0) {
-        delay(100);   // flush this response before PowerManager tears down + resets
-        _bus->post(CMD_POWER_REBOOT);
-        return;
-    }
-    if (sub && strcasecmp(sub, "shipping") == 0) {
-        delay(100);
-        _bus->post(CMD_POWER_SHIPPING_RESET);
-        return;
-    }
-    if (sub && strcasecmp(sub, "wipe") == 0) {
-        delay(100);
-        _bus->post(CMD_POWER_FACTORY_RESET);
-        return;
-    }
-    if (sub && strcasecmp(sub, "off") == 0) {
-        delay(100);
-        _bus->post(CMD_POWER_DOWN);
-        return;
+    // Every subcommand routes through the Power Action screen (same visual
+    // beat as the power menu buttons): message on screen, short hold, then
+    // the CMD_POWER_* fires. beginAction wakes the display first, so this
+    // works with the screen off too. The hold also replaces the old
+    // delay(100)-to-flush-serial — replies go out long before teardown.
+    struct { const char* name; EventId cmd; } const kActions[] = {
+        { "sleep",       CMD_POWER_SLEEP          },
+        { "sleepscreen", CMD_POWER_SCREEN_OFF     },
+        { "reboot",      CMD_POWER_REBOOT         },
+        { "shipping",    CMD_POWER_SHIPPING_RESET },
+        { "wipe",        CMD_POWER_FACTORY_RESET  },
+        { "off",         CMD_POWER_DOWN           },
+    };
+    for (const auto& a : kActions) {
+        if (sub && strcasecmp(sub, a.name) == 0) {
+            g_power_menu_screen.beginAction(a.cmd);
+            Serial.println("OK");
+            return;
+        }
     }
 
     Serial.printf("unknown subcommand 'power %s'  (try 'power')\n", sub ? sub : "");

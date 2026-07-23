@@ -1,4 +1,5 @@
 #include "power_menu_screen.h"
+#include "power_manager.h"
 #include "event_ids.h"
 #include "UI/screens.h"
 #include "UI/eez-flow.h"   // eez_flow_set_screen
@@ -34,25 +35,58 @@ static void _action_timer_cb(lv_timer_t* /*t*/) {
     // repeating timer would re-fire the transition every hold interval.
     _cancelPowerAction();
     if (_bus) _bus->post(_pending_action);
+    // Screen-off is the one action the device survives with LVGL intact — pop
+    // the action screen now so the stale "Turning off screen..." isn't what
+    // greets the user when the display wakes later.
+    if (_pending_action == CMD_POWER_SCREEN_OFF) {
+        eez_flow_pop_screen(LV_SCR_LOAD_ANIM_NONE, 0, 0);
+    }
 }
 
 // Backing out of the Power Action screen (long-press → pop) cancels the pending
 // action. The committed paths (reboot/sleep/off) tear the device down without
-// an LVGL unload, so this fires only when the user bails, never on the real go.
+// an LVGL unload, so this fires only when the user bails or on the screen-off
+// pop above (where the timer is already gone), never on the real go.
 static void _on_action_unload(lv_event_t* /*e*/) {
     _cancelPowerAction();
 }
 
-static void _beginPowerAction(EventId cmd, const char* msg) {
+// One message per power action, defined once — the menu buttons, the serial
+// `power` subcommands, and the settings Reset-device button all converge here.
+static const char* _actionMsg(EventId cmd) {
+    switch (cmd) {
+        case CMD_POWER_SLEEP:          return "Sleeping now...";
+        case CMD_POWER_REBOOT:         return "Restarting now...";
+        case CMD_POWER_DOWN:           return "Powering off...";
+        case CMD_POWER_SHIPPING_RESET: return "Wiping for shipping...";
+        case CMD_POWER_FACTORY_RESET:  return "Wiping device...";
+        case CMD_POWER_SCREEN_OFF:     return "Turning off screen...";
+        default:                       return nullptr;
+    }
+}
+
+static void _beginPowerAction(EventId cmd) {
     if (_action_timer) return;   // an action is already counting down
+    const char* msg = _actionMsg(cmd);
+    if (!msg) return;            // not a power action — refuse rather than show a blank screen
+
+    // Force the display on: with it off, rendering AND lv_timers are
+    // suspended, so a serially-triggered action would neither show its
+    // message nor ever fire its countdown.
+    g_power.wakeScreen();
+
     _pending_action = cmd;
     lv_label_set_text_static(objects.power_action_text, msg);
     // push, not set: set_screen zeroes the EEZ page stack, which makes the
     // long-press back-nav's eez_flow_pop_screen a no-op — the action screen
     // would never unload and the cancel would never fire. push records the
-    // Power Menu so pop returns to it and unloads this screen.
+    // current screen so pop returns to it and unloads this screen.
     eez_flow_push_screen(SCREEN_ID_POWER_ACTION_SCREEN, LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);
     _action_timer = lv_timer_create(_action_timer_cb, POWER_ACTION_HOLD_MS, nullptr);
+}
+
+void PowerMenuScreen::beginAction(EventId cmd) {
+    _beginPowerAction(cmd);
 }
 
 // ---------------------------------------------------------------------------
@@ -61,17 +95,17 @@ static void _beginPowerAction(EventId cmd, const char* msg) {
 // ---------------------------------------------------------------------------
 
 static void _on_sleep_now(lv_event_t* /*e*/) {
-    _beginPowerAction(CMD_POWER_SLEEP, "Sleeping now...");
+    _beginPowerAction(CMD_POWER_SLEEP);
 }
 
 static void _on_restart(lv_event_t* /*e*/) {
-    _beginPowerAction(CMD_POWER_REBOOT, "Restarting now...");
+    _beginPowerAction(CMD_POWER_REBOOT);
 }
 
 static void _on_power_off(lv_event_t* /*e*/) {
     // Deep sleep, no timer — wakes only on a CENTER long-hold. Unlike shipping
     // it leaves the tutorial flag intact.
-    _beginPowerAction(CMD_POWER_DOWN, "Powering off...");
+    _beginPowerAction(CMD_POWER_DOWN);
 }
 
 // ---------------------------------------------------------------------------

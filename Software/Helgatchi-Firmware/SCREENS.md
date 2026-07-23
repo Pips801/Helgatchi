@@ -105,7 +105,7 @@ countdown text via `EV_SLEEP_COUNTDOWN_UPDATED`). The remaining settings-screen
 buttons live in the debug section:
 | Button | Behavior |
 |---|---|
-| `reset_device_button` | C-wired: posts `CMD_POWER_FACTORY_RESET` (factory wipe — settings/rules/alerts/admin — then reboot; comes back up like a first boot). The wipe+shipping-sleep variant `CMD_POWER_SHIPPING_RESET` is serial-only (`power shipping`) for the assembly line. |
+| `reset_device_button` | C-wired: `g_power_menu_screen.beginAction(CMD_POWER_FACTORY_RESET)` — shows the Power Action screen ("Wiping device...", cancellable during the hold), then factory wipe (settings/rules/alerts/admin) + reboot; comes back up like a first boot. The wipe+shipping-sleep variant `CMD_POWER_SHIPPING_RESET` is serial-only (`power shipping`) for the assembly line. |
 | `debug_screen_button` | EEZ-flow navigation to the Debug Info screen |
 | `restart_tutorial_button` | EEZ-flow navigation to the tutorial |
 

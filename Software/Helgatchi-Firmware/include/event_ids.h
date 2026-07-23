@@ -23,6 +23,7 @@ enum EventId : uint16_t {
     CMD_POWER_SLEEP,
     CMD_POWER_SHIPPING_RESET,       // factory wipe (settings/rules/alerts/admin) then shipping sleep — assembly line
     CMD_POWER_FACTORY_RESET,        // factory wipe, then reboot — user-reachable Reset device action
+    CMD_POWER_SCREEN_OFF,           // display off without deep sleep (PowerManager::sleepScreen)
     CMD_POWER_REBOOT,               // peripheral teardown, then ESP.restart()
     CMD_POWER_DOWN,                 // button-only deep sleep (no timer), like shipping but keeps the tutorial flag
 

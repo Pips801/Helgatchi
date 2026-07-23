@@ -132,6 +132,12 @@ public:
     // input does not clear it.
     void sleepScreen();
 
+    // Force the display on, clearing the sleepScreen() override — the same
+    // effect as a button press. Needed by serially-triggered power actions:
+    // with the display off, rendering AND lv_timers are suspended, so the
+    // Power Action screen's countdown would never fire on a dark screen.
+    void wakeScreen();
+
     // Deep-sleep if conditions permit, otherwise just turn the screen off.
     // Wraps the inhibit check so callers don't have to duplicate it.
     void requestSleepOrScreenOff();

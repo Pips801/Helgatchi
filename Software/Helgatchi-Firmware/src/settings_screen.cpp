@@ -1,6 +1,7 @@
 #include "settings_screen.h"
 #include "settings_service.h"
 #include "settings_keys.h"
+#include "power_menu_screen.h"
 #include "event_ids.h"
 #include "event_payload.h"
 #include "UI/screens.h"
@@ -195,9 +196,10 @@ static void _on_show_debug_options(lv_event_t* /*e*/) {
 
 static void _on_reset_device_button(lv_event_t* /*e*/) {
     // Full factory wipe (settings/rules/alerts/admin), then reboot — the
-    // device comes back up like a first boot. The wipe+shipping-sleep variant
-    // (CMD_POWER_SHIPPING_RESET) is deliberately serial-only for assembly.
-    if (_bus) _bus->post(CMD_POWER_FACTORY_RESET);
+    // device comes back up like a first boot. Routed through the Power Action
+    // screen ("Wiping device...", cancellable during the hold). The
+    // wipe+shipping-sleep variant is deliberately serial-only for assembly.
+    g_power_menu_screen.beginAction(CMD_POWER_FACTORY_RESET);
 }
 
 // ---------------------------------------------------------------------------

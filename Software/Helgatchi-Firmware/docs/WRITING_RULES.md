@@ -92,6 +92,13 @@ service drains that ring and tests each sighting against the rules of every
 **enabled** ruleset. When any rule in a ruleset matches, the ruleset fires its
 action (raise an alert, or start party mode) using its configured behaviour.
 
+Rulesets load **disabled** — shipped factory rulesets and anything flashed later
+arrive silent until the user enables them (rules screen, `rule enable <name>`,
+or the upcoming tag bulk-toggles). The exception: rulesets deliberately created
+on-device (`rule create` / `rule save`) start enabled. Enabled-state lives in an
+NVS overlay, not in the ruleset files, so it survives an FS reflash; a factory
+reset or full erase returns every ruleset to disabled.
+
 - **Behaviour is per-ruleset.** `title`, `led`, `vibe`, `type` and `action` are
   set once on the ruleset and apply to whatever its rules match.
 - **Within a ruleset, everything is OR.** Any one rule matching fires the
@@ -679,8 +686,9 @@ use the new fields.
   (`. * + ? \d \w \s [ranges]`, anchors). Purpose-built, not a vendored library.
   Recursion/backtracking is bounded by the 64-char pattern cap.
 - **Persistence.** User rulesets serialize to `/rules/user/<name>.json` on
-  mutation; the disabled-state overlay is a single NVS blob that survives an FS
-  reflash.
+  mutation; enabled-state is a single NVS blob listing the *enabled* ruleset
+  names (rulesets load disabled — an absent blob means nothing is enabled), and
+  survives an FS reflash.
 - **Round-trip.** Pattern strings — including `oui_org`/`mfg_org` — are stored
   and re-serialized verbatim, so save/dump/reload preserve exactly what was
   written. (Before match-time resolution, `oui_org`/`mfg_org` used to persist as

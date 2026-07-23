@@ -119,9 +119,14 @@ public:
     void onEvent(const Event& e) override;
 
     // Wipe in-memory state and re-read /rules/factory + /rules/user from
-    // LittleFS. Preserves NVS enable overlay (user disabled-state survives).
+    // LittleFS. Preserves NVS enable overlay (user enabled-state survives).
     // Returns number of rules loaded.
     uint16_t reloadFromFs();
+
+    // Factory reset: delete every user ruleset file, clear the NVS
+    // enabled-overlay, and reload — leaves the factory set only, everything
+    // disabled (out-of-box state).
+    void factoryReset();
 
     // --- Mutation API (serial commands today; JSON parser uses these in Phase 5) ---
 
@@ -148,7 +153,9 @@ public:
     // Delete a rule entirely, freeing its strings + criterion array.
     bool deleteRule(const char* name);
 
-    // Enable / disable. (NVS persistence wired in Phase 5.)
+    // Enable / disable. Rules load disabled; the NVS overlay stores the set
+    // of enabled names, so first boot / post-erase / factory reset all mean
+    // "nothing enabled" until the user opts in.
     bool setEnabled(const char* name, bool enabled);
 
     // --- Machine-readable I/O for the web companion ---

@@ -33,6 +33,24 @@ static void _setSwitch(lv_obj_t* sw, bool on) {
     else    lv_obj_remove_state(sw, LV_STATE_CHECKED);
 }
 
+static void _setHidden(lv_obj_t* o, bool hidden) {
+    if (!o) return;
+    if (hidden) lv_obj_add_flag(o, LV_OBJ_FLAG_HIDDEN);
+    else        lv_obj_remove_flag(o, LV_OBJ_FLAG_HIDDEN);
+}
+
+// Show/hide the debug rows per SKEY_DEBUG_ENABLED. Hiding the row containers
+// is enough for keypad nav too: lv_group focus skips objects with a hidden
+// ancestor, so the widgets can stay in groups.UINavigation untouched.
+static void _applyDebugVisibility() {
+    const bool hidden = !g_settings.getBool(SKEY_DEBUG_ENABLED);
+    _setHidden(objects.debug_over_serial_container, hidden);
+    _setHidden(objects.debug_level_container,       hidden);
+    _setHidden(objects.device_info_container,       hidden);
+    _setHidden(objects.reset_device_container,      hidden);
+    _setHidden(objects.restart_tutorial_container,  hidden);
+}
+
 // Perf mode ↔ scan_mode_dropdown index:
 //   dropdown 0 = "Power Saver" = PERF_BATTERY_SAVER(2)
 //   dropdown 1 = "Balanced"    = PERF_BALANCED(1)
@@ -77,7 +95,8 @@ static void _populate() {
     _setSwitch(objects.sleep_with_usb_switch,     g_settings.getBool(SKEY_SLEEP_WHILE_USB));
     _setSwitch(objects.sleep_while_charging,      g_settings.getBool(SKEY_SLEEP_WHILE_CHARGING));
 
-    lv_label_set_text_static(objects.sleep_timer_label, "...");
+    _setSwitch(objects.show_debug_options_switch, g_settings.getBool(SKEY_DEBUG_ENABLED));
+    _applyDebugVisibility();
 
     _inhibit = false;
 }
@@ -162,22 +181,23 @@ static void _on_sleep_while_charging(lv_event_t* /*e*/) {
                  lv_obj_has_state(objects.sleep_while_charging, LV_STATE_CHECKED));
 }
 
+static void _on_show_debug_options(lv_event_t* /*e*/) {
+    // Visibility re-applies via the EV_SETTINGS_CHANGED echo → _populate().
+    // Switching OFF also resets the [DEBUG] keys to defaults — that cascade
+    // lives in SettingsService so serial `setting set` behaves identically.
+    _postSetting(SKEY_DEBUG_ENABLED,
+                 lv_obj_has_state(objects.show_debug_options_switch, LV_STATE_CHECKED));
+}
+
 // ---------------------------------------------------------------------------
 // Button CLICKED callbacks
 // ---------------------------------------------------------------------------
 
-static void _on_sleep_button(lv_event_t* /*e*/) {
-    if (_bus) _bus->post(CMD_POWER_SLEEP);
-}
-
-static void _on_reboot_button(lv_event_t* /*e*/) {
-    // Reboot is a power transition — hand off to PowerManager (peripheral
-    // teardown lives there), same as the sleep / shipping buttons.
-    if (_bus) _bus->post(CMD_POWER_REBOOT);
-}
-
-static void _on_shipping_mode_button(lv_event_t* /*e*/) {
-    if (_bus) _bus->post(CMD_POWER_SHIPPING_SLEEP);
+static void _on_reset_device_button(lv_event_t* /*e*/) {
+    // Full factory wipe (settings/rules/alerts/admin), then reboot — the
+    // device comes back up like a first boot. The wipe+shipping-sleep variant
+    // (CMD_POWER_SHIPPING_RESET) is deliberately serial-only for assembly.
+    if (_bus) _bus->post(CMD_POWER_FACTORY_RESET);
 }
 
 // ---------------------------------------------------------------------------
@@ -194,8 +214,7 @@ static void _on_settings_load(lv_event_t* /*e*/) {
 
 void SettingsScreen::begin(EventBus& bus) {
     _bus = &bus;
-    bus.subscribe(EV_SETTINGS_CHANGED,        this);
-    bus.subscribe(EV_SLEEP_COUNTDOWN_UPDATED, this);
+    bus.subscribe(EV_SETTINGS_CHANGED, this);
 
     lv_obj_add_event_cb(objects.settings, _on_settings_load, LV_EVENT_SCREEN_LOAD_START, nullptr);
 
@@ -216,10 +235,12 @@ void SettingsScreen::begin(EventBus& bus) {
     lv_obj_add_event_cb(objects.sleep_with_serial_switch,    _on_sleep_with_serial,   LV_EVENT_VALUE_CHANGED, nullptr);
     lv_obj_add_event_cb(objects.sleep_with_usb_switch,       _on_sleep_with_usb,      LV_EVENT_VALUE_CHANGED, nullptr);
     lv_obj_add_event_cb(objects.sleep_while_charging,        _on_sleep_while_charging,LV_EVENT_VALUE_CHANGED, nullptr);
+    lv_obj_add_event_cb(objects.show_debug_options_switch,   _on_show_debug_options,  LV_EVENT_VALUE_CHANGED, nullptr);
 
-    lv_obj_add_event_cb(objects.sleep_button,         _on_sleep_button,         LV_EVENT_CLICKED, nullptr);
-    lv_obj_add_event_cb(objects.reboot_button,        _on_reboot_button,        LV_EVENT_CLICKED, nullptr);
-    lv_obj_add_event_cb(objects.shipping_mode_button, _on_shipping_mode_button, LV_EVENT_CLICKED, nullptr);
+    // Sleep / reboot moved to the power menu; of the settings action buttons
+    // only reset-device is C-wired (debug screen + restart tutorial navigate
+    // via EEZ flow).
+    lv_obj_add_event_cb(objects.reset_device_button, _on_reset_device_button, LV_EVENT_CLICKED, nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -229,19 +250,5 @@ void SettingsScreen::begin(EventBus& bus) {
 void SettingsScreen::onEvent(const Event& e) {
     if (e.id == EV_SETTINGS_CHANGED && lv_scr_act() == objects.settings) {
         _populate();
-        return;
-    }
-    if (e.id == EV_SLEEP_COUNTDOWN_UPDATED && lv_scr_act() == objects.settings) {
-        uint16_t s = e.data.sleep_count.seconds;
-        if (s == 0xFFFFu) {
-            lv_label_set_text_static(objects.sleep_timer_label, "Will not sleep");
-        } else {
-            char buf[24];
-            if (s >= 60)
-                snprintf(buf, sizeof(buf), "Sleeping in %um %us", s / 60, s % 60);
-            else
-                snprintf(buf, sizeof(buf), "Sleeping in %us", s);
-            lv_label_set_text(objects.sleep_timer_label, buf);
-        }
     }
 }

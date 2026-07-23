@@ -7,6 +7,7 @@
 #include "scan_service.h"
 #include "scan_engine.h"
 #include "rules_service.h"
+#include "alerts_service.h"
 #include "party_service.h"
 #include "admin_service.h"
 #include "event_payload.h"
@@ -115,8 +116,8 @@ void PowerManager::begin(EventBus& bus) {
     bus.subscribe(EV_UI_ACTIVITY,           this);
     bus.subscribe(EV_ALERT_RAISED,          this);
     bus.subscribe(CMD_POWER_SLEEP,          this);
-    bus.subscribe(CMD_POWER_SHIPPING_SLEEP, this);
     bus.subscribe(CMD_POWER_SHIPPING_RESET, this);
+    bus.subscribe(CMD_POWER_FACTORY_RESET,  this);
     bus.subscribe(CMD_POWER_REBOOT,         this);
     bus.subscribe(CMD_POWER_DOWN,           this);
     bus.subscribe(CMD_SCAN_LOCKON_START,    this);
@@ -336,12 +337,12 @@ void PowerManager::onEvent(const Event& e) {
             _enterSleep();
             break;
 
-        case CMD_POWER_SHIPPING_SLEEP:
-            _enterShippingSleep();
+        case CMD_POWER_SHIPPING_RESET:
+            _factoryResetAndShip();
             break;
 
-        case CMD_POWER_SHIPPING_RESET:
-            // Device already rebooted from shipping sleep — nothing to do.
+        case CMD_POWER_FACTORY_RESET:
+            _factoryResetAndReboot();
             break;
 
         case CMD_POWER_REBOOT:
@@ -636,6 +637,42 @@ void PowerManager::_enterSleep() {
 
     esp_deep_sleep_start();
     // Does not return — device resets on wakeup and setup() runs again.
+}
+
+// Wipe every piece of user state, returning the device to out-of-box:
+// settings to defaults (incl. tutorial flag), user rulesets deleted, every
+// rule disabled, alerts + their RTC mirror cleared, seen-devices map cleared,
+// admin re-locked. When this returns, the wipe is applied AND persisted —
+// callers only decide what happens next (shipping sleep or reboot).
+void PowerManager::_wipeUserState() {
+    Serial.println("[power] factory reset — wiping user state");
+    g_alerts.clearAll();       // active records + RTC mirror; per-(rule,MAC) dedup dies with them
+    g_scan_service.clear();    // PSRAM-only (a reboot wipes it anyway); explicit for clarity
+    g_rules.factoryReset();    // user rule files + enabled overlay + reload → factory set, all disabled
+    g_admin.lock();            // clear the NVS unlock — next owner gets a locked device
+
+    // Settings reset rides the bus: the handler applies defaults to RAM and
+    // flushes to NVS (settings_service.cpp CMD_SETTINGS_RESET_DEFAULTS), so
+    // dispatch here to make it happen before we return — _reboot() has no
+    // dispatch of its own. Never erase settings NVS directly here, or the
+    // pre-sleep/pre-reboot flush would write the old RAM values straight back.
+    _bus->post(CMD_SETTINGS_RESET_DEFAULTS);
+    _bus->dispatch();
+}
+
+// Wipe + shipping sleep — the end-of-assembly-line command (`power shipping`).
+// Serial-only on purpose; the user-reachable variant is the reboot one below.
+void PowerManager::_factoryResetAndShip() {
+    _wipeUserState();
+    _enterShippingSleep();
+}
+
+// Wipe + reboot — the user-reachable "Reset device" action (debug section /
+// future Danger-zone). Same wipe; the device comes back up like a first boot
+// (tutorial included) instead of ship-sleeping.
+void PowerManager::_factoryResetAndReboot() {
+    _wipeUserState();
+    _reboot();
 }
 
 void PowerManager::_enterShippingSleep() {

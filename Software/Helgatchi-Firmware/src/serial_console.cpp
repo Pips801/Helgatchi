@@ -90,6 +90,7 @@ static const char* const s_key_name[] = {
     "TUTORIAL_SHOWN",          // 18
     "IGNORE_RANDOMIZED_MACS",  // 19
     "HUNT_VIBRATION",          // 20
+    "DEBUG_ENABLED",           // 21
 };
 static_assert(sizeof(s_key_name) / sizeof(s_key_name[0]) == SKEY_COUNT,
               "s_key_name is out of sync with SettingsKey");
@@ -227,7 +228,7 @@ void SerialConsole::_cmdHelp() {
     Serial.println("  bus post <event_id>         post an event by numeric id");
     Serial.println("  led <subcmd>                LED pattern control       (list / play / off / bright)");
     Serial.println("  party <subcmd>              party mode                (on [secs] / off)");
-    Serial.println("  power <subcmd>              device power ops          (sleep / sleepscreen / reboot / shipping / off)");
+    Serial.println("  power <subcmd>              device power ops          (sleep / sleepscreen / reboot / shipping / wipe / off)");
     Serial.println("  rule <subcmd>               rules engine              (list / show / create / add / rm / delete /");
     Serial.println("                                                         enable / disable / reload / stats)");
     Serial.println("  scan <subcmd>               scan-result ring          (list / inject / clear)");
@@ -1692,7 +1693,8 @@ void SerialConsole::_cmdPower(char* args) {
         Serial.println("  power sleep                   deep-sleep until long-press CENTER or wake timer");
         Serial.println("  power sleepscreen             turn screen off without deep sleep");
         Serial.println("  power reboot                  restart the device");
-        Serial.println("  power shipping                factory shipping sleep — long-press CENTER to wake");
+        Serial.println("  power shipping                factory wipe (settings/rules/alerts) + shipping sleep — long-press CENTER to wake");
+        Serial.println("  power wipe                    factory wipe + reboot — comes back up like a first boot");
         Serial.println("  power off                     power down (no timer) — long-press CENTER to wake, keeps tutorial state");
         return;
     }
@@ -1716,7 +1718,12 @@ void SerialConsole::_cmdPower(char* args) {
     }
     if (sub && strcasecmp(sub, "shipping") == 0) {
         delay(100);
-        _bus->post(CMD_POWER_SHIPPING_SLEEP);
+        _bus->post(CMD_POWER_SHIPPING_RESET);
+        return;
+    }
+    if (sub && strcasecmp(sub, "wipe") == 0) {
+        delay(100);
+        _bus->post(CMD_POWER_FACTORY_RESET);
         return;
     }
     if (sub && strcasecmp(sub, "off") == 0) {

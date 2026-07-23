@@ -55,15 +55,17 @@ enum DebugLevel : uint8_t {
 // Settings keys
 //
 // [USER]    — shown on Settings screen, user can change
-// [DEBUG]   — only shown when debug menu is unlocked
+// [DEBUG]   — row hidden unless SKEY_DEBUG_ENABLED is on; reset to default
+//             when that toggle is switched off
 // [DERIVED] — set automatically (by perf mode, build flags, or linked setting)
 //             not shown in UI
 //
-// NOTE: The following debug screen items are ACTIONS, not stored settings.
+// NOTE: The following debug items are ACTIONS, not stored settings.
 //       They emit commands — see event_ids.h:
-//         "Reset statistics"         → CMD_STATS_RESET
-//         "Reset settings"           → CMD_SETTINGS_RESET_DEFAULTS
-//         "Shipping mode reset+sleep"→ CMD_POWER_SHIPPING_RESET
+//         "Reset statistics"          → CMD_STATS_RESET
+//         "Reset settings"            → CMD_SETTINGS_RESET_DEFAULTS
+//         "Reset device" (wipe+reboot)→ CMD_POWER_FACTORY_RESET
+//         wipe+ship (serial only)     → CMD_POWER_SHIPPING_RESET
 // ---------------------------------------------------------------------------
 
 enum SettingsKey : uint8_t {
@@ -87,10 +89,13 @@ enum SettingsKey : uint8_t {
     SKEY_SLEEP_WHILE_USB,           // [USER]    bool — allow sleep when USB attached (no serial)
     SKEY_VSENSE_5V_DIVIDER,         // [USER]    bool — HW has R4 (+5V→VSENSE) populated; changes VBATT math
 
-    // --- Debug (gated by debug menu) ---
+    // --- Debug (rows gated by SKEY_DEBUG_ENABLED) ---
     SKEY_DEBUG_SERIAL_ENABLED,      // [DEBUG]   bool — USB serial debug output
     SKEY_DEBUG_LEVEL,               // [DEBUG]   DebugLevel
-    SKEY_DEBUG_SLEEP_WITH_SERIAL,   // [DEBUG]   bool — allow sleep even when serial connected
+    // Enum name keeps its DEBUG_ prefix (NVS slot is positional), but this is
+    // a plain sleep-while behavior flag now, shown with SLEEP_WHILE_USB /
+    // SLEEP_WHILE_CHARGING — not gated, not reset by the debug toggle.
+    SKEY_DEBUG_SLEEP_WITH_SERIAL,   // [USER]    bool — allow sleep even when serial connected
 
     // Occupies the slot vacated by the removed [DERIVED] SKEY_SCREEN_TIMEOUT_S
     // (which was dead — nothing consumed it). Kept in place rather than appended;
@@ -115,6 +120,12 @@ enum SettingsKey : uint8_t {
     // Appended (see the NVS-index note above): foxhunt haptics are experimental,
     // so they ship default-OFF behind this toggle. LedService reads it on demand.
     SKEY_HUNT_VIBRATION,            // [USER]    bool — pulse the motor with the foxhunt LED meter (default off)
+
+    // Appended (see the NVS-index note above). The gate for every [DEBUG] row
+    // on the Settings screen. Switching it OFF also resets the [DEBUG] keys to
+    // defaults so no invisible debug state stays active. Default off — the
+    // factory reset (CMD_POWER_SHIPPING_RESET) re-hides debug for shipped units.
+    SKEY_DEBUG_ENABLED,             // [USER]    bool — show debug rows on the Settings screen
 
     SKEY_COUNT,
     SKEY_INVALID = 0xFF
@@ -185,3 +196,4 @@ static constexpr uint8_t  DEFAULT_VSENSE_5V_DIVIDER      = 1;   // 0 = R4 cut (V
 static constexpr uint8_t  DEFAULT_TUTORIAL_SHOWN         = 0;   // 0 = show on first boot
 static constexpr uint8_t  DEFAULT_IGNORE_RANDOMIZED_MACS = 1;   // 1 = hide nameless randomized BLE devices from the list
 static constexpr uint8_t  DEFAULT_HUNT_VIBRATION         = 0;   // 0 = foxhunt haptics off (experimental; opt in)
+static constexpr uint8_t  DEFAULT_DEBUG_ENABLED          = 0;   // 0 = debug rows hidden until the user opts in

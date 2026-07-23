@@ -50,8 +50,8 @@ static DebugLevel _minLevelForEvent(EventId id) {
         case CMD_SCAN_START:
         case CMD_SCAN_STOP:
         case CMD_POWER_SLEEP:
-        case CMD_POWER_SHIPPING_SLEEP:
         case CMD_POWER_SHIPPING_RESET:
+        case CMD_POWER_FACTORY_RESET:
         case CMD_POWER_REBOOT:
         case CMD_POWER_DOWN:
         case CMD_SETTINGS_RESET_DEFAULTS:
@@ -505,8 +505,8 @@ const char* LogService::_eventName(EventId id) {
         case CMD_SETTINGS_SAVE:          return "CMD_SETTINGS_SAVE";
         case CMD_SETTINGS_RESET_DEFAULTS:return "CMD_SETTINGS_RESET_DEFAULTS";
         case CMD_POWER_SLEEP:            return "CMD_POWER_SLEEP";
-        case CMD_POWER_SHIPPING_SLEEP:   return "CMD_POWER_SHIPPING_SLEEP";
         case CMD_POWER_SHIPPING_RESET:   return "CMD_POWER_SHIPPING_RESET";
+        case CMD_POWER_FACTORY_RESET:    return "CMD_POWER_FACTORY_RESET";
         case CMD_POWER_REBOOT:           return "CMD_POWER_REBOOT";
         case CMD_POWER_DOWN:             return "CMD_POWER_DOWN";
         case CMD_STATS_RESET:            return "CMD_STATS_RESET";

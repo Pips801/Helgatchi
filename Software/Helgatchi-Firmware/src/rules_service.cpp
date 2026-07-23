@@ -20,11 +20,12 @@ static constexpr const char* DIR_RULES         = "/rules";
 static constexpr const char* DIR_FACTORY       = "/rules/factory";
 static constexpr const char* DIR_USER          = "/rules/user";
 
-// NVS namespace + key for the disabled-rules overlay. Single blob of
+// NVS namespace + key for the enabled-rules overlay. Single blob of
 // newline-separated rule names; keeps key count fixed at 1 regardless of
-// how many rules are toggled.
+// how many rules are toggled. Rules load disabled by default — an absent
+// key (first boot, post-erase, factory reset) means nothing is enabled.
 static constexpr const char* NVS_NAMESPACE     = "rules";
-static constexpr const char* NVS_KEY_DISABLED  = "disabled";
+static constexpr const char* NVS_KEY_ENABLED   = "enabled";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -237,6 +238,49 @@ uint16_t RulesService::reloadFromFs() {
     return _count;
 }
 
+void RulesService::factoryReset() {
+    // Wipe /rules/user entirely — including stray files that never loaded
+    // (parse failures, name collisions). Collect-then-delete in small passes:
+    // deleting while iterating a LittleFS directory invalidates the iterator.
+    for (;;) {
+        char paths[8][80];   // "/rules/user/" + name[56] + ".json"
+        int  n = 0;
+        {
+            File dir = LittleFS.open(DIR_USER);
+            if (dir && dir.isDirectory()) {
+                File entry = dir.openNextFile();
+                while (entry && n < 8) {
+                    if (!entry.isDirectory()) {
+                        snprintf(paths[n], sizeof(paths[n]), "%s/%s", DIR_USER, entry.name());
+                        n++;
+                    }
+                    entry = dir.openNextFile();
+                }
+            }
+        }
+        if (n == 0) break;
+        int removed = 0;
+        for (int i = 0; i < n; i++) {
+            if (LittleFS.remove(paths[i])) removed++;
+        }
+        if (removed == 0) break;   // FS refusing deletes — don't spin forever
+    }
+
+    // Drop the whole "rules" NVS namespace. The enabled overlay is its only
+    // key, and factory state is "nothing enabled".
+    Preferences prefs;
+    if (prefs.begin(NVS_NAMESPACE, /*readOnly*/ false)) {
+        prefs.clear();
+        prefs.end();
+    }
+
+    // Reload: factory set only, everything disabled (empty overlay). Posts
+    // EV_RULES_CHANGED so any live UI reconciles.
+    reloadFromFs();
+    Serial.printf("[rules] factory reset — %u factory ruleset%s, all disabled\n",
+                  (unsigned)_count, _count == 1 ? "" : "s");
+}
+
 void RulesService::tick() {
     ScanResult batch[DRAIN_BATCH];
     uint32_t   lost = 0;
@@ -339,7 +383,9 @@ bool RulesService::createRule(const char* name) {
     r.is_factory  = false;
     r.enabled     = true;
     _count++;
-    _saveUserRule(r);   // persist immediately so create survives reboot even before criteria added
+    _saveUserRule(r);            // persist immediately so create survives reboot even before criteria added
+    _persistEnabledOverlay();    // deliberate creation implies enabled — record it, or the
+                                 // default-off load would silence the rule on next boot
     _notifyChanged();
     return true;
 }
@@ -358,6 +404,8 @@ bool RulesService::deleteRule(const char* name) {
     memset(&_rules[_count - 1], 0, sizeof(Rule));
     _count--;
     _deleteUserRuleFile(saved_name);
+    _persistEnabledOverlay();    // scrub the name from the enabled blob so a future
+                                 // ruleset reusing it can't arrive silently enabled
     _notifyChanged();
     return true;
 }
@@ -989,7 +1037,7 @@ bool RulesService::_loadRuleFromFile(const char* path, bool is_factory) {
     r.alert_type = ALERT_TYPE_COUNT;
     r.action     = RULE_ACTION_ALERT;
     r.is_factory = is_factory;
-    r.enabled    = true;
+    r.enabled    = false;   // default-off: only the NVS enabled-overlay turns rules on
     _count++;
 
     // Title
@@ -1047,9 +1095,11 @@ bool RulesService::_loadRuleFromFile(const char* path, bool is_factory) {
 // NVS enabled-overlay
 //
 // Single packed blob containing newline-separated names of rules the user
-// has disabled. On boot we read it and clear `enabled` for any matching
-// rule; on every toggle we rewrite it. Avoids per-rule keys (NVS key length
-// would constrain rule names) and survives FS reflash.
+// has enabled. Rules load disabled; on boot we read the blob and set
+// `enabled` for any matching rule; on every toggle we rewrite it. An absent
+// key means nothing is enabled — which makes first boot, post-erase, and
+// factory reset the same state for free. Avoids per-rule keys (NVS key
+// length would constrain rule names) and survives FS reflash.
 // ---------------------------------------------------------------------------
 
 void RulesService::_applyEnabledOverlay() {
@@ -1057,13 +1107,13 @@ void RulesService::_applyEnabledOverlay() {
     // Open RW so the namespace is created on first boot. isKey() check
     // dodges the [E] log line that getString emits when the key is absent.
     if (!prefs.begin(NVS_NAMESPACE, /*readOnly*/ false)) return;
-    if (!prefs.isKey(NVS_KEY_DISABLED)) { prefs.end(); return; }
-    String blob = prefs.getString(NVS_KEY_DISABLED, "");
+    if (!prefs.isKey(NVS_KEY_ENABLED)) { prefs.end(); return; }
+    String blob = prefs.getString(NVS_KEY_ENABLED, "");
     prefs.end();
     if (blob.isEmpty()) return;
 
     // Parse blob: \n-separated names. For each, if a matching rule exists,
-    // flip its enabled flag off.
+    // flip its enabled flag on.
     int start = 0;
     while (start < (int)blob.length()) {
         int nl = blob.indexOf('\n', start);
@@ -1072,7 +1122,7 @@ void RulesService::_applyEnabledOverlay() {
         name.trim();
         if (name.length() > 0) {
             int idx = _findRuleIdx(name.c_str());
-            if (idx >= 0) _rules[idx].enabled = false;
+            if (idx >= 0) _rules[idx].enabled = true;
         }
         start = nl + 1;
     }
@@ -1081,14 +1131,14 @@ void RulesService::_applyEnabledOverlay() {
 void RulesService::_persistEnabledOverlay() {
     String blob;
     for (uint16_t i = 0; i < _count; i++) {
-        if (!_rules[i].enabled) {
+        if (_rules[i].enabled) {
             if (blob.length() > 0) blob += "\n";
             blob += _rules[i].name;
         }
     }
     Preferences prefs;
     if (!prefs.begin(NVS_NAMESPACE, /*readOnly*/ false)) return;
-    if (blob.isEmpty()) prefs.remove(NVS_KEY_DISABLED);
-    else                prefs.putString(NVS_KEY_DISABLED, blob);
+    if (blob.isEmpty()) prefs.remove(NVS_KEY_ENABLED);
+    else                prefs.putString(NVS_KEY_ENABLED, blob);
     prefs.end();
 }

@@ -165,6 +165,9 @@ private:
     void _syncSettings();
     void _sampleBattery();
     void _enterSleep();
+    void _wipeUserState();           // shared factory wipe across all services (applied + persisted on return)
+    void _factoryResetAndShip();     // wipe, then shipping sleep — assembly line (`power shipping`)
+    void _factoryResetAndReboot();   // wipe, then reboot — user-reachable Reset device action
     void _enterShippingSleep();
     void _enterPowerDown();        // button-only deep sleep, keeps the tutorial flag
     void _enterOffSleep(bool reset_tutorial);  // shared no-timer deep-sleep path

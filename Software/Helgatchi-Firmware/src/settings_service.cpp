@@ -32,6 +32,7 @@ static constexpr uint32_t s_key_mask[SKEY_COUNT] = {
     0,                          // SKEY_TUTORIAL_SHOWN — no subsystem reacts
     SMASK_SCAN,                 // SKEY_IGNORE_RANDOMIZED_MACS — ScanService reads it in _updateSeen
     0,                          // SKEY_HUNT_VIBRATION — LedService reads it on demand each hunt frame
+    SMASK_DEBUG,                // SKEY_DEBUG_ENABLED — non-zero so EV_SETTINGS_CHANGED fires and the settings screen re-applies row visibility
 };
 
 // ---------------------------------------------------------------------------
@@ -73,6 +74,14 @@ void SettingsService::onEvent(const Event& e) {
             // it's persisted on sleep/reboot or the periodic backstop, never
             // per change. Only emit EV_SETTINGS_CHANGED when a subsystem reacts.
             if (_set(key, e.data.settings_set.value, mask)) {
+                // Debug toggle OFF also resets the [DEBUG] keys to defaults —
+                // no invisible noisy debug level left running behind hidden
+                // rows. Service-level so the UI switch and serial `setting
+                // set` behave identically (cascade precedent: _applyPerfPreset).
+                if (key == SKEY_DEBUG_ENABLED && e.data.settings_set.value == 0) {
+                    _set(SKEY_DEBUG_SERIAL_ENABLED, DEFAULT_DEBUG_SERIAL, mask);
+                    _set(SKEY_DEBUG_LEVEL,          DEFAULT_DEBUG_LEVEL,  mask);
+                }
                 if (!_dirty) {                 // start the backstop clock at the first change
                     _dirty          = true;
                     _dirty_since_ms = millis();
@@ -131,6 +140,7 @@ void SettingsService::_applyDefaults() {
     _values[SKEY_TUTORIAL_SHOWN]          = DEFAULT_TUTORIAL_SHOWN;
     _values[SKEY_IGNORE_RANDOMIZED_MACS]  = DEFAULT_IGNORE_RANDOMIZED_MACS;
     _values[SKEY_HUNT_VIBRATION]          = DEFAULT_HUNT_VIBRATION;
+    _values[SKEY_DEBUG_ENABLED]           = DEFAULT_DEBUG_ENABLED;
 
     uint32_t dummy = 0;
     _applyPerfPreset(static_cast<PerfMode>(DEFAULT_PERF_MODE), dummy);

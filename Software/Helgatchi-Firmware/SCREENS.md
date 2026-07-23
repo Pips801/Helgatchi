@@ -96,21 +96,18 @@ Currently bound:
 
 Some widgets don't map directly to a single SKEY:
 - **BLE / WiFi scanning switches** combine into `SKEY_SCAN_MODE` via bit-OR (BLE = bit 0, WiFi = bit 1). Custom `_onScanBitsChanged` rebuilds the combined value from both switch states on any change. `_refreshScanBits()` in the other direction.
-- **Reboot button** (`reboot_button`): `_on_reboot_button` posts `CMD_POWER_REBOOT`; PowerManager tears down peripherals (`g_vibe.stop()` + `HAL::prepareForReboot()`) before `ESP.restart()`. (Was a bare `ESP.restart()` that skipped teardown and could leave the motor buzzing through the boot window.)
+- **Show debug options switch** (`show_debug_options_switch`, `SKEY_DEBUG_ENABLED`): gates the visibility of the debug rows (`debug_over_serial_container`, `debug_level_container`, `device_info_container`, `reset_device_container`, `restart_tutorial_container`) via `_applyDebugVisibility()`. Default off; switching OFF also resets the [DEBUG] keys to defaults (cascade in SettingsService), and the factory reset re-hides everything. Keypad nav skips the hidden rows automatically (lv_group ignores objects with a hidden ancestor).
 
-### Action buttons (`_actions[]`)
+### Action buttons
 
-Buttons that fire one-shot commands. Currently:
-| Button | Command |
+Sleep and reboot moved to the power menu screen (which also owns the sleep
+countdown text via `EV_SLEEP_COUNTDOWN_UPDATED`). The remaining settings-screen
+buttons live in the debug section:
+| Button | Behavior |
 |---|---|
-| `button_shipping_mode` | `CMD_POWER_SHIPPING_SLEEP` |
-| `button_sleep` | `CMD_POWER_SLEEP` (bypasses inhibit by design — Sleep Now button) |
-
-### Sleep countdown text
-
-`ui_settings_screen_label_sleep_text` displays the live sleep countdown. Updated on `EV_SLEEP_COUNTDOWN_UPDATED`:
-- `0xFFFF` (sentinel from PowerManager when inhibited) → `"Will not sleep"`
-- otherwise → `"Sleep in Ns"`
+| `reset_device_button` | C-wired: posts `CMD_POWER_FACTORY_RESET` (factory wipe — settings/rules/alerts/admin — then reboot; comes back up like a first boot). The wipe+shipping-sleep variant `CMD_POWER_SHIPPING_RESET` is serial-only (`power shipping`) for the assembly line. |
+| `debug_screen_button` | EEZ-flow navigation to the Debug Info screen |
+| `restart_tutorial_button` | EEZ-flow navigation to the tutorial |
 
 ### Dropdown options must match the enum
 SLS stores dropdown options as a `\n`-separated string and saves the index. **The index is the value stored in NVS.** If your dropdown options aren't in enum order, you'll silently store wrong values — we've eaten this bug twice (extra "Off" leading the Debug Level dropdown, slider range 50..255 vs enum 0..3 for brightness).

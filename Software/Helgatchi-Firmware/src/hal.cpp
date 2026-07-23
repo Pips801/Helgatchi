@@ -234,20 +234,29 @@ void HAL::prepareForReboot() {
 // LEDs
 // ---------------------------------------------------------------------------
 
+// Custom clockless timing for the Würth WL-ICLED (1313210530000) side-view RGB
+// IC-LED. Timing is specified directly from the datasheet TYPICALS rather than
+// borrowing a lookalike chipset, so every bit sits dead-center in its window
+// (max noise margin) and the intent is self-documenting.
+//
+// FastLED's <T1,T2,T3> model (see fl/convert.h): T0H=T1, T1H=T1+T2, T1L=T3,
+// T0L=T2+T3, period=T1+T2+T3. Datasheet windows (min/typ/max, ns):
+//   T0H 150/300/450   T1H 750/900/1050   T0L 750/900/1050
+//   T1L 150/300/450   period 900/1200/1500   reset > 200 us
+// Choosing T1=300, T2=600, T3=300 ns hits every typical exactly:
+//   T0H 300  T1H 900  T0L 900  T1L 300  period 1200.
+//
+// The ESP32-S3 RMT5 backend resolves these in F_CPU cycles (~4 ns), so C_NS()
+// lands on the real ns values — it is NOT quantized to the 125 ns grid that the
+// canned FMUL-based chipsets (WS2812/WS2813/SK6812) are locked to. For contrast
+// SK6812's T1L is 500 ns — outside the 450 ns max — which is why its bits
+// looked off on this part.
+template <uint8_t DATA_PIN, EOrder RGB_ORDER = GRB>
+class WLICLEDController
+    : public FASTLED_CLOCKLESS_CONTROLLER<DATA_PIN, C_NS(300), C_NS(600), C_NS(300), RGB_ORDER> {};
+
 void HAL::_initLEDs() {
-    // WS2813 chipset for the Würth WL-ICLED (1313210530000) side-view RGB
-    // IC-LEDs. FastLED's WS2813 timing is <T1,T2,T3> = 375/500/375 ns, which
-    // lands inside every window of the WL-ICLED datasheet (T0H 150/300/450,
-    // T1H 750/900/1050, T0L 750/900/1050, T1L 150/300/450, period 900/1200/1500):
-    //   T0H = T1        = 375 ns   T1H = T1+T2 = 875 ns
-    //   T0L = T2+T3     = 875 ns   T1L = T3    = 375 ns   period = 1250 ns
-    //
-    // Do NOT use SK6812 here: its T1L (T3 = 500 ns) exceeds the WL-ICLED T1L
-    // max of 450 ns and its T1H sits on the 750 ns minimum — out of spec, which
-    // is why the bits looked off. WS2812 also fits the Würth windows, but its
-    // 250 ns T0H is below the 300 ns minimum of the legacy SK6805 parts on
-    // R2.8+ boards; WS2813's 375 ns T0H keeps those working too.
-    FastLED.addLeds<WS2813, PIN_LED_DATA, GRB>(_leds, HAL_NUM_LEDS);
+    FastLED.addLeds<WLICLEDController, PIN_LED_DATA, GRB>(_leds, HAL_NUM_LEDS);
     FastLED.setBrightness(HAL_LED_LEVELS[1]);  // default: MEDIUM
     FastLED.clear(true);
 }

@@ -63,7 +63,6 @@ enum DebugLevel : uint8_t {
 //       They emit commands — see event_ids.h:
 //         "Reset statistics"         → CMD_STATS_RESET
 //         "Reset settings"           → CMD_SETTINGS_RESET_DEFAULTS
-//         "Shipping mode sleep"      → CMD_POWER_SHIPPING_SLEEP
 //         "Shipping mode reset+sleep"→ CMD_POWER_SHIPPING_RESET
 // ---------------------------------------------------------------------------
 
@@ -168,10 +167,10 @@ static constexpr PerfPreset PERF_PRESETS[PERF_MODE_COUNT] = {
 // Factory defaults
 // ---------------------------------------------------------------------------
 
-static constexpr uint8_t  DEFAULT_SCREEN_BRIGHTNESS      = SCREEN_BRIGHTNESS_HIGH;
-static constexpr uint8_t  DEFAULT_LED_BRIGHTNESS         = LED_BRIGHTNESS_MEDIUM;
+static constexpr uint8_t  DEFAULT_SCREEN_BRIGHTNESS      = SCREEN_BRIGHTNESS_MEDIUM;
+static constexpr uint8_t  DEFAULT_LED_BRIGHTNESS         = LED_BRIGHTNESS_LOW;
 static constexpr uint8_t  DEFAULT_SCAN_MODE              = SCAN_BLE_ONLY;
-static constexpr uint8_t  DEFAULT_SCAN_ACTIVE            = 1;   // 0 = passive scan (listen only); 1 = active scan (solicit scan responses)
+static constexpr uint8_t  DEFAULT_SCAN_ACTIVE            = 0;   // 0 = passive scan (listen only); 1 = active scan (solicit scan responses)
 static constexpr uint8_t  DEFAULT_PERF_MODE              = PERF_BALANCED;
 static constexpr uint8_t  DEFAULT_ALERT_WAKE_SCREEN      = 1;
 static constexpr uint8_t  DEFAULT_ALERT_VIBRATION        = 1;
@@ -181,8 +180,8 @@ static constexpr uint8_t  DEFAULT_DEBUG_SERIAL           = 0;
 static constexpr uint8_t  DEFAULT_DEBUG_LEVEL            = DEBUG_INFORMATIONAL;
 static constexpr uint8_t  DEFAULT_SLEEP_WITH_SERIAL      = 0;
 static constexpr uint8_t  DEFAULT_SLEEP_WHILE_USB        = 0;   // 0 = inhibit sleep while a USB data host is attached
-static constexpr uint8_t  DEFAULT_SLEEP_WHILE_CHARGING   = 1;  // 0 = inhibit sleep while charging
-static constexpr uint8_t  DEFAULT_VSENSE_5V_DIVIDER      = 0;   // 0 = R4 cut (VSENSE = VBATT/2, current default)
+static constexpr uint8_t  DEFAULT_SLEEP_WHILE_CHARGING   = 0;  // 0 = inhibit sleep while charging
+static constexpr uint8_t  DEFAULT_VSENSE_5V_DIVIDER      = 1;   // 0 = R4 cut (VSENSE = VBATT/2, current default)
 static constexpr uint8_t  DEFAULT_TUTORIAL_SHOWN         = 0;   // 0 = show on first boot
 static constexpr uint8_t  DEFAULT_IGNORE_RANDOMIZED_MACS = 1;   // 1 = hide nameless randomized BLE devices from the list
 static constexpr uint8_t  DEFAULT_HUNT_VIBRATION         = 0;   // 0 = foxhunt haptics off (experimental; opt in)

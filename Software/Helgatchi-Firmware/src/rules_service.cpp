@@ -474,6 +474,67 @@ bool RulesService::setEnabled(const char* name, bool enabled) {
     return true;
 }
 
+bool RulesService::hasTag(const Rule& r, const char* tag) const {
+    if (!tag || !*tag) return false;
+    for (uint8_t i = 0; i < r.tag_count; i++) {
+        if (strcasecmp(r.tags[i], tag) == 0) return true;
+    }
+    return false;
+}
+
+bool RulesService::isTagEnabled(const char* tag) const {
+    if (!tag || !*tag) return false;
+    bool found = false;
+    for (uint16_t i = 0; i < _count; i++) {
+        if (hasTag(_rules[i], tag)) {
+            found = true;
+            if (!_rules[i].enabled) return false;
+        }
+    }
+    return found;
+}
+
+bool RulesService::setTagEnabled(const char* tag, bool enabled) {
+    if (!tag || !*tag) return false;
+    bool changed = false;
+    for (uint16_t i = 0; i < _count; i++) {
+        if (hasTag(_rules[i], tag)) {
+            if (_rules[i].enabled != enabled) {
+                _rules[i].enabled = enabled;
+                changed = true;
+            }
+        }
+    }
+    if (changed) {
+        _persistEnabledOverlay();
+        _notifyChanged();
+    }
+    return changed;
+}
+
+uint16_t RulesService::getUniqueTags(char out_tags[][24], uint16_t max_tags) const {
+    uint16_t count = 0;
+    for (uint16_t i = 0; i < _count; i++) {
+        for (uint8_t t = 0; t < _rules[i].tag_count; t++) {
+            const char* tag_name = _rules[i].tags[t];
+            if (!tag_name || !*tag_name) continue;
+            bool exists = false;
+            for (uint16_t u = 0; u < count; u++) {
+                if (strcasecmp(out_tags[u], tag_name) == 0) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists && count < max_tags) {
+                strncpy(out_tags[count], tag_name, 23);
+                out_tags[count][23] = '\0';
+                count++;
+            }
+        }
+    }
+    return count;
+}
+
 bool RulesService::removeCriterion(const char* name, uint16_t idx) {
     int rIdx = _findRuleIdx(name);
     if (rIdx < 0) return false;
@@ -1067,6 +1128,19 @@ bool RulesService::_loadRuleFromFile(const char* path, bool is_factory) {
     if (const char* v = doc["action"] | (const char*)nullptr) {
         if      (strcasecmp(v, "alert") == 0) r.action = RULE_ACTION_ALERT;
         else if (strcasecmp(v, "party") == 0) r.action = RULE_ACTION_PARTY;
+    }
+
+    // Tags
+    r.tag_count = 0;
+    if (doc["tag"].is<JsonArray>()) {
+        for (JsonVariant tv : doc["tag"].as<JsonArray>()) {
+            const char* tag_str = tv.as<const char*>();
+            if (tag_str && *tag_str && r.tag_count < 4) {
+                strncpy(r.tags[r.tag_count], tag_str, sizeof(r.tags[0]) - 1);
+                r.tags[r.tag_count][sizeof(r.tags[0]) - 1] = '\0';
+                r.tag_count++;
+            }
+        }
     }
 
     // Criteria — each entry is { field: [values...] }. Iterate fields, build a

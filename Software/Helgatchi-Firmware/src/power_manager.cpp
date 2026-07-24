@@ -170,7 +170,15 @@ void PowerManager::begin(EventBus& bus) {
     EventPayload p{};
     p.power.state = POWER_AWAKE;
     _bus->post(EV_POWER_STATE_CHANGED, p);
-    _bus->post(CMD_SCAN_START);
+
+    // Don't scan until the tutorial is completed. An unboxed unit just waits for
+    // interaction, then shuts fully off (button-only wake) on the interactive
+    // timeout — see the tutorial gate in tick(). No CMD_SCAN_START here means no
+    // scan windows and, crucially, no scan-cadence timer wake to duty-cycle on.
+    if (g_settings.getBool(SKEY_TUTORIAL_SHOWN)) {
+        _bus->post(CMD_SCAN_START);
+        _scanning_started = true;
+    }
 
     _sampleBattery();
 }
@@ -290,6 +298,36 @@ void PowerManager::tick() {
     // keeps us awake — suspend the whole duty-cycle state machine: no window stop,
     // no drain gate, no sleep, no re-open. The window resumes on CMD_SCAN_LOCKON_STOP.
     if (_hunting) return;
+
+    // Tutorial gate: until the tutorial is completed the device must not scan or
+    // arm the scan-cadence timer. An unboxed unit that's accidentally woken would
+    // otherwise duty-cycle through wake/sleep scan windows forever. Instead it
+    // runs the normal interactive → dim → deep-sleep cycle, but shuts fully off
+    // via _enterPowerDown() — a button-only (CENTER-hold) wake with NO timer —
+    // so a jostled shipping unit returns to deep sleep on its own to save battery.
+    // Inhibit (USB / serial / charging) freezes the timeout, same as normal.
+    // This bypasses the whole scan state machine below, so no CMD_SCAN_START /
+    // CMD_SCAN_STOP is posted while the tutorial is pending.
+    if (!g_settings.getBool(SKEY_TUTORIAL_SHOWN)) {
+        if (_isInhibited()) {
+            _last_activity_ms = now;
+        } else if ((now - _last_activity_ms) >= (uint32_t)_interactive_timeout_s * 1000) {
+            _enterPowerDown();   // button-only wake, no timer; does not return
+        }
+        return;
+    }
+
+    // Tutorial just completed (flag flipped while awake, no reboot) — kick off
+    // the first scan window now so duty-cycling starts immediately. Reset the
+    // window bookkeeping so the state machine below opens a clean window from
+    // this moment rather than acting on the stale boot-time _wake_ms.
+    if (!_scanning_started) {
+        _scanning_started     = true;
+        _scan_stop_posted     = false;
+        _scan_complete_posted = false;
+        _wake_ms              = now;
+        _bus->post(CMD_SCAN_START);
+    }
 
     // End of scan window — fire CMD_SCAN_STOP once. The window spans every
     // enabled radio's phase (BLE then WiFi), so it's duration × radio-count.

@@ -262,6 +262,7 @@ private:
     bool _screen_off_override  = false;  // sleepScreen() set; cleared by buttons or wake-screen alerts
     bool _last_usb_seen        = false;  // HAL::usbAttached() edge tracker (forces an immediate resample)
     bool _hunting              = false;  // foxhunt lock-on active (CMD_SCAN_LOCKON_START..STOP)
+    bool _scanning_started     = false;  // CMD_SCAN_START posted; gated on tutorial completion
 
     // R4 charge-rail learning + edge settling (see the divider block above).
     // _chg_rail_mv: the learned charger rail (0 = unlearned → fallback),

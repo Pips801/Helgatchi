@@ -5,6 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
+  "tag": ["tactical", "networking"],
   "criteria": [
     { "oui": ["20:4C:03", "F0:1A:A0"] },
     { "mfg": ["0x011B"] },

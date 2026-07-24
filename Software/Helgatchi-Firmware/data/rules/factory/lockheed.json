@@ -5,6 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
+  "tag": ["tactical"],
   "criteria": [
     { "oui": ["00:50:C2:03:0", "00:07:EF"] },
     { "name": [".*lockheed.*", ".*eagan.*", ".*tactical.*"] },

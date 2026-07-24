@@ -5,6 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
+  "tag": ["tactical", "camera"],
   "criteria": [
     { "oui": ["4C:CC:34"] },
     { "mfg": ["0x0008"] },

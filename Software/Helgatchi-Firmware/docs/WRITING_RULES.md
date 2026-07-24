@@ -58,6 +58,7 @@ A ruleset is one JSON file. Minimal shape:
 | `action`   | no  | `alert` (default) \| `party` |
 | `vibe`     | no  | haptic pattern name (`vibe list` on the console) |
 | `led`      | no  | LED pattern name (`led list` on the console) |
+| `tag`      | yes | array of category tags (e.g. `["tactical", "camera"]`) |
 | `criteria` | yes | the ruleset's rules — an array of match entries (below) |
 
 **Rule fields** (each entry in `criteria`)

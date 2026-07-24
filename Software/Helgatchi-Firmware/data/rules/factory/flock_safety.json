@@ -5,6 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
+  "tag": ["tactical", "camera"],
   "criteria": [
     { "oui": ["B4:1E:52"] },
     { "name": [".*flock.*", ".*alpr.*", ".*camera.*"] },

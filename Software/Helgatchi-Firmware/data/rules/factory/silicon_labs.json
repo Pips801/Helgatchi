@@ -5,6 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
+  "tag": ["tactical"],
   "criteria": [
     { "oui": ["58:8E:81", "EC:1B:BD", "90:35:EA"] },
     { "name": [".*silicon labs.*", ".*silabs.*"] },

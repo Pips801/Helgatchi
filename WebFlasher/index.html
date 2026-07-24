@@ -159,6 +159,15 @@
           <button id="wipeBtn" class="danger">Full wipe &amp; fresh install</button>
           <button id="restartBtn" class="danger">Force restart</button>
         </div>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin:1.5rem 0 1rem;" />
+        <p style="font-size:.9rem; color:var(--muted); margin:0 0 .75rem;">
+          <strong style="color:var(--danger-hover)">Factory shipping mode</strong> — wipes all settings, rules, and
+          alerts, then puts the device into deep sleep for shipping. Wake it with a long-press of CENTER.
+        </p>
+        <div class="row">
+          <button id="shippingBtn" class="danger">Factory shipping mode</button>
+        </div>
       </div>
     </div>
 
@@ -625,6 +634,34 @@
       }
     }
 
+    // Factory shipping mode — end-of-assembly-line command. Sends `power
+    // shipping`, which acks with "OK" then factory-wipes (settings/rules/alerts)
+    // and deep-sleeps. The link drops on its own; treat it as an intentional
+    // disconnect so we don't auto-reconnect (the device only wakes on a long
+    // CENTER hold). No bootloader reset here — this is a plain serial command.
+    async function doShipping() {
+      if (flashing) return;
+      if (!port || !linkLive) { flashErr("Not connected — click Connect first."); return; }
+      if (!confirm("Factory shipping mode wipes ALL settings, rules, and alerts, then deep-sleeps the device for shipping. Wake it later with a long-press of CENTER. Continue?")) return;
+      setFlashUI(true);
+      userDisconnected = true;    // device won't come back on its own — don't auto-reconnect
+      try {
+        flashStatus("Sending shipping command…");
+        // Wait for the "OK" ack before the device wipes + sleeps. Older firmware
+        // without the ack: proceed anyway (it may already be sleeping).
+        try { await sendLine("power shipping"); await awaitLine((l) => l.trim() === "OK", 3000); }
+        catch {}
+        linkLive = false;
+        await stopReadLoop();
+        try { await port.close(); } catch {}
+        flashStatus("Device wiped and in shipping mode — long-press CENTER to wake.");
+        consoleNote("Device entered shipping mode (wiped + deep sleep).");
+        toStale();          // device info stays on screen; rules/console hide
+      } finally {
+        setFlashUI(false);
+      }
+    }
+
     // ---- Rules editor ------------------------------------------------------
     let rulesCache = [];
     function rulesStatus(m, err) { const e = $("rulesStatus"); e.textContent = m || ""; e.classList.toggle("error", !!err); }
@@ -937,6 +974,7 @@
     function flashErr(m) { const e = $("flashStatus"); e.textContent = m; e.classList.add("error"); }
     function setFlashUI(busy) {
       $("flashBtn").disabled = busy; $("wipeBtn").disabled = busy; $("restartBtn").disabled = busy;
+      $("shippingBtn").disabled = busy;
       $("optFw").disabled = busy; $("optFs").disabled = busy; $("versionSel").disabled = busy;
       $("connectBtn").disabled = busy; $("disconnectBtn").disabled = busy;
       if (!busy) $("flashProgress").classList.add("hidden");
@@ -1066,6 +1104,7 @@
       if (confirm("Full wipe erases ALL settings and rules, then flashes everything. Continue?")) doFlash({ erase: true });
     });
     $("restartBtn").addEventListener("click", doRestart);
+    $("shippingBtn").addEventListener("click", doShipping);
 
     $("rulesNew").addEventListener("click", () => openEditor(null));
     $("ruleSave").addEventListener("click", saveRule);

@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["Camera", "Hidden Cam"],
+  "tag": ["Camera"],
   "criteria": [
     { "mfg": [] },
     { "oui": ["70:89:76", "68:57:2D", "D4:A6:51", "18:69:D8", "A0:92:08"] },

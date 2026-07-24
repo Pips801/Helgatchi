@@ -1,0 +1,18 @@
+{
+  "name": "Sony Audio",
+  "title": "Sony Audio nearby",
+  "vibe": "bump",
+  "led": "rainbow_slow",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Audio", "Wearable"],
+  "criteria": [
+    { "mfg": ["0x012D"] },
+    { "oui": [
+      "3C:01:EF", "3C:38:F4", "F8:4E:17", "88:C9:E8",
+      "AC:80:0A", "80:99:E7", "54:26:3D", "58:18:62"
+    ] },
+    { "name": [".*wh-1000.*", ".*wf-1000.*", ".*linkbuds.*", ".*sony.*", ".*srs-.*"] },
+    { "mfg_org": [".*sony.*"] }
+  ]
+}

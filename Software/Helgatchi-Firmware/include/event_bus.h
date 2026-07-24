@@ -12,7 +12,7 @@ protected:
 
 class EventBus {
 public:
-    static constexpr uint8_t  QUEUE_DEPTH       = 32;
+    static constexpr uint8_t  QUEUE_DEPTH       = 64;
     static constexpr uint8_t  MAX_SUBSCRIPTIONS = 128;
 
     // Call once during setup(), after FreeRTOS scheduler is running.

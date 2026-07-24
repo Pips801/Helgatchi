@@ -290,7 +290,11 @@ void AlertsScreen::onEvent(const Event& e) {
                 _focus_consumed = true;
                 break;
             }
-            lv_screen_load(objects.alerts);
+            // Push (not raw lv_screen_load) so the interrupted screen lands on
+            // the EEZ page stack — long-press back returns the user to where
+            // they were instead of stranding them (pop on an empty stack is a
+            // no-op).
+            eez_flow_push_screen(SCREEN_ID_ALERTS, LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);
             _focus_consumed = true;
             break;
         }

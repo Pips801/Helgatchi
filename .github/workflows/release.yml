@@ -24,6 +24,14 @@ env:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # Admin-mode secrets baked at build time by scripts/build_admin_secret.py.
+    # Set these as repository secrets (Settings → Secrets and variables → Actions).
+    # HELGATCHI_HMAC_SECRET must be >= 32 bytes and stable across releases, or
+    # devices from different builds can't validate each other's commands. Without
+    # them the build hard-fails (by design — no accidental dev-default release).
+    env:
+      HELGATCHI_HMAC_SECRET: ${{ secrets.HELGATCHI_HMAC_SECRET }}
+      HELGATCHI_ADMIN_PASSWORD: ${{ secrets.HELGATCHI_ADMIN_PASSWORD }}
     defaults:
       run:
         working-directory: ${{ env.FW_DIR }}
@@ -72,6 +80,10 @@ jobs:
           # side now while they exist.
           mkdir -p artifacts
           cp ".pio/build/$PIO_ENV"/{bootloader,partitions,firmware}.bin artifacts/
+          # Also stash the ELF (symbols/DWARF) so a crash from a device flashed
+          # with this release can be decoded — its sha256 matches the panic
+          # handler's "ELF file SHA256" line. Not flashed; debug artifact only.
+          cp ".pio/build/$PIO_ENV/firmware.elf" artifacts/
 
       - name: Build LittleFS image
         run: |
@@ -94,6 +106,7 @@ jobs:
             ${{ env.FW_DIR }}/artifacts/partitions.bin
             ${{ env.FW_DIR }}/artifacts/firmware.bin
             ${{ env.FW_DIR }}/artifacts/littlefs.bin
+            ${{ env.FW_DIR }}/artifacts/firmware.elf
 
       # Rebuild the Pages flasher so it mirrors this new release same-origin.
       # A `release: published` trigger won't fire for a release made by the

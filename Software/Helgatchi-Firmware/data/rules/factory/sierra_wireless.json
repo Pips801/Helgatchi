@@ -1,0 +1,15 @@
+{
+  "name": "Sierra Wireless",
+  "title": "Sierra Wireless nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["00:A0:D5", "28:A3:31", "50:13:9D",
+              "64:CE:6E", "84:DB:2F", "CC:93:4A"] },
+    { "name": [".*sierra.*", ".*router.*", ".*wireless.*"] },
+    { "oui_org": [".*sierra.*"] },
+    { "mfg_org": [".*sierra.*"] }
+  ]
+}

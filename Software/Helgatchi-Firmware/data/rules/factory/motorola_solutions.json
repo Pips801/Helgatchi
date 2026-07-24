@@ -1,0 +1,15 @@
+{
+  "name": "(Flock) Motorola Solutions",
+  "title": "(Flock) Motorola nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["4C:CC:34"] },
+    { "mfg": ["0x0008"] },
+    { "name": [".*motorola.*", ".*radio.*"] },
+    { "oui_org": [".*motorola solutions.*"] },
+    { "mfg_org": [".*motorola.*"] }
+  ]
+}

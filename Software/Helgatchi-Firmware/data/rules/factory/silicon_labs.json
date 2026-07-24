@@ -1,0 +1,14 @@
+{
+  "name": "Silicon Labs",
+  "title": "Silicon Lab nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["58:8E:81", "EC:1B:BD", "90:35:EA"] },
+    { "name": [".*silicon labs.*", ".*silabs.*"] },
+    { "oui_org": [".*silicon laboratories.*"] },
+    { "mfg_org": [".*silicon labs.*"] }
+  ]
+}

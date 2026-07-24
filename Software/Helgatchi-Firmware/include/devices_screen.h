@@ -3,29 +3,30 @@
 
 // DevicesScreen
 //
-// UI side of the scanned-device list. Renders one card per unique device in
-// ScanService's dedup'd seen-map into objects.devices_container, refreshed on
-// EV_SCAN_COMPLETE (posted by PowerManager once a scan window's backlog has
-// fully drained, so the seen-map is complete before we read it).
+// UI side of the scanned-device list, built as a RECYCLER: a fixed pool of
+// ~12 card widgets binds to a sliding window of a data-only row list
+// (snapshot of ScanService's dedup'd seen-map, RSSI-strongest-first). Two
+// invisible spacers keep the flex column's height identical to a full
+// one-card-per-device list, so scroll geometry is continuous and LVGL's
+// per-frame cost is constant no matter how many devices are seen.
 //
-// Cards are diffed by (domain, MAC) across refreshes: matched cards update
-// text in place, new devices get a fresh card, evicted ones are deleted, and
-// the list is reordered RSSI-strongest-first. Keeping card objects alive
-// across refreshes preserves keypad focus + scroll position while browsing.
-// A 1 s timer live-ticks only the "Ns ago" age; RSSI/MFG stay frozen between
-// scan windows.
+// Rows rebuild on EV_SCAN_COMPLETE only (posted by PowerManager once a scan
+// window's backlog has fully drained) — dBm values move only when a scan
+// lands. A 5 s timer re-renders the "Ns ago" age on bound cards. Selection
+// is a row index pinned by (domain, MAC) across re-sorts, driven directly by
+// EV_BTN_* events; the LVGL nav group stays empty on this screen.
 //
 // Layered like AlertsScreen: ScanService is the LVGL-free data store; this is
 // the presentation layer. Initialize AFTER g_ui (objects.* must exist) and
-// AFTER g_scan.
+// AFTER g_scan_service.
 
 class DevicesScreen : public IEventHandler {
 public:
     void begin(EventBus& bus);
     void onEvent(const Event& e) override;
 
-    // Number of device cards currently instantiated. Cards are the LVGL-heavy
-    // part of a dense scan, so this is surfaced for perf telemetry (DEBUG_PERF).
+    // Number of devices currently listed (data rows, not pooled widgets) —
+    // surfaced for perf telemetry (DEBUG_PERF).
     uint16_t cardCount() const;
 };
 

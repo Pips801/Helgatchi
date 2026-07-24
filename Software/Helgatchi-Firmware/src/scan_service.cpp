@@ -5,7 +5,15 @@
 #include <esp_heap_caps.h>
 #include <string.h>
 
-ScanService g_scan;
+// MUST NOT be named `g_scan`: the WiFi/net80211 ROM driver defines an ABSOLUTE
+// symbol `g_scan` (its own scan-state struct) at a fixed DRAM address, and a
+// plain `g_scan` here collides with it — the linker drops this object right on
+// top of the WiFi driver's global table (g_scan / net80211_funcs /
+// s_encap_amsdu_func / …), so WiFi init and this object silently overwrite each
+// other's memory. That collision was the root of ALL the WiFi-scan corruption.
+// Keep a name that isn't a WiFi/ROM symbol; audit with:
+//   xtensa-esp32s3-elf-nm firmware.elf | awk '$2=="A"{print $3}' | grep '^g_'
+ScanService g_scan_service;
 
 // ---------------------------------------------------------------------------
 // Lifecycle
@@ -15,7 +23,7 @@ void ScanService::begin(EventBus& bus) {
     _bus = &bus;
 
     // Both buffers in PSRAM — internal SRAM is tight and these structures
-    // are large (ring ~28 KB, seen map ~14 KB at current ScanResult size).
+    // are large (ring ~30 KB, seen map ~30 KB at current ScanResult size).
     // Access latency is fine for our drain cadence (~once per tick).
     if (!_ring) {
         _ring = (ScanResult*)heap_caps_malloc(

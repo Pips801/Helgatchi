@@ -43,7 +43,7 @@ It can be configured to alert anything you want, such as:
 |----------	|---------------------------------------------------	|
 | MCU      	| XIAO ESP32-S3                                     	|
 | Flash    	| 8MB                                               	|
-| Battery  	| 800mAh - 1200mAh 3.7v LiPo                        	|
+| Battery  	| 400mAh - 1200mAh 3.7v LiPo                        	|
 | Screen   	| Waveshare 1.69” LCD - 240p × 280p                 	|
 | Firmware 	| platform.io + Arduino                             	|
 | Software 	| Graphics: LVGL BLE: NimBLE LEDs: FastLED          	|

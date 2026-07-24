@@ -101,31 +101,22 @@ void VibeService::begin(EventBus& bus) {
         _timer = nullptr;
     }
 
-    // Short button events get auto-haptics. CENTER_LONG is fired by callers
-    // at the action site (UIController) so a long-press that doesn't act
-    // doesn't vibrate.
-    bus.subscribe(EV_BTN_LEFT,         this);
-    bus.subscribe(EV_BTN_RIGHT,        this);
-    bus.subscribe(EV_BTN_CENTER_SHORT, this);
-
+    // Button haptics are fired by UIController at the decision site, not here.
+    // Only it knows the focused widget and its position in the nav group, so it
+    // can stay silent at a scroll boundary or on a non-clickable object.
+    // CENTER_LONG already worked this way; now all button haptics do. This
+    // service only owns the alert path on the bus.
+    //
     // Alerts: rules engine fires EV_ALERT_RAISED, we pick a pattern.
     bus.subscribe(EV_ALERT_RAISED, this);
 }
 
 void VibeService::onEvent(const Event& e) {
     switch (e.id) {
-        case EV_BTN_LEFT:
-        case EV_BTN_RIGHT:
-            play(HAPTIC_TICK_LIGHT);
-            break;
-
-        case EV_BTN_CENTER_SHORT:
-            play(HAPTIC_TICK);
-            break;
-
-        // EV_BTN_CENTER_LONG intentionally not handled here — the long-press
-        // doesn't always lead to an action (main menu has no "previous"), so
-        // UIController fires the haptic at the actual action site instead.
+        // Button haptics are intentionally not handled here. UIController fires
+        // them at the action site so a press that changes nothing — a scroll
+        // boundary, a non-clickable object, a dead-end long-press — stays
+        // silent and the bump reflects real UI state, not the raw press.
 
         case EV_ALERT_RAISED: {
             // SKEY_ALERT_VIBRATION gates alerts only — button-press haptics

@@ -1,0 +1,14 @@
+{
+  "name": "Lockheed Martin Eagan",
+  "title": "Lockheed Martin TD nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["00:50:C2:03:0"] },
+    { "name": [".*lockheed.*", ".*eagan.*"] },
+    { "oui_org": [".*lockheed martin tactical defense.*"] },
+    { "mfg_org": [".*lockheed martin.*"] }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "i-PRO",
+  "title": "i-PRO nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["D4:2D:C5"] },
+    { "name": [".*i-pro.*"] },
+    { "oui_org": [".*i-pro.*"] },
+    { "mfg_org": [".*i-pro.*"] }
+  ]
+}

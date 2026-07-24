@@ -44,10 +44,18 @@ public:
     void begin(EventBus& bus);
     void onEvent(const Event& e) override;
 
-    // Request an animation. If Helga is mid-animation the current animation's
-    // outro (if any) and the new animation's intro (if any) are sequenced first,
-    // then the new loop sustains. No-op unless the overview screen is showing.
+    // Request an animation. Always recorded as the desired state (even when the
+    // overview isn't showing) so it's replayed on the next screen load; when the
+    // overview IS showing it's driven live — if Helga is mid-animation the
+    // current animation's outro and the new animation's intro (if any) are
+    // sequenced first, then the new loop sustains.
     void play(HelgaAnim anim);
+
+    // While held, bus events (scan/alert) no longer change the animation, so the
+    // last play() sustains. Used by party mode to keep HELGA_PARTY on-screen for
+    // its whole run. play() still works while held; releasing restores nothing —
+    // the caller should play() the resume animation after hold(false).
+    void hold(bool on);
 };
 
 extern OverviewScreen g_overview_screen;

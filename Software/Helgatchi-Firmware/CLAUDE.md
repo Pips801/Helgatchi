@@ -18,7 +18,9 @@ For the bigger picture (services, event bus, partitions, build flow), see
   `begin(EventBus&)` / `tick()` / `onEvent(const Event&)` pattern.
 - **Rules**: defined as JSON files in `/rules/factory/` (read-only, shipped in
   LittleFS image) and `/rules/user/` (writable, auto-saved on mutation). Never
-  hardcoded in C++.
+  hardcoded in C++. `name`/`ssid`/`oui_org`/`mfg_org` are case-insensitive
+  full-match patterns (equals `x`, contains `.*x.*`, plus `\d`/`[...]` regex);
+  see `docs/WRITING_RULES.md`. The regex engine is `lib/re_lite/`.
 - **Vendor data**: ~700 KB of IEEE OUI + BT SIG name table in flash, generated
   at build time from `scripts/vendor_sources/*` via `scripts/build_vendor_tables.py`.
   Forward lookup only via `vendor_lookup.h`.

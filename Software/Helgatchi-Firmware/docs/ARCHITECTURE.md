@@ -41,7 +41,7 @@ esptool/PIO look for, but the on-disk format is LittleFS via
 Every subsystem is a `class FooService { void begin(EventBus&); void tick(); ... };`
 with a single global instance (`extern FooService g_foo;`). `setup()` in
 `main.cpp` initializes them in a specific order (some have prerequisites —
-e.g. `g_rules` depends on `g_scan` and `g_alerts` being ready, and on LittleFS
+e.g. `g_rules` depends on `g_scan_service` and `g_alerts` being ready, and on LittleFS
 being mounted).
 
 Service catalog (`src/main.cpp` shows current init order):
@@ -55,8 +55,8 @@ Service catalog (`src/main.cpp` shows current init order):
 | `g_console`         | Serial command parser                                                 |
 | `g_power`           | Scan/sleep cycle, battery sampling, shipping mode                     |
 | `g_alerts`          | Active alert store (RTC slow memory persistence across deep sleep)    |
-| `g_scan`            | Scan-result ring buffer (256) + seen-devices map (128). Both in PSRAM |
-| `g_rules`           | Rules engine — loads `/rules/{factory,user}/*.json`, drains `g_scan`  |
+| `g_scan_service`            | Scan-result ring buffer (256) + seen-devices map (128). Both in PSRAM |
+| `g_rules`           | Rules engine — loads `/rules/{factory,user}/*.json`, drains `g_scan_service`  |
 | `g_leds`            | LED pattern renderer (~30 fps), pattern name registry                 |
 | `g_vibe`            | Haptic step-machine, pattern name registry                            |
 | `g_ui`              | LVGL `lv_timer_handler` wrapper, render gating when screen off        |
@@ -74,9 +74,9 @@ Service catalog (`src/main.cpp` shows current init order):
 Payloads are an 8-byte tagged union (`include/event_payload.h`). Adding a new
 event ID *to send a custom payload* means extending the union.
 
-**Hot path note**: scan results do NOT go through the bus. `g_scan.publish()`
+**Hot path note**: scan results do NOT go through the bus. `g_scan_service.publish()`
 writes to a PSRAM ring buffer; `g_rules.tick()` drains it directly via
-`g_scan.drain()`. Only the alert path that fires *after* matching emits bus
+`g_scan_service.drain()`. Only the alert path that fires *after* matching emits bus
 events (downstream of the hot loop).
 
 ## Storage tiers

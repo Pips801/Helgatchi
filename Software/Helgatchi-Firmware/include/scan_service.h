@@ -94,4 +94,4 @@ private:
     void _updateSeen(const ScanResult& r);
 };
 
-extern ScanService g_scan;
+extern ScanService g_scan_service;

@@ -21,9 +21,11 @@ enum EventId : uint16_t {
     CMD_SETTINGS_RESET_DEFAULTS,
 
     CMD_POWER_SLEEP,
-    CMD_POWER_SHIPPING_SLEEP,       // enter shipping sleep (no scheduled wakeup)
-    CMD_POWER_SHIPPING_RESET,       // factory-reset NVS then enter shipping sleep
+    CMD_POWER_SHIPPING_RESET,       // factory wipe (settings/rules/alerts/admin) then shipping sleep — assembly line
+    CMD_POWER_FACTORY_RESET,        // factory wipe, then reboot — user-reachable Reset device action
+    CMD_POWER_SCREEN_OFF,           // display off without deep sleep (PowerManager::sleepScreen)
     CMD_POWER_REBOOT,               // peripheral teardown, then ESP.restart()
+    CMD_POWER_DOWN,                 // button-only deep sleep (no timer), like shipping but keeps the tutorial flag
 
     CMD_STATS_RESET,                // wipe runtime scan/entity statistics
 
@@ -51,6 +53,14 @@ enum EventId : uint16_t {
     EV_POWER_STATE_CHANGED,
     EV_BATTERY_UPDATED,
     EV_SLEEP_COUNTDOWN_UPDATED,
+
+    // Host-connection facts (emitted by HAL on edge). USB = physical host
+    // present (SOF frames); SERIAL = USB-CDC port opened by a host ((bool)Serial).
+    // A dumb wall charger triggers neither.
+    EV_USB_CONNECTED,
+    EV_USB_DISCONNECTED,
+    EV_SERIAL_CONNECTED,
+    EV_SERIAL_DISCONNECTED,
 
     EV_SETTINGS_CHANGED,
 

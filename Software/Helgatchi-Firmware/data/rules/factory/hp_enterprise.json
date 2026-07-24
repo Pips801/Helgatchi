@@ -1,0 +1,15 @@
+{
+  "name": "Hewlett Packard Enterprise",
+  "title": "Hewlett Packard nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["20:4C:03", "F0:1A:A0"] },
+    { "mfg": ["0x011B"] },
+    { "name": [".*hpe.*", ".*hewlett packard.*", ".*aruba.*"] },
+    { "oui_org": [".*hewlett packard enterprise.*"] },
+    { "mfg_org": [".*hewlett packard.*"] }
+  ]
+}

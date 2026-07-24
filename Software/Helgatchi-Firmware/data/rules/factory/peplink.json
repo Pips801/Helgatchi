@@ -1,0 +1,14 @@
+{
+  "name": "Peplink",
+  "title": "Peplink nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["00:11:6E", "10:56:CA", "6C:A3:D3", "D4:13:F8"] },
+    { "name": [".*peplink.*", ".*router.*", ".*gateway.*"] },
+    { "oui_org": [".*peplink.*"] },
+    { "mfg_org": [".*peplink.*"] }
+  ]
+}

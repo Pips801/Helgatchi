@@ -14,6 +14,14 @@ HAL g_hal;
 void HAL::begin(EventBus& bus) {
     _bus = &bus;
 
+    // Seed the SOF baseline from the live register. It survives resets holding
+    // the pre-reset frame count (nonzero after flashing or any prior USB
+    // session), so comparing against an initial 0 made the FIRST 100 ms check
+    // in tick() always read "attached" — a phantom USB icon on every boot,
+    // host or not. Baselined here, the first check only fires if SOF frames
+    // actually advanced since boot, which requires a live host.
+    _last_sof = USB_SERIAL_JTAG.fram_num.sof_frame_index;
+
     // Release any GPIO pad holds left over from a prior deep-sleep cycle (see
     // prepareForSleep). Without this, the held pins would stay locked LOW —
     // LEDC PWM would silently fail to drive the backlight, and FastLED would
@@ -119,10 +127,23 @@ void HAL::tick() {
     // _is_charging, breaking sleep inhibition.
     uint32_t now = millis();
     if (now - _last_sof_check_ms >= 100) {
-        uint32_t sof   = USB_SERIAL_JTAG.fram_num.sof_frame_index;
-        _usb_attached  = (sof != _last_sof);
-        _last_sof      = sof;
+        uint32_t sof     = USB_SERIAL_JTAG.fram_num.sof_frame_index;
+        bool attached    = (sof != _last_sof);
+        if (attached != _usb_attached && _bus) {
+            _bus->post(attached ? EV_USB_CONNECTED : EV_USB_DISCONNECTED);
+        }
+        _usb_attached      = attached;
+        _last_sof          = sof;
         _last_sof_check_ms = now;
+
+        // USB-CDC port open/close (host attaches/detaches a serial monitor).
+        // Sampled on the same 100 ms cadence as SOF; (bool)Serial is a cheap
+        // DTR read. Edge-emitted so services can react without polling.
+        bool serial_open = (bool)Serial;
+        if (serial_open != _serial_open && _bus) {
+            _bus->post(serial_open ? EV_SERIAL_CONNECTED : EV_SERIAL_DISCONNECTED);
+        }
+        _serial_open = serial_open;
     }
 
 }
@@ -213,13 +234,29 @@ void HAL::prepareForReboot() {
 // LEDs
 // ---------------------------------------------------------------------------
 
+// Custom clockless timing for the Würth WL-ICLED (1313210530000) side-view RGB
+// IC-LED. Timing is specified directly from the datasheet TYPICALS rather than
+// borrowing a lookalike chipset, so every bit sits dead-center in its window
+// (max noise margin) and the intent is self-documenting.
+//
+// FastLED's <T1,T2,T3> model (see fl/convert.h): T0H=T1, T1H=T1+T2, T1L=T3,
+// T0L=T2+T3, period=T1+T2+T3. Datasheet windows (min/typ/max, ns):
+//   T0H 150/300/450   T1H 750/900/1050   T0L 750/900/1050
+//   T1L 150/300/450   period 900/1200/1500   reset > 200 us
+// Choosing T1=300, T2=600, T3=300 ns hits every typical exactly:
+//   T0H 300  T1H 900  T0L 900  T1L 300  period 1200.
+//
+// The ESP32-S3 RMT5 backend resolves these in F_CPU cycles (~4 ns), so C_NS()
+// lands on the real ns values — it is NOT quantized to the 125 ns grid that the
+// canned FMUL-based chipsets (WS2812/WS2813/SK6812) are locked to. For contrast
+// SK6812's T1L is 500 ns — outside the 450 ns max — which is why its bits
+// looked off on this part.
+template <uint8_t DATA_PIN, EOrder RGB_ORDER = GRB>
+class WLICLEDController
+    : public FASTLED_CLOCKLESS_CONTROLLER<DATA_PIN, C_NS(300), C_NS(600), C_NS(300), RGB_ORDER> {};
+
 void HAL::_initLEDs() {
-    // SK6812 chipset for SK6805 LEDs (R2.8+). SK6805 is the small EC15/EC20
-    // package variant of the SK6812 family — same protocol/timing. Using the
-    // WS2812B chipset works on tolerant SK6805 chips but fails intermittently
-    // on stricter parts because the WS2812 T0H (250 ns) is below the SK6805
-    // minimum (300 ns) and the chip latches ambiguous bits.
-    FastLED.addLeds<SK6812, PIN_LED_DATA, GRB>(_leds, HAL_NUM_LEDS);
+    FastLED.addLeds<WLICLEDController, PIN_LED_DATA, GRB>(_leds, HAL_NUM_LEDS);
     FastLED.setBrightness(HAL_LED_LEVELS[1]);  // default: MEDIUM
     FastLED.clear(true);
 }

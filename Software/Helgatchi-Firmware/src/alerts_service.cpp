@@ -20,7 +20,9 @@ AlertsService g_alerts;
 // mutating call (raise / ack / clearAll).
 // ---------------------------------------------------------------------------
 
-static constexpr uint32_t RTC_MAGIC = 0xA1E47ED0;  // "ALERTED0"
+// Bump the last digit whenever AlertRecord's layout changes — stale RTC
+// bytes from an older layout must not be reinterpreted as records.
+static constexpr uint32_t RTC_MAGIC = 0xA1E47ED2;  // "ALERTED2"
 
 RTC_DATA_ATTR static uint32_t    _rtc_magic;
 RTC_DATA_ATTR static AlertRecord _rtc_records[AlertsService::MAX_ALERTS];
@@ -74,11 +76,19 @@ uint16_t AlertsService::raise(const char* title,
         int idx = _findIndexByDedup(type, ident);
         if (idx >= 0) {
             AlertRecord& r = _records[idx];
-            r.last_seen_ms = millis();
+            // A present device re-fires its rule on every advertisement —
+            // several times a second per device. Posting an UPDATED per
+            // sighting can fill the event queue within one loop iteration
+            // (dispatch drains once per loop), dropping unrelated events —
+            // including another alert's RAISED. The only consumer refreshes
+            // a 1 Hz time label, so emit at most once per second per record.
+            const uint32_t now  = millis();
+            const bool     emit = (now - r.last_seen_ms) >= 1000;
+            r.last_seen_ms = now;
             if (r.seen_count < UINT16_MAX) r.seen_count++;
             if (rssi != INT8_MIN) r.rssi = rssi;
             _syncToRTC();
-            _emit(EV_ALERT_UPDATED, r.id);
+            if (emit) _emit(EV_ALERT_UPDATED, r.id);
             return r.id;
         }
     }
@@ -184,5 +194,11 @@ void AlertsService::_emit(EventId id, uint16_t alert_id) {
     EventPayload p{};
     p.alert.alert_id = alert_id;
     p.alert.state    = (uint8_t)id;   // subscribers can branch by id alone; state is informational
-    _bus->post(id, p);
+    if (!_bus->post(id, p)) {
+        // A dropped RAISED means an alert that IS in the store gets no card,
+        // LED, vibe, or screen wake — and re-fires dedup silently forever
+        // after. Never let that happen without a trace.
+        Serial.printf("[alerts] event %u for alert %u dropped (bus queue full)\n",
+                      (unsigned)id, (unsigned)alert_id);
+    }
 }

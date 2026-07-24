@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# EEZ Studio regenerates these with LF endings on every build; pin them to LF
+# so rebuilds don't churn the working tree under core.autocrlf=true.
+Software/Helgatchi-Firmware/src/UI/**  text eol=lf
+Software/UI/src/ui/**                   text eol=lf

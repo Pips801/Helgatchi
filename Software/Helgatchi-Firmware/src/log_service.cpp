@@ -50,9 +50,11 @@ static DebugLevel _minLevelForEvent(EventId id) {
         case CMD_SCAN_START:
         case CMD_SCAN_STOP:
         case CMD_POWER_SLEEP:
-        case CMD_POWER_SHIPPING_SLEEP:
         case CMD_POWER_SHIPPING_RESET:
+        case CMD_POWER_FACTORY_RESET:
+        case CMD_POWER_SCREEN_OFF:
         case CMD_POWER_REBOOT:
+        case CMD_POWER_DOWN:
         case CMD_SETTINGS_RESET_DEFAULTS:
             return DEBUG_INFORMATIONAL;
 
@@ -175,7 +177,9 @@ void LogService::onEvent(const Event& e) {
                           e.data.settings.version);
             break;
         case EV_SCAN_STATE_CHANGED:
-            Serial.printf("  state=%u", e.data.scan_state.state);
+            Serial.printf("  domain=%s active=%u",
+                          e.data.scan_state.domain == SCAN_WIFI ? "wifi" : "ble",
+                          e.data.scan_state.active);
             break;
         case EV_ENTITY_UPDATED:
             Serial.printf("  id=%lu", (unsigned long)e.data.entity.entity_id);
@@ -285,33 +289,43 @@ void LogService::_emitPerfTelemetry() {
     // --- Memory ---
     lv_mem_monitor_t lv;
     lv_mem_monitor(&lv);
-    Serial.printf("[%8lu] PERF mem   heap=%luk/%luk  psram=%luk/%luk  "
-                  "lv=%luk/%luk frag=%u%%\n",
+    // heap_* are INTERNAL SRAM. low is the since-boot low-water, blk the largest
+    // contiguous free block — blk << free means the heap is fragmented (matters
+    // for WiFi/LWIP, which need contiguous DMA-capable allocations).
+    Serial.printf("[%8lu] PERF mem   heap=%luk/%luk free=%luk low=%luk blk=%luk  "
+                  "psram=%luk/%luk  lv=%luk/%luk frag=%u%%\n",
                   now,
                   (unsigned long)((ESP.getHeapSize()  - ESP.getFreeHeap())  / 1024),
                   (unsigned long)(ESP.getHeapSize()  / 1024),
+                  (unsigned long)(ESP.getFreeHeap()     / 1024),
+                  (unsigned long)(ESP.getMinFreeHeap()  / 1024),
+                  (unsigned long)(ESP.getMaxAllocHeap() / 1024),
                   (unsigned long)((ESP.getPsramSize() - ESP.getFreePsram()) / 1024),
                   (unsigned long)(ESP.getPsramSize() / 1024),
                   (unsigned long)((lv.total_size - lv.free_size) / 1024),
                   (unsigned long)(lv.total_size / 1024),
                   (unsigned)lv.frag_pct);
 
-    // --- Scan pressure --- (cb/pub are deltas since last line ≈ per second)
+    // --- Scan pressure --- (cb/pub/wifi are deltas since last line ≈ per second)
     const uint32_t cb  = g_scan_engine.callbacks();
     const uint32_t pub = g_scan_engine.published();
-    const uint32_t cb_rate  = cb  - _last_cb;
-    const uint32_t pub_rate = pub - _last_pub;
-    _last_cb  = cb;
-    _last_pub = pub;
-    const unsigned seen  = (unsigned)g_scan.seenCount();
+    const uint32_t wifi_res = g_scan_engine.wifiResults();
+    const uint32_t cb_rate       = cb       - _last_cb;
+    const uint32_t pub_rate      = pub      - _last_pub;
+    const uint32_t wifi_res_rate = wifi_res - _last_wifi_res;
+    _last_cb       = cb;
+    _last_pub      = pub;
+    _last_wifi_res = wifi_res;
+    const unsigned seen  = (unsigned)g_scan_service.seenCount();
     const unsigned cards = (unsigned)g_devices_screen.cardCount();
     const uint32_t qovf  = g_scan_engine.queueOverflows();
     const uint32_t lost  = g_rules.lostScans();
-    const uint32_t noise = g_scan.noiseFiltered();
+    const uint32_t noise = g_scan_service.noiseFiltered();
     Serial.printf("[%8lu] PERF scan  seen=%u cards=%u  cb=%lu/s pub=%lu/s  "
-                  "qovf=%lu lost=%lu noise=%lu\n",
+                  "wifi=%lu/s sweeps=%lu  qovf=%lu lost=%lu noise=%lu\n",
                   now, seen, cards,
                   (unsigned long)cb_rate, (unsigned long)pub_rate,
+                  (unsigned long)wifi_res_rate, (unsigned long)g_scan_engine.wifiScans(),
                   (unsigned long)qovf, (unsigned long)lost, (unsigned long)noise);
 
     // --- Loop timing --- (worst single-iteration micros per phase this window)
@@ -367,13 +381,16 @@ void LogService::_emitTeleplot() {
     lv_mem_monitor_t lv;
     lv_mem_monitor(&lv);
 
-    // Scan pressure (cb/pub are deltas since last line ≈ per second).
+    // Scan pressure (cb/pub/wifi are deltas since last line ≈ per second).
     const uint32_t cb  = g_scan_engine.callbacks();
     const uint32_t pub = g_scan_engine.published();
-    const uint32_t cb_rate  = cb  - _last_cb;
-    const uint32_t pub_rate = pub - _last_pub;
-    _last_cb  = cb;
-    _last_pub = pub;
+    const uint32_t wifi_res = g_scan_engine.wifiResults();
+    const uint32_t cb_rate       = cb       - _last_cb;
+    const uint32_t pub_rate      = pub      - _last_pub;
+    const uint32_t wifi_res_rate = wifi_res - _last_wifi_res;
+    _last_cb       = cb;
+    _last_pub      = pub;
+    _last_wifi_res = wifi_res;
 
     // Loop timing (worst per-phase micros this window; read-and-reset).
     const LoopPerf lp = g_loop_perf;
@@ -398,24 +415,40 @@ void LogService::_emitTeleplot() {
     const uint32_t ev_rate = bus_ev - _last_bus_ev;
     _last_bus_ev = bus_ev;
 
-    // --- Memory (usage — what climbs on a leak) ---
-    Serial.printf(">heap_used:%lu\xC2\xA7KB\n>psram_used:%lu\xC2\xA7KB\n"
+    // --- Memory ---
+    // All heap_* are INTERNAL SRAM (ESP heap accessors are MALLOC_CAP_INTERNAL);
+    // PSRAM is separate. heap_used climbs on a leak; heap_free / heap_largest
+    // (largest contiguous block) / heap_min (since-boot low-water) track internal
+    // headroom. heap_largest well below heap_free = fragmentation, which bites
+    // WiFi/LWIP (they need contiguous DMA-capable blocks) before free hits 0.
+    Serial.printf(">heap_used:%lu\xC2\xA7KB\n>heap_free:%lu\xC2\xA7KB\n"
+                  ">heap_largest:%lu\xC2\xA7KB\n>heap_min:%lu\xC2\xA7KB\n"
+                  ">psram_used:%lu\xC2\xA7KB\n"
                   ">lvgl_pool_used:%lu\xC2\xA7KB\n>lvgl_pool_frag:%u\xC2\xA7%%\n",
-                  (unsigned long)((ESP.getHeapSize()  - ESP.getFreeHeap())  / 1024),
+                  (unsigned long)((ESP.getHeapSize() - ESP.getFreeHeap()) / 1024),
+                  (unsigned long)(ESP.getFreeHeap()     / 1024),
+                  (unsigned long)(ESP.getMaxAllocHeap() / 1024),
+                  (unsigned long)(ESP.getMinFreeHeap()  / 1024),
                   (unsigned long)((ESP.getPsramSize() - ESP.getFreePsram()) / 1024),
                   (unsigned long)((lv.total_size - lv.free_size) / 1024),
                   (unsigned)lv.frag_pct);
 
     // --- Scan pressure ---
+    // ble_adv_recv = raw BLE adv callbacks/s; wifi_ap_recv = WiFi APs published/s
+    // (its own counter, not the shared scan_published); wifi_sweeps = cumulative
+    // completed channel sweeps. scan_queue_overflows is BLE-only (WiFi has no
+    // callback queue — it publishes from tick()).
     Serial.printf(">devices_seen:%u\n>device_cards:%u\n"
                   ">ble_adv_recv:%lu\xC2\xA7/s\n>scan_published:%lu\xC2\xA7/s\n"
+                  ">wifi_ap_recv:%lu\xC2\xA7/s\n>wifi_sweeps:%lu\n"
                   ">scan_queue_overflows:%lu\n>rules_scans_lost:%lu\n>noise_filtered:%lu\n",
-                  (unsigned)g_scan.seenCount(),
+                  (unsigned)g_scan_service.seenCount(),
                   (unsigned)g_devices_screen.cardCount(),
                   (unsigned long)cb_rate, (unsigned long)pub_rate,
+                  (unsigned long)wifi_res_rate, (unsigned long)g_scan_engine.wifiScans(),
                   (unsigned long)g_scan_engine.queueOverflows(),
                   (unsigned long)g_rules.lostScans(),
-                  (unsigned long)g_scan.noiseFiltered());
+                  (unsigned long)g_scan_service.noiseFiltered());
 
     // --- Loop timing (per phase — names the phase that stalls). phase_ui splits
     // into phase_ui_render (rasterization) + phase_ui_flush (SPI/DMA + PSRAM
@@ -435,7 +468,9 @@ void LogService::_emitTeleplot() {
                   (unsigned long)ui_render_us,  (unsigned long)ui_flush_us);
 
     // --- Frame rate / CPU (matches the LVGL perf-monitor overlay) ---
-    Serial.printf(">ui_fps:%lu\xC2\xA7FPS\n>ui_cpu:%lu\xC2\xA7%%\n",
+    // "\xA7" must be its own literal: 'F' is a hex digit, so "\xA7FPS" would
+    // parse as the out-of-range escape \xA7F + "PS" (mangled § + lost F).
+    Serial.printf(">ui_fps:%lu\xC2\xA7" "FPS\n>ui_cpu:%lu\xC2\xA7%%\n",
                   (unsigned long)ui_fps, (unsigned long)ui_cpu);
 
     // --- Power / bus / alerts ---
@@ -471,9 +506,11 @@ const char* LogService::_eventName(EventId id) {
         case CMD_SETTINGS_SAVE:          return "CMD_SETTINGS_SAVE";
         case CMD_SETTINGS_RESET_DEFAULTS:return "CMD_SETTINGS_RESET_DEFAULTS";
         case CMD_POWER_SLEEP:            return "CMD_POWER_SLEEP";
-        case CMD_POWER_SHIPPING_SLEEP:   return "CMD_POWER_SHIPPING_SLEEP";
         case CMD_POWER_SHIPPING_RESET:   return "CMD_POWER_SHIPPING_RESET";
+        case CMD_POWER_FACTORY_RESET:    return "CMD_POWER_FACTORY_RESET";
+        case CMD_POWER_SCREEN_OFF:       return "CMD_POWER_SCREEN_OFF";
         case CMD_POWER_REBOOT:           return "CMD_POWER_REBOOT";
+        case CMD_POWER_DOWN:             return "CMD_POWER_DOWN";
         case CMD_STATS_RESET:            return "CMD_STATS_RESET";
         case CMD_UI_NAV_NEXT:            return "CMD_UI_NAV_NEXT";
         case CMD_UI_NAV_BACK:            return "CMD_UI_NAV_BACK";
@@ -493,6 +530,10 @@ const char* LogService::_eventName(EventId id) {
         case EV_POWER_STATE_CHANGED:     return "EV_POWER_STATE_CHANGED";
         case EV_BATTERY_UPDATED:         return "EV_BATTERY_UPDATED";
         case EV_SLEEP_COUNTDOWN_UPDATED: return "EV_SLEEP_COUNTDOWN_UPDATED";
+        case EV_USB_CONNECTED:           return "EV_USB_CONNECTED";
+        case EV_USB_DISCONNECTED:        return "EV_USB_DISCONNECTED";
+        case EV_SERIAL_CONNECTED:        return "EV_SERIAL_CONNECTED";
+        case EV_SERIAL_DISCONNECTED:     return "EV_SERIAL_DISCONNECTED";
         case EV_SETTINGS_CHANGED:        return "EV_SETTINGS_CHANGED";
         case EV_UI_ACTIVITY:             return "EV_UI_ACTIVITY";
         case EV_MESH_RULE_FIRED_RX:      return "EV_MESH_RULE_FIRED_RX";

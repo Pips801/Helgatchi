@@ -37,6 +37,7 @@ private:
     // telemetry emitters (only one level is active at a time, so they share).
     uint32_t   _last_cb     = 0;   // g_scan_engine.callbacks() at last emit
     uint32_t   _last_pub    = 0;   // g_scan_engine.published() at last emit
+    uint32_t   _last_wifi_res = 0; // g_scan_engine.wifiResults() at last emit — for wifi AP rate
     uint32_t   _last_bus_ev = 0;   // g_bus.eventCount() at last emit — for bus event rate
     uint32_t   _last_frames = 0;   // g_ui.frameCount() at last emit — for ui_fps
     uint32_t   _last_perf_ms = 0;  // millis() at last emit — for loop_hz over real elapsed

@@ -20,6 +20,8 @@ private:
     void _cmdLed(char* args);       // list / play / off / bright
     void _cmdVibe(char* args);      // list / play / off
     void _cmdRule(char* args);      // list / show / create / add / rm / delete / enable / disable / reload / stats
+    void _cmdParty(char* args);     // on [secs] / off
+    void _cmdAdmin(char* args);     // unlock / lock / party / msg / led / beacon / stopall / menu
     void _cmdScan(char* args);      // list / inject / clear
     void _cmdVendor(char* args);    // stats / oui / mfg / search
     void _cmdPower(char* args);     // sleep / sleepscreen / reboot / shipping

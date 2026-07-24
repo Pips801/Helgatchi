@@ -10,6 +10,9 @@ enum PerfMode : uint8_t {
     PERF_BALANCED,         // moderate duty cycle, default timeouts
     PERF_BATTERY_SAVER,    // long intervals, short windows, aggressive sleep
     PERF_DYNAMIC,          // runtime auto-adjustment based on battery level
+    PERF_ALWAYS_ON,        // while charging: never sleeps, screen stays on, ~0 gap
+                           // between scan windows. On battery: normal duty cycle
+                           // (this mode is meant for external power).
     PERF_MODE_COUNT
 };
 
@@ -52,16 +55,17 @@ enum DebugLevel : uint8_t {
 // Settings keys
 //
 // [USER]    — shown on Settings screen, user can change
-// [DEBUG]   — only shown when debug menu is unlocked
+// [DEBUG]   — row hidden unless SKEY_DEBUG_ENABLED is on; reset to default
+//             when that toggle is switched off
 // [DERIVED] — set automatically (by perf mode, build flags, or linked setting)
 //             not shown in UI
 //
-// NOTE: The following debug screen items are ACTIONS, not stored settings.
+// NOTE: The following debug items are ACTIONS, not stored settings.
 //       They emit commands — see event_ids.h:
-//         "Reset statistics"         → CMD_STATS_RESET
-//         "Reset settings"           → CMD_SETTINGS_RESET_DEFAULTS
-//         "Shipping mode sleep"      → CMD_POWER_SHIPPING_SLEEP
-//         "Shipping mode reset+sleep"→ CMD_POWER_SHIPPING_RESET
+//         "Reset statistics"          → CMD_STATS_RESET
+//         "Reset settings"            → CMD_SETTINGS_RESET_DEFAULTS
+//         "Reset device" (wipe+reboot)→ CMD_POWER_FACTORY_RESET
+//         wipe+ship (serial only)     → CMD_POWER_SHIPPING_RESET
 // ---------------------------------------------------------------------------
 
 enum SettingsKey : uint8_t {
@@ -85,13 +89,21 @@ enum SettingsKey : uint8_t {
     SKEY_SLEEP_WHILE_USB,           // [USER]    bool — allow sleep when USB attached (no serial)
     SKEY_VSENSE_5V_DIVIDER,         // [USER]    bool — HW has R4 (+5V→VSENSE) populated; changes VBATT math
 
-    // --- Debug (gated by debug menu) ---
+    // --- Debug (rows gated by SKEY_DEBUG_ENABLED) ---
     SKEY_DEBUG_SERIAL_ENABLED,      // [DEBUG]   bool — USB serial debug output
     SKEY_DEBUG_LEVEL,               // [DEBUG]   DebugLevel
-    SKEY_DEBUG_SLEEP_WITH_SERIAL,   // [DEBUG]   bool — allow sleep even when serial connected
+    // Enum name keeps its DEBUG_ prefix (NVS slot is positional), but this is
+    // a plain sleep-while behavior flag now, shown with SLEEP_WHILE_USB /
+    // SLEEP_WHILE_CHARGING — not gated, not reset by the debug toggle.
+    SKEY_DEBUG_SLEEP_WITH_SERIAL,   // [USER]    bool — allow sleep even when serial connected
+
+    // Occupies the slot vacated by the removed [DERIVED] SKEY_SCREEN_TIMEOUT_S
+    // (which was dead — nothing consumed it). Kept in place rather than appended;
+    // SCHEMA_VERSION is bumped so the old value in this slot resets to default
+    // instead of being misread as this bool.
+    SKEY_SLEEP_WHILE_CHARGING,      // [USER]    bool — allow sleep while charging (default off = inhibit; peer to SLEEP_WHILE_USB / DEBUG_SLEEP_WITH_SERIAL)
 
     // --- Internal / derived (not shown in UI) ---
-    SKEY_SCREEN_TIMEOUT_S,          // [DERIVED] seconds until display dims; tuned by perf mode
     SKEY_INTERACTIVE_TIMEOUT_S,     // [DERIVED] seconds of inactivity before sleep (resets on EV_UI_ACTIVITY)
     SKEY_SLEEP_DURATION_S,          // [DERIVED] seconds the device sleeps between scan cycles
     SKEY_SCAN_DURATION_S,           // [DERIVED] seconds to scan per wake cycle; tuned by perf mode
@@ -104,6 +116,16 @@ enum SettingsKey : uint8_t {
     // Logically a [USER] scanning setting; its UI toggle lives in the Scanning
     // section in EEZ.
     SKEY_IGNORE_RANDOMIZED_MACS,    // [USER]    bool — hide nameless RPA/NRPA BLE devices from the device list (still processed for rules/alerts)
+
+    // Appended (see the NVS-index note above): foxhunt haptics are experimental,
+    // so they ship default-OFF behind this toggle. LedService reads it on demand.
+    SKEY_HUNT_VIBRATION,            // [USER]    bool — pulse the motor with the foxhunt LED meter (default off)
+
+    // Appended (see the NVS-index note above). The gate for every [DEBUG] row
+    // on the Settings screen. Switching it OFF also resets the [DEBUG] keys to
+    // defaults so no invisible debug state stays active. Default off — the
+    // factory reset (CMD_POWER_SHIPPING_RESET) re-hides debug for shipped units.
+    SKEY_DEBUG_ENABLED,             // [USER]    bool — show debug rows on the Settings screen
 
     SKEY_COUNT,
     SKEY_INVALID = 0xFF
@@ -130,7 +152,6 @@ static constexpr uint32_t SMASK_ALL   = 0xFFFFFFFFu;
 struct PerfPreset {
     uint16_t scan_duration_s;        // BLE radio on for this many seconds per cycle
     uint16_t sleep_duration_s;       // BLE radio off / device asleep for this many seconds per cycle
-    uint16_t screen_timeout_s;
     uint16_t interactive_timeout_s;  // inactivity → sleep when user is interacting
 };
 
@@ -139,33 +160,40 @@ struct PerfPreset {
 // the screen stays lit before deep-sleeping. Last 5 s of this period the
 // screen dims as a "going to sleep" warning (handled in PowerManager::tick).
 static constexpr PerfPreset PERF_PRESETS[PERF_MODE_COUNT] = {
-    // PERFORMANCE   scan  sleep  scr  iact
-    {                  7,    15,   60,   20 },
+    // PERFORMANCE   scan  sleep  iact
+    {                  7,    15,   20 },
     // BALANCED
-    {                  5,    30,   30,   20 },
+    {                  5,    30,   20 },
     // BATTERY_SAVER
-    {                  3,    45,   15,   15 },
+    {                  3,    45,   15 },
     // DYNAMIC — managed at runtime, no fixed preset
-    {                  0,     0,    0,    0 },
+    {                  0,     0,    0 },
+    // ALWAYS_ON — while charging PowerManager overrides these to never-sleep,
+    // screen-on, and a ~0 gap between windows (continuous scan). These values
+    // are the on-battery fallback duty cycle (this mode targets external power).
+    {                 15,    30,   20 },
 };
 
 // ---------------------------------------------------------------------------
 // Factory defaults
 // ---------------------------------------------------------------------------
 
-static constexpr uint8_t  DEFAULT_SCREEN_BRIGHTNESS   = SCREEN_BRIGHTNESS_HIGH;
-static constexpr uint8_t  DEFAULT_LED_BRIGHTNESS      = LED_BRIGHTNESS_MEDIUM;
-static constexpr uint8_t  DEFAULT_SCAN_MODE           = SCAN_BLE_ONLY;
-static constexpr uint8_t  DEFAULT_SCAN_ACTIVE         = 0;   // 0 = passive scan (listen only); 1 = active scan (solicit scan responses)
-static constexpr uint8_t  DEFAULT_PERF_MODE           = PERF_BALANCED;
-static constexpr uint8_t  DEFAULT_ALERT_WAKE_SCREEN   = 1;
-static constexpr uint8_t  DEFAULT_ALERT_VIBRATION     = 1;
-static constexpr uint8_t  DEFAULT_ALERT_LED           = 1;
-static constexpr uint8_t  DEFAULT_ALERT_FOCUS         = 0;
-static constexpr uint8_t  DEFAULT_DEBUG_SERIAL        = 0;
-static constexpr uint8_t  DEFAULT_DEBUG_LEVEL         = DEBUG_INFORMATIONAL;
-static constexpr uint8_t  DEFAULT_SLEEP_WITH_SERIAL       = 0;
-static constexpr uint8_t  DEFAULT_SLEEP_WHILE_USB     = 0;   // 0 = inhibit (preserves old behavior)
-static constexpr uint8_t  DEFAULT_VSENSE_5V_DIVIDER   = 0;   // 0 = R4 cut (VSENSE = VBATT/2, current default)
-static constexpr uint8_t  DEFAULT_TUTORIAL_SHOWN      = 0;   // 0 = show on first boot
+static constexpr uint8_t  DEFAULT_SCREEN_BRIGHTNESS      = SCREEN_BRIGHTNESS_MEDIUM;
+static constexpr uint8_t  DEFAULT_LED_BRIGHTNESS         = LED_BRIGHTNESS_LOW;
+static constexpr uint8_t  DEFAULT_SCAN_MODE              = SCAN_BLE_ONLY;
+static constexpr uint8_t  DEFAULT_SCAN_ACTIVE            = 0;   // 0 = passive scan (listen only); 1 = active scan (solicit scan responses)
+static constexpr uint8_t  DEFAULT_PERF_MODE              = PERF_BALANCED;
+static constexpr uint8_t  DEFAULT_ALERT_WAKE_SCREEN      = 1;
+static constexpr uint8_t  DEFAULT_ALERT_VIBRATION        = 1;
+static constexpr uint8_t  DEFAULT_ALERT_LED              = 1;
+static constexpr uint8_t  DEFAULT_ALERT_FOCUS            = 0;
+static constexpr uint8_t  DEFAULT_DEBUG_SERIAL           = 0;
+static constexpr uint8_t  DEFAULT_DEBUG_LEVEL            = DEBUG_INFORMATIONAL;
+static constexpr uint8_t  DEFAULT_SLEEP_WITH_SERIAL      = 0;
+static constexpr uint8_t  DEFAULT_SLEEP_WHILE_USB        = 0;   // 0 = inhibit sleep while a USB data host is attached
+static constexpr uint8_t  DEFAULT_SLEEP_WHILE_CHARGING   = 0;  // 0 = inhibit sleep while charging
+static constexpr uint8_t  DEFAULT_VSENSE_5V_DIVIDER      = 1;   // 0 = R4 cut (VSENSE = VBATT/2, current default)
+static constexpr uint8_t  DEFAULT_TUTORIAL_SHOWN         = 0;   // 0 = show on first boot
 static constexpr uint8_t  DEFAULT_IGNORE_RANDOMIZED_MACS = 1;   // 1 = hide nameless randomized BLE devices from the list
+static constexpr uint8_t  DEFAULT_HUNT_VIBRATION         = 0;   // 0 = foxhunt haptics off (experimental; opt in)
+static constexpr uint8_t  DEFAULT_DEBUG_ENABLED          = 0;   // 0 = debug rows hidden until the user opts in

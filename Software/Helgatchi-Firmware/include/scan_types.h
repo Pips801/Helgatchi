@@ -58,6 +58,7 @@ struct ScanResult {
     uint8_t  mac[6];
     uint8_t  mac_type;          // MacAddrType — BLE address classification; MAC_TYPE_UNKNOWN for WiFi
     int8_t   rssi;
+    uint8_t  channel;           // WiFi primary channel (1..14). 0 for BLE / unknown. Used by WiFi lock-on.
     char     name[32];          // BLE adv name OR WiFi SSID. NUL-terminated; truncated if longer.
     uint16_t mfg_id;            // BT SIG company ID (BLE). 0 = none. Unused for WiFi.
     uint8_t  service_count;     // number of populated entries in service_uuids

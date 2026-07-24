@@ -28,9 +28,8 @@ const char* vendor_for_mac(const uint8_t mac[6]);
 size_t vendor_oui_count();
 size_t vendor_mfg_count();
 
-// Iteration accessors. RulesService uses these at rule-load time to expand
-// a substring criterion (e.g. `org_contains=apple`) into the set of
-// matching prefixes / mfg ids. `idx` is 0..count-1; out-of-range returns
-// false and leaves the out params untouched.
+// Iteration accessors over the full tables. `idx` is 0..count-1; out-of-range
+// returns false and leaves the out params untouched. (RulesService no longer
+// uses these — oui_org/mfg_org resolve via the forward lookups at match time.)
 bool vendor_oui_at(size_t idx, uint32_t* prefix_out, const char** name_out);
 bool vendor_mfg_at(size_t idx, uint16_t* mfg_id_out, const char** name_out);

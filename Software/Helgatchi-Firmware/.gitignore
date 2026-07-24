@@ -5,6 +5,9 @@
 .vscode/ipch
 include/build_info.h
 include/vendor_tables_data.h
+include/admin_secret.h
+# Admin-mode build secrets (see .env.example). Never commit real secrets.
+.env
 scripts/vendor_sources/audit.txt
 # Uncompressed OUI CSV — only the .gz copy is committed
 scripts/vendor_sources/oui.csv

@@ -1,0 +1,14 @@
+{
+  "name": "Universal Global",
+  "title": "Universal Global SC nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["08:3a:88", "E0:4F:43"] },
+    { "name": [".*universal global.*", ".*ugsi.*"] },
+    { "oui_org": [".*universal global scientific.*"] },
+    { "mfg_org": [".*universal global.*"] }
+  ]
+}

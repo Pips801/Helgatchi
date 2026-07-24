@@ -1,6 +1,8 @@
 #include "rules_service.h"
 #include "scan_service.h"
 #include "vendor_lookup.h"
+#include "party_service.h"
+#include "re_lite.h"
 #include <Arduino.h>
 #include <esp_heap_caps.h>
 #include <LittleFS.h>
@@ -18,11 +20,12 @@ static constexpr const char* DIR_RULES         = "/rules";
 static constexpr const char* DIR_FACTORY       = "/rules/factory";
 static constexpr const char* DIR_USER          = "/rules/user";
 
-// NVS namespace + key for the disabled-rules overlay. Single blob of
+// NVS namespace + key for the enabled-rules overlay. Single blob of
 // newline-separated rule names; keeps key count fixed at 1 regardless of
-// how many rules are toggled.
+// how many rules are toggled. Rules load disabled by default — an absent
+// key (first boot, post-erase, factory reset) means nothing is enabled.
 static constexpr const char* NVS_NAMESPACE     = "rules";
-static constexpr const char* NVS_KEY_DISABLED  = "disabled";
+static constexpr const char* NVS_KEY_ENABLED   = "enabled";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -37,34 +40,102 @@ static char* _psram_strdup(const char* s) {
     return out;
 }
 
-// Case-insensitive substring — folds both sides on the fly. Slightly slower
-// than pre-lowercasing the needle, but lets us store the user's original
-// casing in the rule and emit it verbatim when serializing back to JSON.
-static const char* _icontains(const char* haystack, const char* needle) {
-    if (!haystack || !needle || !*needle) return haystack;
-    const size_t nlen = strlen(needle);
+// Case-insensitive substring test with an explicit needle length (the needle
+// is a slice of a longer pattern string, so it isn't NUL-terminated where we
+// want to stop). Empty needle matches anything.
+static bool _icontains_n(const char* haystack, const char* needle, size_t nlen) {
+    if (nlen == 0) return true;
+    if (!haystack) return false;
     for (const char* p = haystack; *p; p++) {
         size_t i = 0;
         for (; i < nlen; i++) {
-            char a = p[i]; char b = needle[i];
-            if (!a) return nullptr;
+            char a = p[i];
+            if (!a) return false;
+            char b = needle[i];
             if (a >= 'A' && a <= 'Z') a = (char)(a + 32);
             if (b >= 'A' && b <= 'Z') b = (char)(b + 32);
             if (a != b) break;
         }
-        if (i == nlen) return p;
+        if (i == nlen) return true;
     }
-    return nullptr;
+    return false;
 }
 
-// Parse "AA:BB:CC" into the low 24 bits of a uint32. Accepts hex with or
-// without colons. Returns false on malformed input.
-static bool _parseOuiPrefix(const char* s, uint32_t* out) {
-    if (!s || !out) return false;
-    unsigned int b[3] = {0};
-    int n = sscanf(s, "%2x:%2x:%2x", &b[0], &b[1], &b[2]);
-    if (n != 3) return false;
-    *out = ((uint32_t)b[0] << 16) | ((uint32_t)b[1] << 8) | (uint32_t)b[2];
+// Classify a pattern into a match shape. For every shape but PAT_REGEX the
+// literal "core" is [*off_out, *off_out + *len_out) within `p` — i.e. `p` with
+// its leading/trailing ".*" wildcards skipped. PAT_REGEX ignores off/len and
+// runs the whole verbatim pattern through re_lite. Assumes `p` already passed
+// re_lite_valid(). See PatShape in rules_service.h.
+static PatShape _classifyPattern(const char* p, uint8_t* off_out, uint8_t* len_out) {
+    const size_t n = strlen(p);
+    bool lead  = (n >= 2 && p[0] == '.' && p[1] == '*');
+    bool trail = (n >= 2 && p[n - 1] == '*' && p[n - 2] == '.');
+    // A "\.*" tail is an escaped literal dot, not a wildcard — don't strip it.
+    if (trail && n >= 3 && p[n - 3] == '\\') trail = false;
+
+    size_t start = lead  ? 2      : 0;
+    size_t end   = trail ? n - 2  : n;
+    if (end < start) end = start;
+
+    for (size_t i = start; i < end; i++) {
+        const char c = p[i];
+        if (c == '.' || c == '^' || c == '$' || c == '*' || c == '+' ||
+            c == '?' || c == '[' || c == ']' || c == '(' || c == ')' ||
+            c == '{' || c == '}' || c == '|' || c == '\\') {
+            return PAT_REGEX;   // a metachar survived affix-stripping
+        }
+    }
+    *off_out = (uint8_t)start;
+    *len_out = (uint8_t)(end - start);
+    if (lead && trail) return PAT_CONTAINS;   // .*core.*
+    if (lead)          return PAT_SUFFIX;     // .*core
+    if (trail)         return PAT_PREFIX;     // core.*
+    return PAT_EXACT;                         // core
+}
+
+// Evaluate a classified pattern against a haystack. Fast-path shapes are plain
+// case-insensitive compares; only PAT_REGEX invokes the matcher.
+static bool _patMatch(const char* pat, PatShape shape, uint8_t off, uint8_t len,
+                      const char* hay) {
+    if (!hay) hay = "";
+    switch (shape) {
+        case PAT_EXACT:    return strcasecmp(hay, pat) == 0;
+        case PAT_CONTAINS: return _icontains_n(hay, pat + off, len);
+        case PAT_PREFIX:   return strncasecmp(hay, pat + off, len) == 0;
+        case PAT_SUFFIX: {
+            const size_t hl = strlen(hay);
+            if (hl < len) return false;
+            return strncasecmp(hay + hl - len, pat + off, len) == 0;
+        }
+        case PAT_REGEX:    return re_lite_full_match(pat, hay);
+    }
+    return false;
+}
+
+// Parse an OUI/MAC prefix into `bytes` (MSB-first) + a nibble count. Accepts
+// 6..12 hex nibbles (24-bit MA-L .. 48-bit full MAC) with optional ':' / '-'
+// separators, so "00:1D:96" (24-bit), "8C:1F:64:F" (28-bit MA-M) and
+// "70:B3:D5:1A:2" (36-bit MA-S) all parse. An odd nibble lands in the high half
+// of the last byte, low half zeroed. Returns false on a non-hex char, or a
+// length below 3 octets / above a full MAC.
+static bool _parseOuiPrefix(const char* s, uint8_t bytes[6], uint8_t* nibbles_out) {
+    if (!s) return false;
+    memset(bytes, 0, 6);
+    uint8_t nib = 0;
+    for (const char* p = s; *p; p++) {
+        if (*p == ':' || *p == '-') continue;      // separators optional
+        int v;
+        if      (*p >= '0' && *p <= '9') v = *p - '0';
+        else if (*p >= 'a' && *p <= 'f') v = *p - 'a' + 10;
+        else if (*p >= 'A' && *p <= 'F') v = *p - 'A' + 10;
+        else return false;                          // non-hex
+        if (nib >= 12) return false;                // longer than a full MAC
+        if ((nib & 1) == 0) bytes[nib >> 1] = (uint8_t)(v << 4);   // high nibble
+        else                bytes[nib >> 1] |= (uint8_t)v;         // low nibble
+        nib++;
+    }
+    if (nib < 6) return false;                      // shorter than 3 octets
+    *nibbles_out = nib;
     return true;
 }
 
@@ -135,16 +206,20 @@ void RulesService::begin(EventBus& bus) {
     // Start draining the ring from "right now" — old scan entries from before
     // we existed aren't actionable. ScanService.publish() since boot will be
     // visible on the next tick.
-    _ring_read_pos = g_scan.writePos();
+    _ring_read_pos = g_scan_service.writePos();
 
     // LittleFS must already be mounted by main.cpp.
     _ensureUserDir();
+    _loading = true;   // don't let loading a rule persist it back to disk
     _loadDir(DIR_FACTORY, true);
     _loadDir(DIR_USER,    false);
+    _loading = false;
     _applyEnabledOverlay();
 
-    Serial.printf("[rules] loaded %u rule%s from filesystem\n",
-                  (unsigned)_count, _count == 1 ? "" : "s");
+    const uint32_t nrules = totalRules();
+    Serial.printf("[rules] loaded %u ruleset%s with %lu rule%s\n",
+                  (unsigned)_count, _count == 1 ? "" : "s",
+                  (unsigned long)nrules, nrules == 1 ? "" : "s");
 }
 
 uint16_t RulesService::reloadFromFs() {
@@ -154,16 +229,62 @@ uint16_t RulesService::reloadFromFs() {
         _count--;
     }
     _ensureUserDir();
+    _loading = true;
     _loadDir(DIR_FACTORY, true);
     _loadDir(DIR_USER,    false);
+    _loading = false;
     _applyEnabledOverlay();
+    _notifyChanged();
     return _count;
+}
+
+void RulesService::factoryReset() {
+    // Wipe /rules/user entirely — including stray files that never loaded
+    // (parse failures, name collisions). Collect-then-delete in small passes:
+    // deleting while iterating a LittleFS directory invalidates the iterator.
+    for (;;) {
+        char paths[8][80];   // "/rules/user/" + name[56] + ".json"
+        int  n = 0;
+        {
+            File dir = LittleFS.open(DIR_USER);
+            if (dir && dir.isDirectory()) {
+                File entry = dir.openNextFile();
+                while (entry && n < 8) {
+                    if (!entry.isDirectory()) {
+                        snprintf(paths[n], sizeof(paths[n]), "%s/%s", DIR_USER, entry.name());
+                        n++;
+                    }
+                    entry = dir.openNextFile();
+                }
+            }
+        }
+        if (n == 0) break;
+        int removed = 0;
+        for (int i = 0; i < n; i++) {
+            if (LittleFS.remove(paths[i])) removed++;
+        }
+        if (removed == 0) break;   // FS refusing deletes — don't spin forever
+    }
+
+    // Drop the whole "rules" NVS namespace. The enabled overlay is its only
+    // key, and factory state is "nothing enabled".
+    Preferences prefs;
+    if (prefs.begin(NVS_NAMESPACE, /*readOnly*/ false)) {
+        prefs.clear();
+        prefs.end();
+    }
+
+    // Reload: factory set only, everything disabled (empty overlay). Posts
+    // EV_RULES_CHANGED so any live UI reconciles.
+    reloadFromFs();
+    Serial.printf("[rules] factory reset — %u factory ruleset%s, all disabled\n",
+                  (unsigned)_count, _count == 1 ? "" : "s");
 }
 
 void RulesService::tick() {
     ScanResult batch[DRAIN_BATCH];
     uint32_t   lost = 0;
-    const size_t got = g_scan.drain(&_ring_read_pos, batch, DRAIN_BATCH, &lost);
+    const size_t got = g_scan_service.drain(&_ring_read_pos, batch, DRAIN_BATCH, &lost);
     _lost_scans += lost;
     for (size_t i = 0; i < got; i++) _matchScan(batch[i]);
 }
@@ -176,6 +297,12 @@ void RulesService::onEvent(const Event& /*e*/) {
 // ---------------------------------------------------------------------------
 // Mutation
 // ---------------------------------------------------------------------------
+
+void RulesService::_notifyChanged() {
+    // No payload — consumers re-read g_rules. Suppressed during bulk FS loads
+    // (begin/reloadFromFs post once when the load completes, not per file).
+    if (_bus && !_loading) _bus->post(EV_RULES_CHANGED);
+}
 
 int RulesService::_findRuleIdx(const char* name) const {
     if (!name) return -1;
@@ -218,10 +345,10 @@ bool RulesService::_appendCriterion(Rule& r, const Criterion& c) {
 
 void RulesService::_freeCriterion(Criterion& c) {
     switch (c.kind) {
-        case CRIT_NAME_EQUALS:
-        case CRIT_NAME_CONTAINS:
-        case CRIT_SSID_EQUALS:
-        case CRIT_SSID_CONTAINS:
+        case CRIT_NAME_MATCH:
+        case CRIT_SSID_MATCH:
+        case CRIT_OUI_ORG:
+        case CRIT_MFG_ORG:
             if (c.v.str) heap_caps_free((void*)c.v.str);
             c.v.str = nullptr;
             break;
@@ -256,7 +383,10 @@ bool RulesService::createRule(const char* name) {
     r.is_factory  = false;
     r.enabled     = true;
     _count++;
-    _saveUserRule(r);   // persist immediately so create survives reboot even before criteria added
+    _saveUserRule(r);            // persist immediately so create survives reboot even before criteria added
+    _persistEnabledOverlay();    // deliberate creation implies enabled — record it, or the
+                                 // default-off load would silence the rule on next boot
+    _notifyChanged();
     return true;
 }
 
@@ -264,7 +394,7 @@ bool RulesService::deleteRule(const char* name) {
     int idx = _findRuleIdx(name);
     if (idx < 0) return false;
     if (_rules[idx].is_factory) return false;   // factory rules are read-only
-    char saved_name[24];
+    char saved_name[sizeof(Rule::name)];
     strncpy(saved_name, _rules[idx].name, sizeof(saved_name));
     saved_name[sizeof(saved_name) - 1] = '\0';
     _freeRuleContents(_rules[idx]);
@@ -274,6 +404,9 @@ bool RulesService::deleteRule(const char* name) {
     memset(&_rules[_count - 1], 0, sizeof(Rule));
     _count--;
     _deleteUserRuleFile(saved_name);
+    _persistEnabledOverlay();    // scrub the name from the enabled blob so a future
+                                 // ruleset reusing it can't arrive silently enabled
+    _notifyChanged();
     return true;
 }
 
@@ -287,6 +420,7 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
         strncpy(r.title, value, sizeof(r.title) - 1);
         r.title[sizeof(r.title) - 1] = '\0';
         _saveUserRule(r);
+        _notifyChanged();
         return true;
     }
     if (strcasecmp(field, "vibe") == 0) {
@@ -294,6 +428,7 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
         if (p == HAPTIC_PATTERN_COUNT) return false;
         r.vibe = p;
         _saveUserRule(r);
+        _notifyChanged();
         return true;
     }
     if (strcasecmp(field, "led") == 0) {
@@ -301,6 +436,7 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
         if (p == LED_PATTERN_COUNT) return false;
         r.led = p;
         _saveUserRule(r);
+        _notifyChanged();
         return true;
     }
     if (strcasecmp(field, "type") == 0 || strcasecmp(field, "alert_type") == 0) {
@@ -315,6 +451,7 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
                  strcasecmp(value, "infer") == 0)                             r.alert_type = ALERT_TYPE_COUNT;
         else return false;
         _saveUserRule(r);
+        _notifyChanged();
         return true;
     }
     if (strcasecmp(field, "action") == 0) {
@@ -322,6 +459,7 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
         else if (strcasecmp(value, "party") == 0) r.action = RULE_ACTION_PARTY;
         else return false;
         _saveUserRule(r);
+        _notifyChanged();
         return true;
     }
     return false;
@@ -332,6 +470,7 @@ bool RulesService::setEnabled(const char* name, bool enabled) {
     if (idx < 0) return false;
     _rules[idx].enabled = enabled;
     _persistEnabledOverlay();   // NVS overlay survives reboots + FS reflash
+    _notifyChanged();
     return true;
 }
 
@@ -347,6 +486,7 @@ bool RulesService::removeCriterion(const char* name, uint16_t idx) {
     }
     r.criterion_count--;
     _saveUserRule(r);
+    _notifyChanged();
     return true;
 }
 
@@ -355,71 +495,42 @@ bool RulesService::removeCriterion(const char* name, uint16_t idx) {
 // entries.
 // ---------------------------------------------------------------------------
 
-// Expand org_equals / org_contains into a set of CRIT_OUI or CRIT_MFG
-// criteria by walking the vendor table. `equals` selects exact vs substring.
-int RulesService::_expandOrgCriteria(Rule& r, CriterionKind kind, bool equals, const char* value) {
-    if (!value || !*value) return 0;
-    int added = 0;
-    if (kind == CRIT_OUI) {
-        const size_t N = vendor_oui_count();
-        for (size_t k = 0; k < N; k++) {
-            uint32_t   prefix;
-            const char* name;
-            vendor_oui_at(k, &prefix, &name);
-            bool hit = equals ? (strcasecmp(name, value) == 0)
-                              : (_icontains(name, value) != nullptr);
-            if (!hit) continue;
-            Criterion c{};
-            c.kind = CRIT_OUI;
-            c.v.oui_prefix = prefix;
-            if (!_appendCriterion(r, c)) return added;   // hit MAX_CRITERIA
-            added++;
-        }
-    } else {   // CRIT_MFG
-        const size_t N = vendor_mfg_count();
-        for (size_t k = 0; k < N; k++) {
-            uint16_t   mfg_id;
-            const char* name;
-            vendor_mfg_at(k, &mfg_id, &name);
-            bool hit = equals ? (strcasecmp(name, value) == 0)
-                              : (_icontains(name, value) != nullptr);
-            if (!hit) continue;
-            Criterion c{};
-            c.kind = CRIT_MFG;
-            c.v.mfg_id = mfg_id;
-            if (!_appendCriterion(r, c)) return added;
-            added++;
-        }
-    }
-    return added;
-}
-
 int RulesService::addCriteria(const char* name, const char* field, const char* values_csv) {
     int rIdx = _findRuleIdx(name);
     if (rIdx < 0 || !field || !values_csv) return -1;
     Rule& r = _rules[rIdx];
     if (r.is_factory) return -1;
+    const int added = _addCriteriaToRule(r, field, values_csv);
+    if (added > 0) {
+        _saveUserRule(r);
+        _notifyChanged();
+    }
+    return added;
+}
 
-    // Identify the field.
+// Parse `field`=`values_csv` into criteria on `r`. No factory guard and no
+// persistence (the public addCriteria wraps this with both; the loader calls it
+// directly). Returns the count added, or -1 on parse error / invalid pattern.
+int RulesService::_addCriteriaToRule(Rule& r, const char* field, const char* values_csv) {
+    if (!field || !values_csv) return -1;
+
+    // Identify the field. name/ssid/oui_org/mfg_org take case-insensitive
+    // full-match patterns (see PatShape); the *_equals / *_contains fields they
+    // replaced are gone.
     enum FieldKind {
         F_OUI, F_MAC, F_MFG, F_SERVICE,
-        F_NAME_EQ, F_NAME_CT, F_SSID_EQ, F_SSID_CT,
-        F_OUI_ORG_EQ, F_OUI_ORG_CT, F_MFG_ORG_EQ, F_MFG_ORG_CT,
+        F_NAME, F_SSID, F_OUI_ORG, F_MFG_ORG,
         F_UNKNOWN
     };
     FieldKind fk =
-        (strcasecmp(field, "oui")              == 0) ? F_OUI        :
-        (strcasecmp(field, "mac")              == 0) ? F_MAC        :
-        (strcasecmp(field, "mfg")              == 0) ? F_MFG        :
-        (strcasecmp(field, "service")          == 0) ? F_SERVICE    :
-        (strcasecmp(field, "name_equals")      == 0) ? F_NAME_EQ    :
-        (strcasecmp(field, "name_contains")    == 0) ? F_NAME_CT    :
-        (strcasecmp(field, "ssid_equals")      == 0) ? F_SSID_EQ    :
-        (strcasecmp(field, "ssid_contains")    == 0) ? F_SSID_CT    :
-        (strcasecmp(field, "oui_org_equals")   == 0) ? F_OUI_ORG_EQ :
-        (strcasecmp(field, "oui_org_contains") == 0) ? F_OUI_ORG_CT :
-        (strcasecmp(field, "mfg_org_equals")   == 0) ? F_MFG_ORG_EQ :
-        (strcasecmp(field, "mfg_org_contains") == 0) ? F_MFG_ORG_CT :
+        (strcasecmp(field, "oui")     == 0) ? F_OUI      :
+        (strcasecmp(field, "mac")     == 0) ? F_MAC      :
+        (strcasecmp(field, "mfg")     == 0) ? F_MFG      :
+        (strcasecmp(field, "service") == 0) ? F_SERVICE  :
+        (strcasecmp(field, "name")    == 0) ? F_NAME     :
+        (strcasecmp(field, "ssid")    == 0) ? F_SSID     :
+        (strcasecmp(field, "oui_org") == 0) ? F_OUI_ORG  :
+        (strcasecmp(field, "mfg_org") == 0) ? F_MFG_ORG  :
         F_UNKNOWN;
     if (fk == F_UNKNOWN) return -1;
 
@@ -442,10 +553,11 @@ int RulesService::addCriteria(const char* name, const char* field, const char* v
         Criterion c{};
         switch (fk) {
             case F_OUI: {
-                uint32_t pfx;
-                if (!_parseOuiPrefix(tok, &pfx)) { free(buf); return -1; }
+                uint8_t bytes[6]; uint8_t nib;
+                if (!_parseOuiPrefix(tok, bytes, &nib)) { free(buf); return -1; }
                 c.kind = CRIT_OUI;
-                c.v.oui_prefix = pfx;
+                memcpy(c.v.oui.bytes, bytes, 6);
+                c.v.oui.nibbles = nib;
                 if (_appendCriterion(r, c)) added++;
                 break;
             }
@@ -473,58 +585,58 @@ int RulesService::addCriteria(const char* name, const char* field, const char* v
                 if (_appendCriterion(r, c)) added++;
                 break;
             }
-            case F_NAME_EQ:
-            case F_NAME_CT:
-            case F_SSID_EQ:
-            case F_SSID_CT: {
-                // Store with original case; _icontains folds both sides at
-                // match time. Preserves how the user typed it for `rules show`
-                // and JSON round-trip.
+            case F_NAME:
+            case F_SSID:
+            case F_OUI_ORG:
+            case F_MFG_ORG: {
+                // Pattern kinds. Store the pattern verbatim (original case) for
+                // `rules show` and JSON round-trip, and classify its shape once
+                // so the hot path skips the regex engine for plain shapes.
+                // name/ssid match the device name; oui_org/mfg_org match the
+                // vendor name resolved per sighting at match time.
+                if (!re_lite_valid(tok)) { free(buf); return -1; }
+                uint8_t off = 0, len = 0;
+                const PatShape shape = _classifyPattern(tok, &off, &len);
                 char* dup = _psram_strdup(tok);
                 if (!dup) { free(buf); return -1; }
-                c.kind = (fk == F_NAME_EQ) ? CRIT_NAME_EQUALS  :
-                         (fk == F_NAME_CT) ? CRIT_NAME_CONTAINS:
-                         (fk == F_SSID_EQ) ? CRIT_SSID_EQUALS  :
-                                             CRIT_SSID_CONTAINS;
-                c.v.str = dup;
+                c.kind      = (fk == F_NAME)    ? CRIT_NAME_MATCH :
+                              (fk == F_SSID)    ? CRIT_SSID_MATCH :
+                              (fk == F_OUI_ORG) ? CRIT_OUI_ORG    : CRIT_MFG_ORG;
+                c.pat_shape = shape;
+                c.pat_off   = off;
+                c.pat_len   = len;
+                c.v.str     = dup;
                 if (_appendCriterion(r, c)) added++;
                 else                        heap_caps_free(dup);
                 break;
             }
-            case F_OUI_ORG_EQ:
-                added += _expandOrgCriteria(r, CRIT_OUI, true,  tok);
-                break;
-            case F_OUI_ORG_CT:
-                added += _expandOrgCriteria(r, CRIT_OUI, false, tok);
-                break;
-            case F_MFG_ORG_EQ:
-                added += _expandOrgCriteria(r, CRIT_MFG, true,  tok);
-                break;
-            case F_MFG_ORG_CT:
-                added += _expandOrgCriteria(r, CRIT_MFG, false, tok);
-                break;
             default:
                 break;
         }
     }
 
     free(buf);
-    if (added > 0) _saveUserRule(r);
-    return added;
+    return added;   // caller (public addCriteria) persists; the loader does not
 }
 
 // ---------------------------------------------------------------------------
 // Match path
 // ---------------------------------------------------------------------------
 
-bool RulesService::_criterionMatches(const Criterion& c, const ScanResult& s) const {
+bool RulesService::_criterionMatches(const Criterion& c, const ScanResult& s,
+                                     const char* oui_org, const char* mfg_org) const {
     switch (c.kind) {
         case CRIT_OUI: {
-            const uint32_t scan_prefix =
-                ((uint32_t)s.mac[0] << 16) |
-                ((uint32_t)s.mac[1] <<  8) |
-                ((uint32_t)s.mac[2]);
-            return scan_prefix == c.v.oui_prefix;
+            // Nibble-wise prefix compare: full bytes, then a trailing high
+            // nibble when the prefix has an odd nibble count.
+            const uint8_t full = c.v.oui.nibbles >> 1;
+            for (uint8_t i = 0; i < full; i++) {
+                if (s.mac[i] != c.v.oui.bytes[i]) return false;
+            }
+            if (c.v.oui.nibbles & 1) {
+                if ((s.mac[full] & 0xF0) != (c.v.oui.bytes[full] & 0xF0)) return false;
+            }
+            return true;
         }
         case CRIT_MAC:
             return memcmp(s.mac, c.v.mac, 6) == 0;
@@ -535,25 +647,33 @@ bool RulesService::_criterionMatches(const Criterion& c, const ScanResult& s) co
                 if (memcmp(s.service_uuids[i], c.v.uuid, 16) == 0) return true;
             }
             return false;
-        case CRIT_NAME_EQUALS:
-            return c.v.str && strcmp(s.name, c.v.str) == 0;
-        case CRIT_NAME_CONTAINS:
-            return c.v.str && _icontains(s.name, c.v.str) != nullptr;
-        case CRIT_SSID_EQUALS:
-            return s.domain == SCAN_WIFI && c.v.str && strcmp(s.name, c.v.str) == 0;
-        case CRIT_SSID_CONTAINS:
-            return s.domain == SCAN_WIFI && c.v.str && _icontains(s.name, c.v.str) != nullptr;
+        case CRIT_NAME_MATCH:
+            return c.v.str && _patMatch(c.v.str, c.pat_shape, c.pat_off, c.pat_len, s.name);
+        case CRIT_SSID_MATCH:
+            return s.domain == SCAN_WIFI && c.v.str &&
+                   _patMatch(c.v.str, c.pat_shape, c.pat_off, c.pat_len, s.name);
+        case CRIT_OUI_ORG:
+            return oui_org && c.v.str &&
+                   _patMatch(c.v.str, c.pat_shape, c.pat_off, c.pat_len, oui_org);
+        case CRIT_MFG_ORG:
+            return mfg_org && c.v.str &&
+                   _patMatch(c.v.str, c.pat_shape, c.pat_off, c.pat_len, mfg_org);
         default:
             return false;
     }
 }
 
 void RulesService::_matchScan(const ScanResult& s) {
+    // Resolve the sighting's vendor names once and reuse them across every rule
+    // — CRIT_OUI_ORG / CRIT_MFG_ORG match against these instead of expanding the
+    // vendor table at load. Both are single bsearches; oui uses the 24-bit OUI.
+    const char* oui_org = vendor_for_mac(s.mac);
+    const char* mfg_org = s.mfg_id ? vendor_mfg_lookup(s.mfg_id) : nullptr;
     for (uint16_t i = 0; i < _count; i++) {
         Rule& r = _rules[i];
         if (!r.enabled || r.criterion_count == 0) continue;
         for (uint16_t k = 0; k < r.criterion_count; k++) {
-            if (_criterionMatches(r.criteria[k], s)) {
+            if (_criterionMatches(r.criteria[k], s, oui_org, mfg_org)) {
                 _fire(r, s);
                 _match_count++;
                 r.match_count++;
@@ -564,14 +684,25 @@ void RulesService::_matchScan(const ScanResult& s) {
 }
 
 void RulesService::_fire(Rule& r, const ScanResult& s) {
-    if (r.action != RULE_ACTION_ALERT) {
-        // RULE_ACTION_PARTY etc. — reserved for Phase 6.
+    if (r.action == RULE_ACTION_PARTY) {
+        // Party mode owns its own effects (rainbow LEDs, haptics, dance anim,
+        // banner) — no alert card. Re-fires while the device lingers just
+        // refresh the party timer; from_rule=true honours the post-dismiss
+        // cooldown so a persistent beacon can't instantly re-trigger.
+        g_party.start(PartyService::DEFAULT_DURATION_MS, /*from_rule=*/true);
         return;
+    }
+    if (r.action != RULE_ACTION_ALERT) {
+        return;   // other actions reserved
     }
 
     // Dedup identifier: per (rule, MAC). AlertsService coalesces re-fires
-    // into a last_seen update.
-    char ident[24];
+    // into a last_seen update. Sized for name[56] + ':' + 12 hex + NUL —
+    // truncating the MAC off the key would collapse distinct devices into
+    // one alert.
+    char ident[72];
+    static_assert(sizeof(ident) >= sizeof(Rule::name) + 13,
+                  "ident must fit name + ':' + 12 hex MAC");
     snprintf(ident, sizeof(ident), "%s:%02X%02X%02X%02X%02X%02X",
              r.name,
              s.mac[0], s.mac[1], s.mac[2], s.mac[3], s.mac[4], s.mac[5]);
@@ -583,7 +714,19 @@ void RulesService::_fire(Rule& r, const ScanResult& s) {
     HapticPatternId vibe = (r.vibe == HAPTIC_PATTERN_COUNT) ? HAPTIC_DOUBLE_TAP        : r.vibe;
     LedPatternId    led  = (r.led  == LED_PATTERN_COUNT)    ? LED_PATTERN_ALERT_DEFAULT : r.led;
 
-    g_alerts.raise(r.title, type, vibe, led, ident, s.rssi);
+    const uint16_t id = g_alerts.raise(r.title, type, vibe, led, ident, s.rssi);
+    if (id == AlertsService::INVALID_ALERT) {
+        // Store full (16 active) and this device has no existing record —
+        // the alert is lost. Throttled: a present device re-fires several
+        // times a second.
+        static uint32_t s_last_warn_ms = 0;
+        const uint32_t now = millis();
+        if (now - s_last_warn_ms >= 5000) {
+            s_last_warn_ms = now;
+            Serial.printf("[rules] '%s' fired but alert store is full — ack or clear alerts\n",
+                          r.name);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -622,15 +765,15 @@ void RulesService::_loadDir(const char* dir_path, bool is_factory) {
 // Used by _saveUserRule to group atomic criteria back into JSON entries.
 static const char* _kindToField(CriterionKind k) {
     switch (k) {
-        case CRIT_OUI:           return "oui";
-        case CRIT_MAC:           return "mac";
-        case CRIT_MFG:           return "mfg";
-        case CRIT_SERVICE:       return "service";
-        case CRIT_NAME_EQUALS:   return "name_equals";
-        case CRIT_NAME_CONTAINS: return "name_contains";
-        case CRIT_SSID_EQUALS:   return "ssid_equals";
-        case CRIT_SSID_CONTAINS: return "ssid_contains";
-        default:                 return nullptr;
+        case CRIT_OUI:         return "oui";
+        case CRIT_MAC:         return "mac";
+        case CRIT_MFG:         return "mfg";
+        case CRIT_SERVICE:     return "service";
+        case CRIT_NAME_MATCH:  return "name";
+        case CRIT_SSID_MATCH:  return "ssid";
+        case CRIT_OUI_ORG:     return "oui_org";
+        case CRIT_MFG_ORG:     return "mfg_org";
+        default:               return nullptr;
     }
 }
 
@@ -640,13 +783,22 @@ static const char* _kindToField(CriterionKind k) {
 static void _appendCriterionValue(JsonArray arr, const Criterion& c) {
     char buf[40];
     switch (c.kind) {
-        case CRIT_OUI:
-            snprintf(buf, sizeof(buf), "%02X:%02X:%02X",
-                     (unsigned)((c.v.oui_prefix >> 16) & 0xFF),
-                     (unsigned)((c.v.oui_prefix >>  8) & 0xFF),
-                     (unsigned)( c.v.oui_prefix        & 0xFF));
+        case CRIT_OUI: {
+            // Emit the full bytes colon-joined; append a lone trailing nibble
+            // for an odd count. 24-bit prefixes round-trip as "AA:BB:CC".
+            const uint8_t full = c.v.oui.nibbles >> 1;
+            int p = 0;
+            for (uint8_t i = 0; i < full; i++) {
+                p += snprintf(buf + p, sizeof(buf) - p, "%s%02X", i ? ":" : "", c.v.oui.bytes[i]);
+            }
+            if (c.v.oui.nibbles & 1) {
+                p += snprintf(buf + p, sizeof(buf) - p, "%s%X",
+                              full ? ":" : "", (c.v.oui.bytes[full] >> 4) & 0xF);
+            }
+            buf[p] = '\0';
             arr.add(buf);
             break;
+        }
         case CRIT_MAC:
             snprintf(buf, sizeof(buf), "%02X:%02X:%02X:%02X:%02X:%02X",
                      c.v.mac[0], c.v.mac[1], c.v.mac[2],
@@ -670,10 +822,10 @@ static void _appendCriterionValue(JsonArray arr, const Criterion& c) {
             arr.add(buf);
             break;
         }
-        case CRIT_NAME_EQUALS:
-        case CRIT_NAME_CONTAINS:
-        case CRIT_SSID_EQUALS:
-        case CRIT_SSID_CONTAINS:
+        case CRIT_NAME_MATCH:
+        case CRIT_SSID_MATCH:
+        case CRIT_OUI_ORG:
+        case CRIT_MFG_ORG:
             arr.add(c.v.str ? c.v.str : "");
             break;
         default:
@@ -682,10 +834,11 @@ static void _appendCriterionValue(JsonArray arr, const Criterion& c) {
 }
 
 bool RulesService::_saveUserRule(const Rule& r) {
+    if (_loading) return false;         // bulk FS load in progress — never write back
     if (r.is_factory) return false;     // never overwrite factory files
     _ensureUserDir();
 
-    char path[64];
+    char path[80];   // "/rules/user/" + name[56] + ".json"
     snprintf(path, sizeof(path), "%s/%s.json", DIR_USER, r.name);
 
     JsonDocument doc;
@@ -737,7 +890,7 @@ bool RulesService::_saveUserRule(const Rule& r) {
 }
 
 bool RulesService::_deleteUserRuleFile(const char* name) {
-    char path[64];
+    char path[80];   // "/rules/user/" + name[56] + ".json"
     snprintf(path, sizeof(path), "%s/%s.json", DIR_USER, name);
     if (!LittleFS.exists(path)) return false;
     return LittleFS.remove(path);
@@ -884,7 +1037,7 @@ bool RulesService::_loadRuleFromFile(const char* path, bool is_factory) {
     r.alert_type = ALERT_TYPE_COUNT;
     r.action     = RULE_ACTION_ALERT;
     r.is_factory = is_factory;
-    r.enabled    = true;
+    r.enabled    = false;   // default-off: only the NVS enabled-overlay turns rules on
     _count++;
 
     // Title
@@ -916,13 +1069,10 @@ bool RulesService::_loadRuleFromFile(const char* path, bool is_factory) {
         else if (strcasecmp(v, "party") == 0) r.action = RULE_ACTION_PARTY;
     }
 
-    // Criteria — each entry is { field: [values...] }. Iterate fields,
-    // build a CSV, and call addCriteria as if the user had typed it.
-    // BUT addCriteria has the is_factory guard that we'd then trip — bypass
-    // by temporarily clearing the flag, then restoring.
+    // Criteria — each entry is { field: [values...] }. Iterate fields, build a
+    // CSV, and add via the internal helper: no factory guard (this rule may be
+    // factory) and no persistence (loading must never write back).
     JsonArray criteria = doc["criteria"].as<JsonArray>();
-    const bool save_factory = r.is_factory;
-    r.is_factory = false;
     for (JsonObject crit : criteria) {
         for (JsonPair kv : crit) {
             const char* field = kv.key().c_str();
@@ -932,13 +1082,12 @@ bool RulesService::_loadRuleFromFile(const char* path, bool is_factory) {
                 if (csv.length() > 0) csv += ",";
                 csv += v.as<const char*>();
             }
-            const int n = addCriteria(name, field, csv.c_str());
+            const int n = _addCriteriaToRule(r, field, csv.c_str());
             if (n < 0) {
                 Serial.printf("[rules] %s: bad criterion field '%s'\n", path, field);
             }
         }
     }
-    r.is_factory = save_factory;
     return true;
 }
 
@@ -946,9 +1095,11 @@ bool RulesService::_loadRuleFromFile(const char* path, bool is_factory) {
 // NVS enabled-overlay
 //
 // Single packed blob containing newline-separated names of rules the user
-// has disabled. On boot we read it and clear `enabled` for any matching
-// rule; on every toggle we rewrite it. Avoids per-rule keys (NVS key length
-// would constrain rule names) and survives FS reflash.
+// has enabled. Rules load disabled; on boot we read the blob and set
+// `enabled` for any matching rule; on every toggle we rewrite it. An absent
+// key means nothing is enabled — which makes first boot, post-erase, and
+// factory reset the same state for free. Avoids per-rule keys (NVS key
+// length would constrain rule names) and survives FS reflash.
 // ---------------------------------------------------------------------------
 
 void RulesService::_applyEnabledOverlay() {
@@ -956,13 +1107,13 @@ void RulesService::_applyEnabledOverlay() {
     // Open RW so the namespace is created on first boot. isKey() check
     // dodges the [E] log line that getString emits when the key is absent.
     if (!prefs.begin(NVS_NAMESPACE, /*readOnly*/ false)) return;
-    if (!prefs.isKey(NVS_KEY_DISABLED)) { prefs.end(); return; }
-    String blob = prefs.getString(NVS_KEY_DISABLED, "");
+    if (!prefs.isKey(NVS_KEY_ENABLED)) { prefs.end(); return; }
+    String blob = prefs.getString(NVS_KEY_ENABLED, "");
     prefs.end();
     if (blob.isEmpty()) return;
 
     // Parse blob: \n-separated names. For each, if a matching rule exists,
-    // flip its enabled flag off.
+    // flip its enabled flag on.
     int start = 0;
     while (start < (int)blob.length()) {
         int nl = blob.indexOf('\n', start);
@@ -971,7 +1122,7 @@ void RulesService::_applyEnabledOverlay() {
         name.trim();
         if (name.length() > 0) {
             int idx = _findRuleIdx(name.c_str());
-            if (idx >= 0) _rules[idx].enabled = false;
+            if (idx >= 0) _rules[idx].enabled = true;
         }
         start = nl + 1;
     }
@@ -980,14 +1131,14 @@ void RulesService::_applyEnabledOverlay() {
 void RulesService::_persistEnabledOverlay() {
     String blob;
     for (uint16_t i = 0; i < _count; i++) {
-        if (!_rules[i].enabled) {
+        if (_rules[i].enabled) {
             if (blob.length() > 0) blob += "\n";
             blob += _rules[i].name;
         }
     }
     Preferences prefs;
     if (!prefs.begin(NVS_NAMESPACE, /*readOnly*/ false)) return;
-    if (blob.isEmpty()) prefs.remove(NVS_KEY_DISABLED);
-    else                prefs.putString(NVS_KEY_DISABLED, blob);
+    if (blob.isEmpty()) prefs.remove(NVS_KEY_ENABLED);
+    else                prefs.putString(NVS_KEY_ENABLED, blob);
     prefs.end();
 }

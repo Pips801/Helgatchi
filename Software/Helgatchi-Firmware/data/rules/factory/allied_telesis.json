@@ -1,0 +1,14 @@
+{
+  "name": "Allied Telesis",
+  "title": "Allied Telesis nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["00:15:77"] },
+    { "name": [".*allied telesis.*", ".*telesis.*"] },
+    { "oui_org": [".*allied telesis.*"] },
+    { "mfg_org": [".*allied telesis.*"] }
+  ]
+}

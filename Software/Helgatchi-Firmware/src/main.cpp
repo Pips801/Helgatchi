@@ -9,8 +9,13 @@
 #include "settings_screen.h"
 #include "alerts_screen.h"
 #include "devices_screen.h"
+#include "foxhunting_screen.h"
 #include "debug_screen.h"
+#include "rules_screen.h"
 #include "overview_screen.h"
+#include "power_menu_screen.h"
+#include "party_service.h"
+#include "admin_service.h"
 #include "ui_controller.h"
 #include "led_service.h"
 #include "vibe_service.h"
@@ -63,15 +68,15 @@ void setup() {
     g_console.begin(g_bus);
     g_power.begin(g_bus);
     g_alerts.begin(g_bus); // must precede led/vibe so they can find() records when EV_ALERT_RAISED fires
-    g_scan.begin(g_bus);          // ring buffer + seen-devices map
-    g_scan_engine.begin(g_bus);   // NimBLE driver — publishes into g_scan
+    g_scan_service.begin(g_bus);          // ring buffer + seen-devices map
+    g_scan_engine.begin(g_bus);   // NimBLE driver — publishes into g_scan_service
     // LittleFS must be mounted before RulesService reads /rules/factory and
     // /rules/user. formatOnFail=true so a fresh device with no FS image
     // still boots (it'll just find an empty filesystem).
     if (!LittleFS.begin(true /* formatOnFail */)) {
         Serial.println("[fs] FATAL: LittleFS mount failed — rules subsystem disabled");
     }
-    g_rules.begin(g_bus);  // must follow LittleFS mount + g_scan + g_alerts
+    g_rules.begin(g_bus);  // must follow LittleFS mount + g_scan_service + g_alerts
     g_leds.begin(g_bus);   // depends on HAL (LED chain) + bus events from PowerManager
     g_vibe.begin(g_bus);   // haptic patterns; subscribes to button + alert events
     g_ui.begin(g_bus);     // creates the LVGL display — auto-shows perf overlay
@@ -79,9 +84,14 @@ void setup() {
     g_display.begin(g_bus); // top-bar indicators — must follow g_ui (objects.* must exist)
     g_settings_screen.begin(g_bus); // settings widget wiring — must follow g_ui
     g_alerts_screen.begin(g_bus);   // alert cards UI — must follow g_ui + g_display + g_alerts
-    g_devices_screen.begin(g_bus);  // device cards UI — must follow g_ui + g_scan
+    g_devices_screen.begin(g_bus);  // device cards UI — must follow g_ui + g_scan_service
+    g_foxhunting_screen.begin(g_bus); // foxhunt lock-on UI — must follow g_ui + g_scan_service + g_scan_engine
     g_debug_screen.begin(g_bus);    // diagnostics view — must follow g_ui
+    g_rules_screen.begin(g_bus);    // rule cards UI — must follow g_ui + g_rules
     g_overview_screen.begin(g_bus); // Helga character animation — must follow g_ui
+    g_party.begin(g_bus);           // party mode — must follow g_ui + g_overview_screen (references objects.*)
+    g_admin.begin(g_bus);           // admin mode — must follow g_scan_engine (BLE init + admin queue) + g_ui (objects.*)
+    g_power_menu_screen.begin(g_bus); // power menu buttons + sleep countdown — must follow g_ui
     g_logger.applyPerfMonitor();   // re-hide unless level >= RENDERING_PERF
 
     if (g_settings.getBool(SKEY_DEBUG_SERIAL_ENABLED)) {
@@ -129,9 +139,11 @@ void loop() {
     PERF_TIME(bus_us,     g_bus.dispatch());     // drain event queue and call all handlers (device-list rebuild runs here)
     PERF_TIME(console_us, g_console.tick());     // process any pending serial input
     PERF_TIME(power_us,   g_power.tick());       // scan/sleep cycle + battery sampling
-    PERF_TIME(scan_us,    g_scan_engine.tick()); // drain NimBLE callback queue + publish to g_scan
+    PERF_TIME(scan_us,    g_scan_engine.tick()); // drain NimBLE callback queue + publish to g_scan_service
+    g_admin.tick();                              // drain + auth admin command frames; expire admin effects
     PERF_TIME(rules_us,   g_rules.tick());       // drain scan ring + match against loaded rules
     PERF_TIME(leds_us,    g_leds.tick());        // ~30 FPS LED pattern render (frame-skips internally)
+    g_party.tick();                              // party mode: re-fire haptics, cycle banner colour, keep-awake (no-op when idle)
     PERF_TIME(ui_us,      g_ui.tick());          // lv_timer_handler — drives LVGL rendering
     // Haptics no longer tick here — VibeService runs its step machine on a
     // one-shot esp_timer, immune to loop-cadence stalls (see vibe_service.h).

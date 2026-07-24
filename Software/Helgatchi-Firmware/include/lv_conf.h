@@ -567,8 +567,11 @@
  *  - 254: round up */
 #define LV_COLOR_MIX_ROUND_OFS  0
 
-/** Add 2 x 32-bit variables to each `lv_obj_t` to speed up getting style properties */
-#define LV_OBJ_STYLE_CACHE      0
+/** Add 2 x 32-bit variables to each `lv_obj_t` to speed up getting style properties.
+ *  With the LVGL pool in PSRAM every style walk is a cache-missing pointer
+ *  chase — 8 bytes/obj to skip most of them is a clear win on the devices
+ *  screen (~300 objects at 50 cards). */
+#define LV_OBJ_STYLE_CACHE      1
 
 /** Add `id` field to `lv_obj_t` */
 #define LV_USE_OBJ_ID           0
@@ -867,7 +870,7 @@
 
 #define LV_USE_LABEL      1
 #if LV_USE_LABEL
-    #define LV_LABEL_TEXT_SELECTION 1   /**< Enable selecting text of the label */
+    #define LV_LABEL_TEXT_SELECTION 0   /**< No touch/pointer input — selection is dead weight per label draw */
     #define LV_LABEL_LONG_TXT_HINT 1    /**< Store some extra info in labels to speed up drawing of very long text */
     #define LV_LABEL_WAIT_CHAR_COUNT 3  /**< The count of wait chart */
 #endif

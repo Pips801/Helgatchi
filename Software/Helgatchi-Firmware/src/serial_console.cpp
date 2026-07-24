@@ -6,17 +6,33 @@
 #include "vibe_service.h"
 #include "hal.h"
 #include "power_manager.h"
+#include "power_menu_screen.h"
 #include "ui_controller.h"
 #include "alerts_service.h"
 #include "scan_service.h"
 #include "vendor_lookup.h"
 #include "rules_service.h"
+#include "party_service.h"
+#include "admin_service.h"
 #include "version.h"
 #include <Arduino.h>
 #include <FastLED.h>
 #include <lvgl.h>
 #include <stdlib.h>
 #include <string.h>
+
+static int _resolveLedId(const char* s);   // defined lower; used by _cmdAdmin
+
+// Trim leading/trailing ASCII whitespace in place (internal whitespace kept).
+// Matches the password normalization in scripts/build_admin_secret.py so the
+// on-device PBKDF2 input equals the build-time input byte-for-byte.
+static char* _trimWs(char* s) {
+    if (!s) return s;
+    while (*s == ' ' || *s == '\t') s++;
+    char* end = s + strlen(s);
+    while (end > s && (end[-1] == ' ' || end[-1] == '\t')) *--end = '\0';
+    return s;
+}
 
 // ---------------------------------------------------------------------------
 // Human-readable formatters for stats output. Each writes into a caller-
@@ -68,15 +84,40 @@ static const char* const s_key_name[] = {
     "DEBUG_SERIAL",            // 11
     "DEBUG_LEVEL",             // 12
     "DEBUG_SLEEP_W_SERIAL",    // 13
-    "SCREEN_TIMEOUT_S",        // 14
+    "SLEEP_WHILE_CHARGING",    // 14
     "INTERACTIVE_TIMEOUT_S",   // 15
     "SLEEP_DURATION_S",        // 16
     "SCAN_DURATION_S",         // 17
     "TUTORIAL_SHOWN",          // 18
     "IGNORE_RANDOMIZED_MACS",  // 19
+    "HUNT_VIBRATION",          // 20
+    "DEBUG_ENABLED",           // 21
 };
 static_assert(sizeof(s_key_name) / sizeof(s_key_name[0]) == SKEY_COUNT,
               "s_key_name is out of sync with SettingsKey");
+
+// Resolve a `setting set` key token to a SettingsKey index. Accepts either a
+// numeric id (0..SKEY_COUNT-1) or a case-insensitive setting name, with or
+// without the SKEY_ prefix (so "led_brightness", "LED_BRIGHTNESS" and
+// "SKEY_LED_BRIGHTNESS" all work). Returns SKEY_COUNT on no match.
+static uint8_t resolveSettingKey(const char* s) {
+    if (!s || !*s) return SKEY_COUNT;
+
+    bool numeric = true;
+    for (const char* p = s; *p; ++p) {
+        if (!isdigit((unsigned char)*p)) { numeric = false; break; }
+    }
+    if (numeric) {
+        long id = atol(s);
+        return (id >= 0 && id < SKEY_COUNT) ? (uint8_t)id : SKEY_COUNT;
+    }
+
+    if (strncasecmp(s, "SKEY_", 5) == 0) s += 5;
+    for (uint8_t k = 0; k < SKEY_COUNT; k++) {
+        if (strcasecmp(s, s_key_name[k]) == 0) return k;
+    }
+    return SKEY_COUNT;
+}
 
 // LED + haptic pattern name registries are owned by their respective
 // services now (led_service.cpp / vibe_service.cpp). RulesService and this
@@ -136,7 +177,14 @@ void SerialConsole::tick() {
 
         } else if (_pos < BUF_LEN - 1) {
             _buf[_pos++] = c;
-            Serial.print(c);  // local echo
+            // Mask the secret on `admin unlock <password>`: once the line is past
+            // the "admin unlock " prefix, echo '*' instead of the typed char so
+            // the password never appears on the terminal. (The real bytes still
+            // land in _buf for dispatch.)
+            static const char PW_PREFIX[] = "admin unlock ";
+            const size_t PLEN = sizeof(PW_PREFIX) - 1;
+            const bool mask = (_pos > PLEN) && strncasecmp(_buf, PW_PREFIX, PLEN) == 0;
+            Serial.print(mask ? '*' : c);  // local echo
             _bus->post(EV_UI_ACTIVITY);  // reset interactive sleep timer
         }
     }
@@ -157,6 +205,8 @@ void SerialConsole::_dispatch(char* line) {
     else if (strcmp(verb, "led")      == 0) _cmdLed(rest);
     else if (strcmp(verb, "vibe")     == 0) _cmdVibe(rest);
     else if (strcmp(verb, "rule")     == 0) _cmdRule(rest);
+    else if (strcmp(verb, "party")    == 0) _cmdParty(rest);
+    else if (strcmp(verb, "admin")    == 0) _cmdAdmin(rest);
     else if (strcmp(verb, "scan")     == 0) _cmdScan(rest);
     else if (strcmp(verb, "vendor")   == 0) _cmdVendor(rest);
     else if (strcmp(verb, "power")    == 0) _cmdPower(rest);
@@ -172,11 +222,14 @@ void SerialConsole::_dispatch(char* line) {
 
 void SerialConsole::_cmdHelp() {
     Serial.println("commands (run a verb without args for its subcommand list):");
+    Serial.println("  admin <subcmd>              admin crowd-control       (unlock / lock / party / msg /");
+    Serial.println("                                                         led / beacon / stopall / menu)");
     Serial.println("  alert <subcmd>              active alert store        (list / raise / ack / clear)");
     Serial.println("  battery                     voltage / pct / charging state");
     Serial.println("  bus post <event_id>         post an event by numeric id");
     Serial.println("  led <subcmd>                LED pattern control       (list / play / off / bright)");
-    Serial.println("  power <subcmd>              device power ops          (sleep / sleepscreen / reboot / shipping)");
+    Serial.println("  party <subcmd>              party mode                (on [secs] / off)");
+    Serial.println("  power <subcmd>              device power ops          (sleep / sleepscreen / reboot / shipping / wipe / off)");
     Serial.println("  rule <subcmd>               rules engine              (list / show / create / add / rm / delete /");
     Serial.println("                                                         enable / disable / reload / stats)");
     Serial.println("  scan <subcmd>               scan-result ring          (list / inject / clear)");
@@ -192,7 +245,7 @@ void SerialConsole::_cmdSetting(char* args) {
     if (!args) {
         Serial.println("setting: settings store");
         Serial.println("  setting list                  print every setting + current value");
-        Serial.println("  setting set <id> <value>      write one setting by numeric id");
+        Serial.println("  setting set <id|name> <value> write one setting by id or name");
         Serial.println("  setting save                  persist current values to NVS");
         Serial.println("  setting reset                 restore factory defaults");
         return;
@@ -213,16 +266,17 @@ void SerialConsole::_cmdSetting(char* args) {
     }
 
     if (sub && strcasecmp(sub, "set") == 0) {
-        if (!rest) { Serial.println("usage: setting set <id> <value>"); return; }
+        if (!rest) { Serial.println("usage: setting set <id|name> <value>"); return; }
         char* k_str = strtok(rest, " ");
         char* v_str = strtok(nullptr, " ");
-        if (!k_str || !v_str) { Serial.println("usage: setting set <id> <value>"); return; }
-        uint8_t  key = (uint8_t)atoi(k_str);
-        uint32_t val = (uint32_t)atol(v_str);
+        if (!k_str || !v_str) { Serial.println("usage: setting set <id|name> <value>"); return; }
+        uint8_t key = resolveSettingKey(k_str);
         if (key >= SKEY_COUNT) {
-            Serial.printf("bad id %u (valid: 0-%u)\n", key, SKEY_COUNT - 1);
+            Serial.printf("bad setting '%s' (use id 0-%u or a name from 'setting list')\n",
+                          k_str, SKEY_COUNT - 1);
             return;
         }
+        uint32_t val = (uint32_t)atol(v_str);
         EventPayload p{};
         p.settings_set.key   = (SettingsKey)key;
         p.settings_set.value = val;
@@ -273,10 +327,15 @@ void SerialConsole::_cmdWebinfo() {
     doc["ui"]   = UI_VERSION_STR;
 
     JsonArray led = doc["led"].to<JsonArray>();
-    for (uint8_t i = 0; i < LED_PATTERN_COUNT; i++) led.add(ledPatternName((LedPatternId)i));
+    ledPatternForEach([](LedPatternId, const char* name, void* user) {
+        static_cast<JsonArray*>(user)->add(name);
+    }, &led);
 
     JsonArray vibe = doc["vibe"].to<JsonArray>();
     for (uint8_t i = 0; i < HAPTIC_PATTERN_COUNT; i++) vibe.add(vibePatternName((HapticPatternId)i));
+
+    doc["admin_unlocked"]       = g_admin.unlocked();
+    doc["admin_default_secret"] = g_admin.secretIsDefault();   // true = insecure dev build
 
     g_rules.toJson(doc["rules"].to<JsonArray>());
 
@@ -391,9 +450,9 @@ void SerialConsole::_cmdLed(char* args) {
     if (sub && strcasecmp(sub, "list") == 0) {
         Serial.println(" id  name");
         Serial.println("---  --------------");
-        for (uint8_t i = 0; i < LED_PATTERN_COUNT; i++) {
-            Serial.printf("%3u  %s\n", i, ledPatternName((LedPatternId)i));
-        }
+        ledPatternForEach([](LedPatternId id, const char* name, void*) {
+            Serial.printf("%3u  %s\n", (unsigned)id, name);
+        }, nullptr);
         return;
     }
 
@@ -491,6 +550,154 @@ void SerialConsole::_cmdVibe(char* args) {
     Serial.printf("unknown subcommand 'vibe %s'  (try 'vibe')\n", sub ? sub : "");
 }
 
+// `party <subcmd>` — party mode (rainbow LEDs + haptics + dance anim + banner).
+void SerialConsole::_cmdParty(char* args) {
+    if (!args) {
+        if (g_party.active())
+            Serial.printf("party: ACTIVE (%lus left)\n",
+                          (unsigned long)((g_party.remainingMs() + 999) / 1000));
+        else
+            Serial.println("party: off");
+        Serial.println("  party on [secs]               start party mode (default 20s; re-run extends)");
+        Serial.println("  party off                     stop immediately");
+        Serial.println("  (long-press-back on the device also exits party mode)");
+        return;
+    }
+
+    char* sub  = strtok(args, " ");
+    char* rest = strtok(nullptr, "");
+
+    if (sub && strcasecmp(sub, "on") == 0) {
+        uint32_t secs = rest ? (uint32_t)atol(rest) : 0;
+        uint32_t ms   = secs ? secs * 1000UL : PartyService::DEFAULT_DURATION_MS;
+        g_party.start(ms);
+        Serial.printf("OK: party for %lus\n", (unsigned long)(ms / 1000));
+        return;
+    }
+
+    if (sub && strcasecmp(sub, "off") == 0) {
+        g_party.stop();
+        Serial.println("OK: party off");
+        return;
+    }
+
+    Serial.printf("unknown subcommand 'party %s'  (try 'party')\n", sub ? sub : "");
+}
+
+// `admin <subcmd>` — HMAC-signed BLE crowd control. Receiving/acting on commands
+// needs no unlock (all devices obey a valid frame); SENDING requires `unlock`.
+void SerialConsole::_cmdAdmin(char* args) {
+    if (!args) {
+        Serial.printf("admin: %s%s\n",
+                      g_admin.unlocked() ? "UNLOCKED (can send)" : "locked (receive-only)",
+                      g_admin.broadcasting() ? "  [broadcasting]" : "");
+        if (g_admin.secretIsDefault())
+            Serial.println("  WARNING: built with DEV-DEFAULT secrets — not for release");
+        Serial.println("  admin unlock <password>       enable send mode (persists in NVS)");
+        Serial.println("  admin lock                    disable send mode");
+        Serial.println("  admin party on [secs]         broadcast: start party");
+        Serial.println("  admin party off               broadcast: stop party");
+        Serial.println("  admin msg <idx> [secs]        broadcast: show predefined message");
+        Serial.println("  admin led <name|id> [secs]    broadcast: run an LED pattern");
+        Serial.println("  admin beacon [secs]           broadcast: everyone name-beacons");
+        Serial.println("  admin stopall                 broadcast: tell receivers to cancel effects");
+        Serial.println("  admin stopbroadcast           stop THIS device's advert (sends nothing)");
+        return;
+    }
+
+    char* sub  = strtok(args, " ");
+    char* rest = strtok(nullptr, "");
+
+    if (sub && strcasecmp(sub, "unlock") == 0) {
+        char* pw = _trimWs(rest);
+        if (!pw || !*pw) { Serial.println("usage: admin unlock <password>"); return; }
+        if (g_admin.unlock(pw)) Serial.println("OK: admin unlocked");
+        else                    Serial.println("ERR: wrong password");
+        return;
+    }
+    if (sub && strcasecmp(sub, "lock") == 0) {
+        g_admin.lock();
+        Serial.println("OK: admin locked");
+        return;
+    }
+
+    // Everything below broadcasts — requires unlock.
+    if (!g_admin.unlocked()) {
+        Serial.println("ERR: locked  (run 'admin unlock <password>' first)");
+        return;
+    }
+
+    if (sub && strcasecmp(sub, "party") == 0) {
+        char* onoff  = strtok(rest, " ");
+        char* secs_s = strtok(nullptr, "");
+        if (onoff && strcasecmp(onoff, "on") == 0) {
+            uint16_t secs = secs_s ? (uint16_t)atoi(secs_s) : 20;
+            g_admin.broadcast(ADMIN_CMD_PARTY_START, 0, secs);
+            Serial.printf("OK: broadcast party on (%us)\n", secs);
+        } else if (onoff && strcasecmp(onoff, "off") == 0) {
+            g_admin.broadcast(ADMIN_CMD_PARTY_STOP, 0, 0);
+            Serial.println("OK: broadcast party off");
+        } else {
+            Serial.println("usage: admin party on [secs] | admin party off");
+        }
+        return;
+    }
+    if (sub && strcasecmp(sub, "msg") == 0) {
+        char* idx_s  = strtok(rest, " ");
+        char* secs_s = strtok(nullptr, "");
+        if (!idx_s) {
+            // Bare `admin msg` — list the predefined messages and their indexes.
+            Serial.println("admin msg <idx> [secs] — broadcast a predefined message:");
+            for (uint8_t i = 0; i < AdminService::messageCount(); i++)
+                Serial.printf("  %u = \"%s\"\n", i, AdminService::messageText(i));
+            return;
+        }
+        int idx = atoi(idx_s);
+        if (idx < 0 || idx >= AdminService::messageCount()) {
+            Serial.printf("bad msg idx (0-%u)  (run 'admin msg' to list)\n",
+                          (unsigned)(AdminService::messageCount() - 1));
+            return;
+        }
+        uint16_t secs = secs_s ? (uint16_t)atoi(secs_s) : 10;
+        g_admin.broadcast(ADMIN_CMD_MESSAGE, (uint8_t)idx, secs);
+        Serial.printf("OK: broadcast msg %d (\"%s\", %us)\n",
+                      idx, AdminService::messageText((uint8_t)idx), secs);
+        return;
+    }
+    if (sub && strcasecmp(sub, "led") == 0) {
+        char* name_s = strtok(rest, " ");
+        char* secs_s = strtok(nullptr, "");
+        if (!name_s) { Serial.println("usage: admin led <name|id> [secs]  (see 'led list')"); return; }
+        int id = _resolveLedId(name_s);
+        if (id < 0) { Serial.printf("bad led '%s' (see 'led list')\n", name_s); return; }
+        uint16_t secs = secs_s ? (uint16_t)atoi(secs_s) : 15;
+        g_admin.broadcast(ADMIN_CMD_LED, (uint8_t)id, secs);
+        Serial.printf("OK: broadcast led %s (%us)\n", ledPatternName((LedPatternId)id), secs);
+        return;
+    }
+    if (sub && strcasecmp(sub, "beacon") == 0) {
+        uint16_t secs = rest ? (uint16_t)atoi(rest) : 30;
+        g_admin.broadcast(ADMIN_CMD_BEACON, 0, secs);
+        Serial.printf("OK: broadcast beacon (%us)\n", secs);
+        return;
+    }
+    if (sub && strcasecmp(sub, "stopall") == 0) {
+        g_admin.broadcast(ADMIN_CMD_STOP_ALL, 0, 0);
+        Serial.println("OK: broadcast stop-all");
+        return;
+    }
+    if (sub && strcasecmp(sub, "stopbroadcast") == 0) {
+        // Stop THIS device's own advert — purely local. Distinct from `stopall`,
+        // which TRANSMITS a command telling receivers to cancel their effects.
+        if (!g_admin.broadcasting()) { Serial.println("admin: not broadcasting"); return; }
+        g_admin.stopBroadcast();
+        Serial.println("OK: stopped broadcasting");
+        return;
+    }
+
+    Serial.printf("unknown subcommand 'admin %s'  (try 'admin')\n", sub ? sub : "");
+}
+
 // ---------------------------------------------------------------------------
 // `selftest` — GPIO short-detection scan
 //
@@ -548,13 +755,13 @@ void SerialConsole::_cmdSelftest() {
     if      (vmv < 20)   Serial.println("(0 V — battery missing or divider open)");
     else if (vmv > 3200) Serial.println("(rail — short to VCC / no divider)");
     else if (g_settings.getBool(SKEY_VSENSE_5V_DIVIDER)) {
-        // R4 populated: VBATT = 3*vsense - V5. USB is likely attached during a
-        // bench selftest, so subtract the 5V rail; clamp to avoid underflow.
-        bool usb = g_hal.usbAttached();
-        int32_t vb = 3 * vmv - (usb ? PM_V5_RAIL_MV : 0);
-        if (vb < 0) vb = 0;
+        // R4 populated: VBATT line = 3·VSENSE − V5 rail (see power_manager.h).
+        bool charging = vmv > PM_R4_CHARGING_MV;
+        int32_t vb = pmR4VbattLineMv((uint16_t)vmv, charging ? g_power.chargeRailMv()
+                                                             : PM_R4_DISCHG_RAIL_MV);
+        if (charging) vb -= PM_R4_CHARGE_LIFT_MV;   // cell estimate
         Serial.printf ("(vbatt~%d mV via 3-resistor +R4 divider, %s)\n",
-                       vb, usb ? "5V rail present" : "USB detached");
+                       vb, charging ? "charging (5V rail sensed)" : "on battery");
     }
     else                 Serial.printf ("(vbatt~%d mV via /2 divider)\n", vmv * 2);
 
@@ -602,25 +809,32 @@ void SerialConsole::_cmdBattery() {
     bool     ser      = (bool)Serial;
     bool     r4       = g_settings.getBool(SKEY_VSENSE_5V_DIVIDER);
 
-    // Mirror PowerManager::_sampleBattery: R4-populated boards sense off a
-    // three-resistor node tied to the +5V rail (VBATT = 3*vsense - V5), the
-    // default two-resistor divider is a plain VBATT = 2*vsense.
-    uint16_t vbatt_mv;
-    if (r4) {
-        int32_t v5 = usb ? PM_V5_RAIL_MV : 0;
-        int32_t vb = 3 * (int32_t)vsense - v5;
-        if (vb < 0) vb = 0;
-        vbatt_mv = (uint16_t)vb;
-    } else {
-        vbatt_mv = vsense * 2;
-    }
-    uint8_t  raw_pct  = pmBattPctFromVsenseMv(vbatt_mv / 2);
+    // Mirror PowerManager::_sampleBattery. R4 boards: VSENSE = (VBATT + V5)/3,
+    // so vsense > threshold → +5V rail present → charging. VBATT line =
+    // 3·vsense − rail; while charging the ~100mV +BATT lift is stripped for the
+    // cell estimate. On USB, below threshold means no pack. Default boards are
+    // always 2*vsense, charge state from USB data.
+    bool     r4_missing  = r4 && usb && (vsense < PM_R4_CHARGING_MV);
+    bool     r4_charging = r4 && (vsense > PM_R4_CHARGING_MV);
+    uint16_t rail_mv  = r4_charging ? g_power.chargeRailMv() : PM_R4_DISCHG_RAIL_MV;
+    uint16_t line_mv  = r4 ? pmR4VbattLineMv(vsense, rail_mv)
+                           : (uint16_t)(vsense * 2);
+    uint16_t vbatt_mv = r4_charging ? (uint16_t)(line_mv - PM_R4_CHARGE_LIFT_MV)
+                                    : line_mv;
+    uint8_t  raw_pct  = pmBattPctFromVsenseMv((uint16_t)(vbatt_mv / 2));
 
     Serial.printf("vsense:    %u mV  (raw ADC, post-divider)\n", vsense);
-    if (r4) Serial.printf("vbatt:     %u mV  (= 3*vsense - %s)\n", vbatt_mv,
-                          usb ? "5V rail" : "0 (USB detached)");
-    else    Serial.printf("vbatt:     %u mV  (= vsense * 2)\n",    vbatt_mv);
+    Serial.printf("vbatt:     %u mV  (= %s)\n", vbatt_mv,
+                  r4 ? (r4_charging ? "3*vsense - rail - lift" : "3*vsense - rail") : "vsense * 2");
+    if (r4) Serial.printf("rail:      %u mV  (%s)\n", rail_mv,
+                          !r4_charging ? "backfed, unplugged"
+                          : g_power.chargeRailLearned() ? "learned (plug-in edge / NVS)"
+                                                        : "fallback, never learned");
     Serial.printf("divider:   %s\n", r4 ? "3-resistor + R4 (+5V sense)" : "2-resistor (R4 cut)");
+    if (r4) Serial.printf("sensed:    %s  (ADC %s %u mV threshold%s)\n",
+                          r4_missing ? "NO PACK" : (r4_charging ? "CHARGING" : "on battery"),
+                          vsense > PM_R4_CHARGING_MV ? ">" : "<=", PM_R4_CHARGING_MV,
+                          r4_missing ? " while on USB" : "");
     Serial.printf("raw pct:   %u%%   (curve, no smoothing)\n",   raw_pct);
 
     uint8_t  last_pct = g_power.lastBatteryPct();
@@ -636,6 +850,7 @@ void SerialConsole::_cmdBattery() {
     Serial.print("charging:  ");
     if      (last_pct == BATT_PCT_CHARGED)  Serial.println("yes (full)");
     else if (last_pct == BATT_PCT_CHARGING) Serial.println("yes");
+    else if (r4_charging)                   Serial.println("yes (fresh ADC read; sentinel lags ≤30s)");
     else if (usb)                           Serial.println("usb attached, not yet sampled as charging");
     else                                    Serial.println("no (discharging)");
 
@@ -921,7 +1136,9 @@ void SerialConsole::_cmdScan(char* args) {
         Serial.println("scan: scan-result ring + seen-devices map");
         Serial.println("  scan list                     list seen devices (dedup'd by MAC)");
         Serial.println("  scan inject <k=v>             push a test scan result");
-        Serial.println("                                k=v: domain=bt|ble|wifi  mac=AA:BB:CC:DD:EE:FF");
+        // Example MAC deliberately avoids AA:BB:CC:DD:EE:FF — that exact
+        // address matches the factory party.json rule and starts party mode.
+        Serial.println("                                k=v: domain=bt|ble|wifi  mac=AA:BB:CC:11:22:33");
         Serial.println("                                     rssi=<int>  name=<string>  mfg=<0xNNNN>");
         Serial.println("                                     type=static|rotating|random");
         Serial.println("  scan clear                    wipe the seen-devices map");
@@ -929,17 +1146,17 @@ void SerialConsole::_cmdScan(char* args) {
     }
 
     if (strncasecmp(args, "list", 4) == 0) {
-        const size_t n = g_scan.seenCount();
+        const size_t n = g_scan_service.seenCount();
         Serial.printf("seen: %u device%s (ring writes: %lu)\n",
                       (unsigned)n, n == 1 ? "" : "s",
-                      (unsigned long)g_scan.writePos());
+                      (unsigned long)g_scan_service.writePos());
         if (n == 0) return;
         Serial.println(" #  dom   mac                type      rssi  age      mfg   oui-org         mfg-org         name");
         Serial.println("--  ----  -----------------  --------  ----  -------  ----  --------------  --------------  ----");
         const uint32_t now = millis();
         char age_buf[16];
         for (size_t i = 0; i < n; i++) {
-            const ScanResult& r = g_scan.seenAt(i);
+            const ScanResult& r = g_scan_service.seenAt(i);
             fmt_uptime(age_buf, sizeof(age_buf), now - r.timestamp_ms);
             char mfg_buf[8];
             if (r.mfg_id) snprintf(mfg_buf, sizeof(mfg_buf), "%04X", (unsigned)r.mfg_id);
@@ -973,14 +1190,14 @@ void SerialConsole::_cmdScan(char* args) {
     char* rest = strtok(nullptr, "");
 
     if (sub && strcasecmp(sub, "clear") == 0) {
-        g_scan.clear();
+        g_scan_service.clear();
         Serial.println("OK: seen-devices map cleared");
         return;
     }
 
     if (sub && strcasecmp(sub, "inject") == 0) {
         if (!rest) {
-            Serial.println("usage: scan inject domain=bt|wifi mac=AA:BB:CC:DD:EE:FF "
+            Serial.println("usage: scan inject domain=bt|wifi mac=AA:BB:CC:11:22:33 "
                            "[rssi=-50] [name=foo] [mfg=0x004C] [type=random]");
             return;
         }
@@ -1032,11 +1249,11 @@ void SerialConsole::_cmdScan(char* args) {
             return;
         }
 
-        g_scan.publish(r);
+        g_scan_service.publish(r);
         Serial.printf("OK: injected %s %02X:%02X:%02X:%02X:%02X:%02X (seen: %u)\n",
                       _scanDomainName((ScanDomain)r.domain),
                       r.mac[0], r.mac[1], r.mac[2], r.mac[3], r.mac[4], r.mac[5],
-                      (unsigned)g_scan.seenCount());
+                      (unsigned)g_scan_service.seenCount());
         return;
     }
 
@@ -1211,12 +1428,24 @@ static const char* _ruleActionName(RuleAction a) {
 static void _printCriterion(uint16_t idx, const Criterion& c) {
     switch (c.kind) {
         case CRIT_OUI: {
-            const uint8_t b0 = (uint8_t)((c.v.oui_prefix >> 16) & 0xFF);
-            const uint8_t b1 = (uint8_t)((c.v.oui_prefix >>  8) & 0xFF);
-            const uint8_t b2 = (uint8_t)( c.v.oui_prefix        & 0xFF);
-            const char* org = vendor_oui_lookup(c.v.oui_prefix);
-            Serial.printf("    [%u] oui  %02X:%02X:%02X  (%s)\n",
-                          idx, b0, b1, b2, org ? org : "?");
+            const uint8_t full = c.v.oui.nibbles >> 1;
+            char pfx[20];
+            int p = 0;
+            for (uint8_t i = 0; i < full; i++) {
+                p += snprintf(pfx + p, sizeof(pfx) - p, "%s%02X", i ? ":" : "", c.v.oui.bytes[i]);
+            }
+            if (c.v.oui.nibbles & 1) {
+                p += snprintf(pfx + p, sizeof(pfx) - p, "%s%X",
+                              full ? ":" : "", (c.v.oui.bytes[full] >> 4) & 0xF);
+            }
+            pfx[p] = '\0';
+            // Vendor lookup is 24-bit MA-L; for a longer prefix this names the
+            // umbrella block owner (e.g. IEEE RA for an MA-S range).
+            const uint32_t p24 = ((uint32_t)c.v.oui.bytes[0] << 16) |
+                                 ((uint32_t)c.v.oui.bytes[1] <<  8) |
+                                 ((uint32_t)c.v.oui.bytes[2]);
+            const char* org = vendor_oui_lookup(p24);
+            Serial.printf("    [%u] oui  %-17s  (%s)\n", idx, pfx, org ? org : "?");
             break;
         }
         case CRIT_MAC:
@@ -1241,17 +1470,17 @@ static void _printCriterion(uint16_t idx, const Criterion& c) {
             Serial.println();
             break;
         }
-        case CRIT_NAME_EQUALS:
-            Serial.printf("    [%u] name == \"%s\"\n", idx, c.v.str ? c.v.str : "");
+        case CRIT_NAME_MATCH:
+            Serial.printf("    [%u] name ~ \"%s\"\n", idx, c.v.str ? c.v.str : "");
             break;
-        case CRIT_NAME_CONTAINS:
-            Serial.printf("    [%u] name contains \"%s\"\n", idx, c.v.str ? c.v.str : "");
+        case CRIT_SSID_MATCH:
+            Serial.printf("    [%u] ssid ~ \"%s\"  (wifi only)\n", idx, c.v.str ? c.v.str : "");
             break;
-        case CRIT_SSID_EQUALS:
-            Serial.printf("    [%u] ssid == \"%s\"  (wifi only)\n", idx, c.v.str ? c.v.str : "");
+        case CRIT_OUI_ORG:
+            Serial.printf("    [%u] oui_org ~ \"%s\"\n", idx, c.v.str ? c.v.str : "");
             break;
-        case CRIT_SSID_CONTAINS:
-            Serial.printf("    [%u] ssid contains \"%s\"  (wifi only)\n", idx, c.v.str ? c.v.str : "");
+        case CRIT_MFG_ORG:
+            Serial.printf("    [%u] mfg_org ~ \"%s\"\n", idx, c.v.str ? c.v.str : "");
             break;
         default:
             Serial.printf("    [%u] (unknown kind %u)\n", idx, (unsigned)c.kind);
@@ -1292,9 +1521,10 @@ void SerialConsole::_cmdRule(char* args) {
         Serial.println("                                k=v: title=...  vibe=<name>  led=<name>");
         Serial.println("                                     type=ble|wifi|sys|batt|auto  action=alert|party");
         Serial.println("  rule add <name> <f>=<v>...    add one or more criteria (space-separated clauses)");
-        Serial.println("                                f: oui mac mfg service name_equals name_contains");
-        Serial.println("                                   ssid_equals ssid_contains oui_org_equals");
-        Serial.println("                                   oui_org_contains mfg_org_equals mfg_org_contains");
+        Serial.println("                                f: oui mac mfg service name ssid oui_org mfg_org");
+        Serial.println("                                   name/ssid/oui_org/mfg_org take match patterns:");
+        Serial.println("                                     x=equals  .*x.*=contains  x.*=starts  .*x=ends");
+        Serial.println("                                     plus \\d \\w [a-z] etc. (see docs/WRITING_RULES.md)");
         Serial.println("                                v: comma-separated values (underscore = space in strings)");
         Serial.println("  rule rm <name> <idx>          remove the Nth criterion");
         Serial.println("  rule delete <name>            delete a user rule");
@@ -1358,22 +1588,27 @@ void SerialConsole::_cmdRule(char* args) {
             const Rule* r = g_rules.get(i);
             if (r && r->enabled) enabled++;
         }
-        Serial.printf("rules:    %u loaded (%u enabled, %u disabled)\n",
+        Serial.printf("rulesets: %u loaded (%u enabled, %u disabled)\n",
                       (unsigned)total, (unsigned)enabled, (unsigned)(total - enabled));
+        Serial.printf("rules:    %lu total across all rulesets\n",
+                      (unsigned long)g_rules.totalRules());
         Serial.printf("matches:  %lu total since boot\n",
                       (unsigned long)g_rules.totalMatches());
         Serial.printf("lost:     %lu scan results dropped (ring overrun)\n",
                       (unsigned long)g_rules.lostScans());
         Serial.printf("ring:     read=%lu  write=%lu  lag=%lu\n",
                       (unsigned long)g_rules.ringReadPos(),
-                      (unsigned long)g_scan.writePos(),
-                      (unsigned long)(g_scan.writePos() - g_rules.ringReadPos()));
+                      (unsigned long)g_scan_service.writePos(),
+                      (unsigned long)(g_scan_service.writePos() - g_rules.ringReadPos()));
         return;
     }
 
     if (sub && strcasecmp(sub, "reload") == 0) {
-        const uint16_t n = g_rules.reloadFromFs();
-        Serial.printf("OK: reloaded %u rule%s from filesystem\n", (unsigned)n, n == 1 ? "" : "s");
+        const uint16_t n  = g_rules.reloadFromFs();
+        const uint32_t nr = g_rules.totalRules();
+        Serial.printf("OK: reloaded %u ruleset%s with %lu rule%s\n",
+                      (unsigned)n, n == 1 ? "" : "s",
+                      (unsigned long)nr, nr == 1 ? "" : "s");
         return;
     }
 
@@ -1465,31 +1700,33 @@ void SerialConsole::_cmdPower(char* args) {
         Serial.println("  power sleep                   deep-sleep until long-press CENTER or wake timer");
         Serial.println("  power sleepscreen             turn screen off without deep sleep");
         Serial.println("  power reboot                  restart the device");
-        Serial.println("  power shipping                factory shipping sleep — long-press CENTER to wake");
+        Serial.println("  power shipping                factory wipe (settings/rules/alerts) + shipping sleep — long-press CENTER to wake");
+        Serial.println("  power wipe                    factory wipe + reboot — comes back up like a first boot");
+        Serial.println("  power off                     power down (no timer) — long-press CENTER to wake, keeps tutorial state");
         return;
     }
 
     char* sub = strtok(args, " ");
 
-    if (sub && strcasecmp(sub, "sleep") == 0) {
-        delay(100);
-        _bus->post(CMD_POWER_SLEEP);
-        return;
-    }
-    if (sub && strcasecmp(sub, "sleepscreen") == 0) {
-        g_power.sleepScreen();
-        Serial.println("OK: screen off; button press or wake-screen alert restores it");
-        return;
-    }
-    if (sub && strcasecmp(sub, "reboot") == 0) {
-        delay(100);   // flush this response before PowerManager tears down + resets
-        _bus->post(CMD_POWER_REBOOT);
-        return;
-    }
-    if (sub && strcasecmp(sub, "shipping") == 0) {
-        delay(100);
-        _bus->post(CMD_POWER_SHIPPING_SLEEP);
-        return;
+    // Every subcommand routes through the Power Action screen (same visual
+    // beat as the power menu buttons): message on screen, short hold, then
+    // the CMD_POWER_* fires. beginAction wakes the display first, so this
+    // works with the screen off too. The hold also replaces the old
+    // delay(100)-to-flush-serial — replies go out long before teardown.
+    struct { const char* name; EventId cmd; } const kActions[] = {
+        { "sleep",       CMD_POWER_SLEEP          },
+        { "sleepscreen", CMD_POWER_SCREEN_OFF     },
+        { "reboot",      CMD_POWER_REBOOT         },
+        { "shipping",    CMD_POWER_SHIPPING_RESET },
+        { "wipe",        CMD_POWER_FACTORY_RESET  },
+        { "off",         CMD_POWER_DOWN           },
+    };
+    for (const auto& a : kActions) {
+        if (sub && strcasecmp(sub, a.name) == 0) {
+            g_power_menu_screen.beginAction(a.cmd);
+            Serial.println("OK");
+            return;
+        }
     }
 
     Serial.printf("unknown subcommand 'power %s'  (try 'power')\n", sub ? sub : "");

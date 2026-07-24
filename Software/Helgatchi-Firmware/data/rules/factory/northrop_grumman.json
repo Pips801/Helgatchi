@@ -1,0 +1,14 @@
+{
+  "name": "Northrop Grumman",
+  "title": "Northrop Grumman nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["00:19:8A"] },
+    { "name": [".*northrop.*", ".*grumman.*"] },
+    { "oui_org": [".*northrop grumman.*"] },
+    { "mfg_org": [".*northrop.*"] }
+  ]
+}

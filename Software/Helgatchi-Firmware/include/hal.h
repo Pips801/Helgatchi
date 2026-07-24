@@ -124,6 +124,7 @@ private:
     esp_timer_handle_t _btn_timer  = nullptr;   // periodic button-poll timer (HAL_BTN_POLL_MS)
 
     bool     _usb_attached      = false;
+    bool     _serial_open       = false;   // (bool)Serial edge tracking for EV_SERIAL_*
     uint32_t _last_sof          = 0;
     uint32_t _last_sof_check_ms = 0;
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Helgatchi — Device Console</title>
+  <title>Helgatchi Web Flasher & Console</title>
   <meta name="description" content="Connect to your Helgatchi over USB: check for updates, flash firmware, and open a serial console." />
   <style>
     :root {
@@ -69,6 +69,18 @@
     .chip b:hover { color: var(--danger-hover); }
     .chips input { flex: 1; min-width: 10ch; border: none; background: transparent; color: var(--text); outline: none; padding: .25rem; font-size: .9rem; }
 
+    /* Hover/focus help popover (e.g. "regex help"). */
+    .help { position: relative; color: var(--muted); text-decoration: underline dotted; cursor: help; font-size: .82rem; }
+    .help-pop {
+      display: none; position: absolute; right: 0; top: 1.5em; z-index: 60;
+      width: 340px; max-width: 86vw; background: var(--panel); border: 1px solid var(--border);
+      border-radius: 8px; padding: .7rem .8rem; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+      font-size: .82rem; line-height: 1.55; color: var(--text); white-space: normal; text-align: left; cursor: auto;
+    }
+    .help:hover .help-pop, .help:focus .help-pop, .help:focus-within .help-pop { display: block; }
+    .help-pop code { background: #010409; border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; color: var(--accent-hover); }
+    .help-pop .muted { color: var(--muted); }
+
     label.opt { display: flex; gap: .6rem; align-items: flex-start; font-size: .92rem; cursor: pointer; margin-bottom: .6rem; }
     label.opt input { margin-top: .3rem; }
 
@@ -93,6 +105,7 @@
 <body>
   <main>
     <header>
+      <img src="DC801_white.png">
       <h1>Helgatchi</h1>
       <p>Connect over USB to update firmware or open a console.</p>
     </header>
@@ -142,7 +155,19 @@
         <p style="font-size:.9rem; color:var(--muted); margin:0 0 .75rem;">
           <strong style="color:var(--danger-hover)">Full wipe &amp; fresh install</strong> — erases all settings and rules, then flashes everything.
         </p>
-        <button id="wipeBtn" class="danger">Full wipe &amp; fresh install</button>
+        <div class="row">
+          <button id="wipeBtn" class="danger">Full wipe &amp; fresh install</button>
+          <button id="restartBtn" class="danger">Force restart</button>
+        </div>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin:1.5rem 0 1rem;" />
+        <p style="font-size:.9rem; color:var(--muted); margin:0 0 .75rem;">
+          <strong style="color:var(--danger-hover)">Factory shipping mode</strong> — wipes all settings, rules, and
+          alerts, then puts the device into deep sleep for shipping. Wake it with a long-press of CENTER.
+        </p>
+        <div class="row">
+          <button id="shippingBtn" class="danger">Factory shipping mode</button>
+        </div>
       </div>
     </div>
 
@@ -159,7 +184,24 @@
         <div class="field"><label>Name <span style="opacity:.7">(id — lowercase, no spaces)</span></label><input id="reName" autocomplete="off" placeholder="my_rule" /></div>
         <div class="field"><label>Title <span style="opacity:.7">(shown on the alert)</span></label><input id="reTitle" autocomplete="off" placeholder="My rule" /></div>
 
-        <label class="fld-label">Alert when a device matches any of these</label>
+        <div class="row spread" style="align-items:baseline; margin-bottom:.3rem;">
+          <label class="fld-label" style="margin:0;">Alert when a device matches any of these</label>
+          <span class="help" tabindex="0">regex help<span class="help-pop">
+            <b>Regex patterns</b> <span class="muted">(the "matches (regex)" mode)</span><br>
+            <span class="muted">Case-insensitive; must match the whole value.</span><br><br>
+            <code>.</code> any character<br>
+            <code>*</code> <code>+</code> <code>?</code> repeat previous (0+, 1+, 0-1)<br>
+            <code>\d</code> digit&nbsp;&nbsp; <code>\w</code> letter/digit/_&nbsp;&nbsp; <code>\s</code> space<br>
+            <code>[a-z]</code> any in set&nbsp;&nbsp; <code>[^0-9]</code> any not in set<br>
+            <code>\.</code> a literal dot (backslash escapes specials)<br><br>
+            <b>Examples</b><br>
+            <code>BWL\d-\d*</code> <span class="muted">&rarr; BWL9-089912, BWL5-012241</span><br>
+            <code>cam-\d+</code> <span class="muted">&rarr; cam-1, cam-42</span><br>
+            <code>[a-f0-9]*</code> <span class="muted">&rarr; any hex string</span><br><br>
+            <span class="muted">Tip: "contains / starts with / ends with" already cover plain
+            text &mdash; reach for regex only when the value has a pattern like these.</span>
+          </span></span>
+        </div>
         <div id="reClauses"></div>
         <button id="reAddClause" class="secondary" style="margin:.2rem 0 .8rem;">+ Add match</button>
 
@@ -492,19 +534,9 @@
           reportProgress: (_i, written, total) => { $("flashProgress").value = Math.round((written / total) * 100); },
         });
 
-        // Reboot into the freshly-written firmware. This is the exact sequence
-        // esp-web-tools uses and that is proven on the S3's USB-Serial-JTAG:
-        // ASSERT RTS, hold briefly, then release it via after(). The RTS *pulse*
-        // is what reboots the chip — a bare after() (which only releases RTS)
-        // never asserts it and leaves the chip parked in the bootloader, which
-        // was the "stuck after flash" symptom.
+        // Reboot into the freshly-written firmware via a hard reset on RST.
         flashStatus("Rebooting device…");
-        try {
-          await transport.setRTS(true);
-          await sleep(100);
-          await esploader.after();          // HardReset: releases RTS → chip runs
-        } catch { /* the reset re-enumerates USB and may reject; reboot still happened */ }
-        try { await transport.disconnect(); } catch {}
+        await hardResetIntoApp(transport, esploader);
 
         // Keep the device panel up and try to reconnect + re-read the version to
         // confirm the new firmware is actually running.
@@ -533,6 +565,99 @@
         toStale();
       } finally {
         flashing = false;      // re-arm sleep/wake auto-reconnect
+        setFlashUI(false);
+      }
+    }
+
+    // Hard-reset the chip on its RST pin so it (re)boots the app. This is the
+    // exact sequence esp-web-tools uses and that is proven on the S3's
+    // USB-Serial-JTAG: ASSERT RTS, hold briefly, then release it via after().
+    // The RTS *pulse* is what reboots the chip — a bare after() (which only
+    // releases RTS) never asserts it and leaves the chip parked in the
+    // bootloader, which was the "stuck after flash" symptom. Caller owns the
+    // Transport/ESPLoader and any reconnect afterwards.
+    async function hardResetIntoApp(transport, esploader) {
+      try {
+        await transport.setRTS(true);
+        await sleep(100);
+        await esploader.after();          // HardReset: releases RTS → chip runs
+      } catch { /* the reset re-enumerates USB and may reject; reboot still happened */ }
+      try { await transport.disconnect(); } catch {}
+    }
+
+    // Restart button — reboot the running device without reflashing. Same RST
+    // pulse esptool does at the end of a flash: hand the text port to
+    // esptool-js, sync to the ROM bootloader, then hard-reset into the app.
+    // (Raw port.setSignals RTS toggling alone doesn't reset this USB-JTAG board;
+    // the bootloader handshake is what makes the RST pulse land.)
+    async function doRestart() {
+      if (flashing) return;
+      if (!port || !linkLive) { flashErr("Not connected — click Connect first."); return; }
+      setFlashUI(true);
+      flashing = true;          // the reset re-enumerates USB — ignore connect/disconnect
+      let transport = null, esploader = null;
+      try {
+        await stopReadLoop();
+        await port.close();
+
+        flashStatus("Resetting device…");
+        transport = new Transport(port, true);
+        esploader = new ESPLoader({
+          transport, baudrate: 115200,
+          terminal: { clean() {}, writeLine: (d) => logLine(d), write: (d) => logLine(d) },
+        });
+        await esploader.main();
+        await hardResetIntoApp(transport, esploader);
+
+        flashStatus("Restarted — reconnecting…");
+        const ok = await reconnectAndValidate();
+        if (ok) {
+          linkLive = true;
+          setConn(`Connected — ${installed?.fw || "reconnected"}`);
+          flashStatus(`Device restarted — running ${installed?.fw || "firmware"}.`);
+          consoleNote(`Device reconnected — ${installed?.fw || "firmware"}`);
+          toConnected();
+        } else {
+          linkLive = false;
+          flashStatus("Restarted. If it didn't reconnect, click Connect.");
+          toStale();          // device info stays on screen
+        }
+      } catch (e) {
+        linkLive = false;
+        flashErr("Restart failed: " + e.message + " — click Connect to reconnect.");
+        try { await transport?.disconnect(); } catch {}
+        try { await port?.close(); } catch {}
+        toStale();
+      } finally {
+        flashing = false;
+        setFlashUI(false);
+      }
+    }
+
+    // Factory shipping mode — end-of-assembly-line command. Sends `power
+    // shipping`, which acks with "OK" then factory-wipes (settings/rules/alerts)
+    // and deep-sleeps. The link drops on its own; treat it as an intentional
+    // disconnect so we don't auto-reconnect (the device only wakes on a long
+    // CENTER hold). No bootloader reset here — this is a plain serial command.
+    async function doShipping() {
+      if (flashing) return;
+      if (!port || !linkLive) { flashErr("Not connected — click Connect first."); return; }
+      if (!confirm("Factory shipping mode wipes ALL settings, rules, and alerts, then deep-sleeps the device for shipping. Wake it later with a long-press of CENTER. Continue?")) return;
+      setFlashUI(true);
+      userDisconnected = true;    // device won't come back on its own — don't auto-reconnect
+      try {
+        flashStatus("Sending shipping command…");
+        // Wait for the "OK" ack before the device wipes + sleeps. Older firmware
+        // without the ack: proceed anyway (it may already be sleeping).
+        try { await sendLine("power shipping"); await awaitLine((l) => l.trim() === "OK", 3000); }
+        catch {}
+        linkLive = false;
+        await stopReadLoop();
+        try { await port.close(); } catch {}
+        flashStatus("Device wiped and in shipping mode — long-press CENTER to wake.");
+        consoleNote("Device entered shipping mode (wiped + deep sleep).");
+        toStale();          // device info stays on screen; rules/console hide
+      } finally {
         setFlashUI(false);
       }
     }
@@ -624,21 +749,70 @@
     }
 
     // ---- Structured rule form ---------------------------------------------
-    // Friendly label ↔ device field name for each match clause.
-    const MATCH_TYPES = [
-      ["name_contains", "Name contains"],
-      ["name_equals", "Name is exactly"],
-      ["oui", "MAC prefix / OUI"],
-      ["mac", "Exact MAC"],
-      ["mfg", "Manufacturer ID"],
+    // A match clause has two dropdowns: the field (subject) and, for the
+    // device's pattern fields (name / ssid / oui_org / mfg_org), how to match.
+    // The "how" transforms to/from a case-insensitive full-match pattern on the
+    // device. Literal fields (oui/mac/mfg/service) hide the "how" dropdown and
+    // pass their values through untouched.
+    const FIELD_TYPES = [
+      ["name",    "Name"],
+      ["ssid",    "Wi-Fi SSID"],
+      ["oui",     "MAC prefix / OUI"],
+      ["mac",     "Exact MAC"],
+      ["mfg",     "Manufacturer ID"],
       ["service", "BLE service UUID"],
-      ["ssid_contains", "Wi-Fi SSID contains"],
-      ["ssid_equals", "Wi-Fi SSID is exactly"],
-      ["oui_org_contains", "Vendor name contains"],
-      ["oui_org_equals", "Vendor name is exactly"],
-      ["mfg_org_contains", "Mfg name contains"],
-      ["mfg_org_equals", "Mfg name is exactly"],
+      ["oui_org", "Vendor name"],
+      ["mfg_org", "Mfg name"],
     ];
+    const HOW_TYPES = [
+      ["contains", "contains"],
+      ["equals",   "is exactly"],
+      ["starts",   "starts with"],
+      ["ends",     "ends with"],
+      ["regex",    "matches (regex)"],
+    ];
+    const PATTERN_FIELDS = ["name", "ssid", "oui_org", "mfg_org"];
+    const isPatternField = (f) => PATTERN_FIELDS.includes(f);
+
+    // Escape regex metacharacters so a friendly literal stays literal.
+    const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // "how" + user value → device pattern string.
+    function howToPattern(how, v) {
+      if (how === "contains") return ".*" + reEsc(v) + ".*";
+      if (how === "starts")   return reEsc(v) + ".*";
+      if (how === "ends")     return ".*" + reEsc(v);
+      if (how === "equals")   return reEsc(v);
+      return v;   // regex — pass through verbatim
+    }
+
+    // True if `s` is a plain literal with only escaped metacharacters (no
+    // unescaped regex operators) — i.e. reversible to a friendly literal.
+    function isEscapedLiteral(s) {
+      for (let i = 0; i < s.length; i++) {
+        if (s[i] === "\\") { i++; continue; }
+        if (".*+?^${}()|[]".includes(s[i])) return false;
+      }
+      return true;
+    }
+    const unescapeLiteral = (s) => s.replace(/\\(.)/g, "$1");
+
+    // Device pattern → friendly { how, value }. Falls back to regex when the
+    // pattern isn't a clean affix-wrapped literal.
+    function patternToHow(pat) {
+      const lead  = pat.startsWith(".*");
+      const trail = pat.length >= 2 && pat.endsWith(".*") &&
+                    !(pat.length >= 3 && pat[pat.length - 3] === "\\");
+      let start = lead ? 2 : 0;
+      let end   = trail ? pat.length - 2 : pat.length;
+      if (end < start) end = start;
+      const core = pat.slice(start, end);
+      if (isEscapedLiteral(core)) {
+        const how = (lead && trail) ? "contains" : trail ? "starts" : lead ? "ends" : "equals";
+        return { how, value: unescapeLiteral(core) };
+      }
+      return { how: "regex", value: pat };
+    }
     const TYPE_OPTS = [["", "Auto"], ["ble", "BLE"], ["wifi", "Wi-Fi"], ["sys", "System"], ["batt", "Battery"]];
     let vibeNames = [], ledNames = [];
 
@@ -661,16 +835,24 @@
     function chipValues(chips) {
       return [...chips.querySelectorAll(".chip")].map((c) => c.firstChild.textContent.trim()).filter(Boolean);
     }
-    // One match clause: a type dropdown + a chips input for its values.
-    function makeClause(field, values) {
+    // One match clause: a field dropdown, a "how" dropdown (pattern fields
+    // only), and a chips input for its values.
+    function makeClause(field, how, values) {
       const wrap = document.createElement("div"); wrap.className = "clause";
       const top = document.createElement("div"); top.className = "row spread";
       const sel = document.createElement("select"); sel.className = "re clause-field"; sel.style.flex = "1";
-      MATCH_TYPES.forEach(([v, label]) => { const o = document.createElement("option"); o.value = v; o.textContent = label; sel.appendChild(o); });
-      sel.value = field && MATCH_TYPES.some(([v]) => v === field) ? field : MATCH_TYPES[0][0];
+      FIELD_TYPES.forEach(([v, label]) => { const o = document.createElement("option"); o.value = v; o.textContent = label; sel.appendChild(o); });
+      sel.value = field && FIELD_TYPES.some(([v]) => v === field) ? field : FIELD_TYPES[0][0];
+      const hsel = document.createElement("select"); hsel.className = "re clause-how"; hsel.style.flex = "1";
+      HOW_TYPES.forEach(([v, label]) => { const o = document.createElement("option"); o.value = v; o.textContent = label; hsel.appendChild(o); });
+      hsel.value = how && HOW_TYPES.some(([v]) => v === how) ? how : "contains";
       const rm = document.createElement("button"); rm.className = "secondary"; rm.textContent = "✕"; rm.title = "Remove match";
       rm.onclick = () => wrap.remove();
-      top.appendChild(sel); top.appendChild(rm);
+      // "how" applies only to pattern fields; hide it for literal fields.
+      const syncHow = () => hsel.classList.toggle("hidden", !isPatternField(sel.value));
+      sel.addEventListener("change", syncHow);
+      syncHow();
+      top.appendChild(sel); top.appendChild(hsel); top.appendChild(rm);
       const chips = document.createElement("div"); chips.className = "chips";
       const input = document.createElement("input"); input.placeholder = "add value, press Enter";
       chips.appendChild(input);
@@ -689,7 +871,22 @@
       return wrap;
     }
 
-    const RULE_TEMPLATE = { name: "", title: "", type: "ble", criteria: [{ name_contains: [] }] };
+    const RULE_TEMPLATE = { name: "", title: "", type: "ble", criteria: [] };
+
+    // Expand one saved criterion into editor clauses. Pattern fields get one
+    // clause per value (each value may be a different shape); literal fields
+    // keep all values as chips in a single clause.
+    function clausesForCriterion(c) {
+      const field  = Object.keys(c)[0];
+      const values = c[field] || [];
+      if (isPatternField(field)) {
+        return (values.length ? values : [""]).map((pat) => {
+          const { how, value } = patternToHow(String(pat));
+          return makeClause(field, how, value ? [value] : []);
+        });
+      }
+      return [makeClause(field, "contains", values.map(String))];
+    }
 
     function openEditor(r) {
       const rule = r || RULE_TEMPLATE;
@@ -701,7 +898,10 @@
       fillSelect($("reLed"), ["", ...ledNames], rule.led || "");
       const host = $("reClauses"); host.innerHTML = "";
       const crit = (rule.criteria && rule.criteria.length) ? rule.criteria : [{}];
-      crit.forEach((c) => { const f = Object.keys(c)[0]; host.appendChild(makeClause(f, f ? c[f] : [])); });
+      crit.forEach((c) => {
+        if (!Object.keys(c).length) { host.appendChild(makeClause(FIELD_TYPES[0][0], "contains", [])); return; }
+        clausesForCriterion(c).forEach((cl) => host.appendChild(cl));
+      });
       ruleEditStatus("");
       $("ruleEditor").classList.remove("hidden");
       $("ruleEditor").scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -715,8 +915,11 @@
       const criteria = [];
       $("reClauses").querySelectorAll(".clause").forEach((cl) => {
         const field = cl.querySelector(".clause-field").value;
-        const vals = chipValues(cl.querySelector(".chips"));
-        if (vals.length) criteria.push({ [field]: vals });
+        const how   = cl.querySelector(".clause-how").value;
+        const vals  = chipValues(cl.querySelector(".chips"));
+        if (!vals.length) return;
+        const out = isPatternField(field) ? vals.map((v) => howToPattern(how, v)) : vals;
+        criteria.push({ [field]: out });
       });
       obj.criteria = criteria;
       return obj;
@@ -770,7 +973,8 @@
     function flashStatus(m) { const e = $("flashStatus"); e.textContent = m; e.classList.remove("error"); }
     function flashErr(m) { const e = $("flashStatus"); e.textContent = m; e.classList.add("error"); }
     function setFlashUI(busy) {
-      $("flashBtn").disabled = busy; $("wipeBtn").disabled = busy;
+      $("flashBtn").disabled = busy; $("wipeBtn").disabled = busy; $("restartBtn").disabled = busy;
+      $("shippingBtn").disabled = busy;
       $("optFw").disabled = busy; $("optFs").disabled = busy; $("versionSel").disabled = busy;
       $("connectBtn").disabled = busy; $("disconnectBtn").disabled = busy;
       if (!busy) $("flashProgress").classList.add("hidden");
@@ -899,11 +1103,13 @@
     $("wipeBtn").addEventListener("click", () => {
       if (confirm("Full wipe erases ALL settings and rules, then flashes everything. Continue?")) doFlash({ erase: true });
     });
+    $("restartBtn").addEventListener("click", doRestart);
+    $("shippingBtn").addEventListener("click", doShipping);
 
     $("rulesNew").addEventListener("click", () => openEditor(null));
     $("ruleSave").addEventListener("click", saveRule);
     $("ruleCancel").addEventListener("click", () => $("ruleEditor").classList.add("hidden"));
-    $("reAddClause").addEventListener("click", () => $("reClauses").appendChild(makeClause(null, [])));
+    $("reAddClause").addEventListener("click", () => $("reClauses").appendChild(makeClause(null, "contains", [])));
   </script>
 </body>
 </html>

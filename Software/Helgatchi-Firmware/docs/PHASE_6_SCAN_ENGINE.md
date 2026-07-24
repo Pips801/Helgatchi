@@ -35,7 +35,7 @@ and pushes it through the same ring. If your real-radio output matches what
 - **Ring + seen map**: `ScanService` (PSRAM-backed). `publish()` is thread-
   safe-enough for the main loop (no locking yet — see "concurrency" below).
 - **RulesService consumer**: drains the ring on every `tick()` via
-  `g_scan.drain(&_ring_read_pos, ...)`. Match → alert.
+  `g_scan_service.drain(&_ring_read_pos, ...)`. Match → alert.
 - **Vendor resolution**: `vendor_lookup.h` exposes `vendor_oui_lookup(prefix)`,
   `vendor_mfg_lookup(id)`. Already used by `scan` list and rule pretty-print.
   Scan engine does NOT need to resolve names — just fill in raw MAC + mfg_id
@@ -70,9 +70,12 @@ In `include/event_ids.h`:
 - `CMD_SCAN_STOP`  — PowerManager posts this to end a window
 - `CMD_SCAN_LOCKON_START` / `CMD_SCAN_LOCKON_STOP` — future "focus on one
   device" mode (Phase 7+); leave unhandled for now
-- `EV_SCAN_STATE_CHANGED` — emit with payload `ScanStatePayload { uint8_t state }`
-  when transitioning between idle / BLE / WiFi / both. UI top bar might
-  hook this later
+- `EV_SCAN_STATE_CHANGED` — emit with payload
+  `ScanStatePayload { uint8_t domain; uint8_t active }` on every radio
+  start/stop. `domain` is `ScanDomain` (`SCAN_BLE` / `SCAN_WIFI`), `active` is
+  0/1. ScanEngine emits this for BLE today (`_emitScanState`); WiFi will emit
+  the same event with `SCAN_WIFI` once its radio path lands. The top-bar icons
+  already consume it (DisplayService) to color the BT/WiFi glyphs per domain.
 
 The existing `EV_OBS_*` and `EV_ENTITY_*` reservations are vestigial from
 an earlier design pass. Don't use them; we may delete them in cleanup.
@@ -108,7 +111,7 @@ private:
 extern ScanEngine g_scan_engine;
 ```
 
-Wiring in `main.cpp`: `g_scan_engine.begin(g_bus);` AFTER `g_scan.begin()` and
+Wiring in `main.cpp`: `g_scan_engine.begin(g_bus);` AFTER `g_scan_service.begin()` and
 `g_power.begin()` (so subscriptions land in the right order). Tick goes in
 `loop()`.
 
@@ -138,7 +141,7 @@ In the callback, build `ScanResult`:
   `service_uuids` array is fixed at 4.
 - `timestamp_ms = millis()`
 
-Then `g_scan.publish(r)`.
+Then `g_scan_service.publish(r)`.
 
 ### WiFi
 
@@ -155,7 +158,7 @@ if (n >= 0) {
         r.rssi = WiFi.RSSI(i);
         strncpy(r.name, WiFi.SSID(i).c_str(), sizeof(r.name) - 1);
         r.timestamp_ms = millis();
-        g_scan.publish(r);
+        g_scan_service.publish(r);
     }
     WiFi.scanDelete();
     // optionally trigger next scan or wait

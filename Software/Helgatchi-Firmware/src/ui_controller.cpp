@@ -3,6 +3,7 @@
 #include "settings_service.h"
 #include "power_manager.h"
 #include "vibe_service.h"
+#include "party_service.h"
 #include "version.h"
 #include "UI/ui.h"
 #include "UI/screens.h"
@@ -21,35 +22,48 @@ static EventBus* _ui_bus = nullptr;
 // ---------------------------------------------------------------------------
 
 // Two equal-sized partial-render buffers let LVGL pipeline render-vs-flush
-// across strips. 120 rows × 280 px = 2 strips per 240-row screen. At
-// lv_color_t = 2 bytes (RGB565) each buffer is 67,200 B — together ~134 KB.
-// Allocated in PSRAM at begin() time so they don't eat internal DRAM.
-// Larger strips → fewer flushes per frame → fewer tear seams.
+// across strips. 80 rows × 280 px = 3 strips per 240-row screen; at 2 B/px
+// (RGB565) each buffer is 44,800 B — together ~90 KB.
 //
-// Flush strategy: writePixelsDMA + deferred endWrite + PSRAM cache writeback.
+// Buffers are lv_color16_t, NOT lv_color_t: in LVGL 9 lv_color_t is the
+// 3-byte RGB888 struct regardless of LV_COLOR_DEPTH, so sizing RGB565
+// buffers with sizeof(lv_color_t) silently over-allocates them by 50%.
+//
+// Buffers live in INTERNAL SRAM (DMA-capable) by choice: the SW renderer
+// read-modify-writes the strip for every blend (text AA, rounded corners,
+// borders), so buffer bandwidth dominates render time. The strips were in
+// PSRAM once — each strip overflows the data cache, forcing rasterization
+// to quad-SPI PSRAM speed; that alone held the devices screen to ~1 FPS.
+// More strips can mean more tear seams during scrolls — if seams get bad
+// and heap allows, raise DISP_BUF_ROWS (240 must split into whole strips).
+//
+// Flush strategy: writePixelsDMA + deferred endWrite.
 // Each strip's DMA runs in the background while the CPU renders the next
 // strip into the OTHER buffer. The bus stays "held" with a pending DMA
 // between strips and between frames; endWrite is called at the START of the
 // next flush to drain the previous transfer before reusing the bus.
 //
-// PSRAM cache caveat: the CPU writes pixels through its data cache, but GDMA
-// reads from physical PSRAM. Dirty cache lines must be written back before
-// each DMA — otherwise DMA pulls stale bytes (the green-glitch symptom).
-// Cache_WriteBack_Addr handles this; the address/size are rounded out to the
-// 32-byte cache line.
+// PSRAM cache caveat (fallback path only): the CPU writes pixels through its
+// data cache, but GDMA reads from physical PSRAM. Dirty cache lines must be
+// written back before each DMA — otherwise DMA pulls stale bytes (the
+// green-glitch symptom). Cache_WriteBack_Addr handles this; the address/size
+// are rounded out to the 32-byte cache line. Internal-SRAM DMA is coherent,
+// so the writeback is skipped there.
 //
 // FULL mode was tried (one flush per frame, atomic full-screen write); it
 // reduced strip seams from 2 → 1 but the remaining seam was still visible
 // during scrolls, while costing a brief FPS dip on small isolated updates.
 // Not worth the trade — reverted.
-static constexpr size_t DISP_BUF_PX    = 280 * 120;
-static constexpr size_t DISP_BUF_BYTES = DISP_BUF_PX * sizeof(lv_color_t);
-static lv_color_t* _disp_buf1 = nullptr;
-static lv_color_t* _disp_buf2 = nullptr;
+static constexpr size_t DISP_BUF_ROWS  = 80;
+static constexpr size_t DISP_BUF_PX    = 280 * DISP_BUF_ROWS;
+static constexpr size_t DISP_BUF_BYTES = DISP_BUF_PX * sizeof(lv_color16_t);
+static lv_color16_t* _disp_buf1 = nullptr;
+static lv_color16_t* _disp_buf2 = nullptr;
+static bool        _bufs_in_psram = false; // PSRAM bufs need cache writeback pre-DMA
 static bool        _dma_pending = false;   // an endWrite is owed at next flush
 
 // Ground-truth flush counter. Incremented once per flush_cb call.
-// Counts strips, not frames — in PARTIAL mode that's 1-2 calls/frame.
+// Counts strips, not frames — in PARTIAL mode that's 1-3 calls/frame.
 static uint32_t    _flush_count          = 0;
 static uint32_t    _flush_last_sample_ms = 0;
 
@@ -75,7 +89,7 @@ static void _flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map
     auto& tft = g_hal.tft();
     const uint32_t w = (uint32_t)(area->x2 - area->x1 + 1);
     const uint32_t h = (uint32_t)(area->y2 - area->y1 + 1);
-    const size_t bytes = (size_t)w * h * sizeof(lv_color_t);
+    const size_t bytes = (size_t)w * h * sizeof(lv_color16_t);
 
     // Drain the previous DMA (and release its transaction) before grabbing
     // the bus for this strip. No-op on the very first flush.
@@ -87,17 +101,21 @@ static void _flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map
     // Write back any dirty PSRAM cache lines covering px_map so GDMA reads
     // the pixels the CPU just rendered. 32-byte cache line on ESP32-S3 — we
     // align the address down and the size up so partial-line writes flush.
-    const uintptr_t aligned_addr = (uintptr_t)px_map & ~31U;
-    const size_t    aligned_size = (((uintptr_t)px_map + bytes + 31U) & ~31U) - aligned_addr;
-    Cache_WriteBack_Addr((uint32_t)aligned_addr, (uint32_t)aligned_size);
+    // Only needed on the PSRAM fallback path; internal SRAM is DMA-coherent.
+    if (_bufs_in_psram) {
+        const uintptr_t aligned_addr = (uintptr_t)px_map & ~31U;
+        const size_t    aligned_size = (((uintptr_t)px_map + bytes + 31U) & ~31U) - aligned_addr;
+        Cache_WriteBack_Addr((uint32_t)aligned_addr, (uint32_t)aligned_size);
+    }
 
     tft.startWrite();
     tft.setAddrWindow(area->x1, area->y1, w, h);
-    // `swap=true`: LVGL stores RGB565 in CPU-native (little-endian) byte
-    // order, but the ST7789 wants MSB-first. The DMA overload with swap
-    // handles this — the raw writePixelsDMA(uint16_t*, len) variant does
-    // NOT and produces a green/yellow color mash.
-    tft.writePixelsDMA((uint16_t*)px_map, (int32_t)(w * h), true);
+    // swap=false: the display renders LV_COLOR_FORMAT_RGB565_SWAPPED — the
+    // bytes are already MSB-first as the ST7789 wants — so LovyanGFX DMAs
+    // the LVGL buffer as-is. (With CPU-native RGB565 output this needed
+    // swap=true, which routed every strip through a CPU swap-copy into
+    // LovyanGFX's own DMA buffer before the transfer could start.)
+    tft.writePixelsDMA((uint16_t*)px_map, (int32_t)(w * h), false);
     _dma_pending = true;
     _flush_count++;
     // Intentionally NOT endWrite()-ing — let DMA run in background. The next
@@ -171,12 +189,17 @@ static void _on_screen_load_start(lv_event_t* /*e*/) {
     if (_saved_main_menu_focus) lv_group_focus_obj(_saved_main_menu_focus);
 }
 
-static void _on_tutorial_splash_load(lv_event_t* /*e*/) {
+// Mark the tutorial complete only when the user reaches the end and presses
+// "Start Scanning!". Persist immediately (SET then SAVE) so a sleep/wake or
+// power loss mid-tutorial can't dismiss it — only finishing does. PowerManager
+// resets SKEY_TUTORIAL_SHOWN to 0 on shipping-mode sleep.
+static void _on_end_tutorial_click(lv_event_t* /*e*/) {
     if (!_ui_bus) return;
     EventPayload p{};
     p.settings_set.key   = SKEY_TUTORIAL_SHOWN;
     p.settings_set.value = 1;
     _ui_bus->post(CMD_SETTINGS_SET, p);
+    _ui_bus->post(CMD_SETTINGS_SAVE);   // commit now — survives power loss
 }
 
 void UIController::begin(EventBus& bus) {
@@ -189,16 +212,23 @@ void UIController::begin(EventBus& bus) {
     lv_display_t* disp = lv_display_create(280, 240);
     lv_display_set_flush_cb(disp, _flush_cb);
 
-    // Allocate render buffers in PSRAM. ps_malloc returns nullptr if PSRAM
-    // is absent (base XIAO ESP32-S3 variant); fall back to internal heap so
-    // boards without PSRAM still work.
-    _disp_buf1 = (lv_color_t*)ps_malloc(DISP_BUF_BYTES);
-    _disp_buf2 = (lv_color_t*)ps_malloc(DISP_BUF_BYTES);
+    // Render in the panel's byte order (RGB565, MSB-first). The SW renderer
+    // handles RGB565_SWAPPED natively, and it lets _flush_cb hand the LVGL
+    // buffer to DMA untouched — no per-strip swap copy inside LovyanGFX.
+    lv_display_set_color_format(disp, LV_COLOR_FORMAT_RGB565_SWAPPED);
+
+    // Render buffers go to internal DMA-capable SRAM — see the block comment
+    // above DISP_BUF_ROWS for why (render bandwidth). If internal heap can't
+    // fit both strips, fall back to PSRAM (slow but functional); the flush
+    // path then re-enables the cache writeback via _bufs_in_psram.
+    _disp_buf1 = (lv_color16_t*)heap_caps_malloc(DISP_BUF_BYTES, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    _disp_buf2 = (lv_color16_t*)heap_caps_malloc(DISP_BUF_BYTES, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
     if (!_disp_buf1 || !_disp_buf2) {
         if (_disp_buf1) free(_disp_buf1);
         if (_disp_buf2) free(_disp_buf2);
-        _disp_buf1 = (lv_color_t*)heap_caps_malloc(DISP_BUF_BYTES, MALLOC_CAP_8BIT);
-        _disp_buf2 = (lv_color_t*)heap_caps_malloc(DISP_BUF_BYTES, MALLOC_CAP_8BIT);
+        _disp_buf1 = (lv_color16_t*)ps_malloc(DISP_BUF_BYTES);
+        _disp_buf2 = (lv_color16_t*)ps_malloc(DISP_BUF_BYTES);
+        _bufs_in_psram = true;
     }
     lv_display_set_buffers(disp, _disp_buf1, _disp_buf2,
                            DISP_BUF_BYTES, LV_DISPLAY_RENDER_MODE_PARTIAL);
@@ -220,10 +250,11 @@ void UIController::begin(EventBus& bus) {
                           HW_REV_STR, FW_VERSION_STR, UI_VERSION_STR,
                           GAME_VERSION_STR, BUILD_DATE_STR);
 
-    // Register splash-load handler before we (maybe) load the splash, so the
-    // initial load also marks SKEY_TUTORIAL_SHOWN.
-    lv_obj_add_event_cb(objects.tutorial_splash_screen, _on_tutorial_splash_load,
-                        LV_EVENT_SCREEN_LOAD_START, nullptr);
+    // Mark the tutorial complete only when the user finishes it and presses the
+    // end-tutorial button — showing the tutorial no longer clears the flag, so
+    // a sleep/wake or power loss mid-tutorial re-shows it on next boot.
+    lv_obj_add_event_cb(objects.end_tutorial_button, _on_end_tutorial_click,
+                        LV_EVENT_CLICKED, nullptr);
 
     // Show the tutorial on first flash or after shipping-mode exit.
     // PowerManager resets SKEY_TUTORIAL_SHOWN to 0 before shipping sleep;
@@ -317,21 +348,69 @@ void UIController::onEvent(const Event& e) {
                 && lv_obj_check_type(focused, &lv_dropdown_class)
                 && lv_dropdown_is_open(focused);
 
+            // Haptic only when the press actually moves something. Left/right
+            // reflect UI state, not the raw button: at a hard end (nav group
+            // doesn't wrap) or at a dropdown option limit, pressing further
+            // changes nothing and stays silent.
+            bool haptic = false;
+
             if (dropdown_open) {
                 _enqueueKey(is_left ? LV_KEY_UP : LV_KEY_DOWN);
+                // Dropdown clamps at both ends (see lv_dropdown.c key handler),
+                // so bump only if the highlighted option can still move.
+                const uint32_t sel = lv_dropdown_get_selected(focused);
+                const uint32_t cnt = lv_dropdown_get_option_cnt(focused);
+                haptic = is_left ? (sel > 0) : (sel + 1 < cnt);
             } else if (g && lv_group_get_editing(g)) {
                 _enqueueKey(is_left ? LV_KEY_LEFT : LV_KEY_RIGHT);
+                // No value-editable widgets (slider/roller/arc) are in the nav
+                // group today, so a value edit always confirms. If one is added,
+                // gate this on its min/max the same way the dropdown does.
+                haptic = true;
             } else {
                 _enqueueKey(is_left ? LV_KEY_PREV : LV_KEY_NEXT);
+                // Nav mode: bump only if focus can move that way. Group doesn't
+                // wrap (disabled in EEZ), so first/last is a hard end. Assumes
+                // no hidden members mid-group — none exist; if that changes,
+                // this count-based bound would need to skip them.
+                if (focused && g) {
+                    const uint32_t cnt = lv_group_get_obj_count(g);
+                    for (uint32_t i = 0; i < cnt; i++) {
+                        if (lv_group_get_obj_by_index(g, i) == focused) {
+                            haptic = is_left ? (i > 0) : (i + 1 < cnt);
+                            break;
+                        }
+                    }
+                }
             }
+
+            if (haptic) g_vibe.play(HAPTIC_TICK_LIGHT);
             break;
         }
 
-        case EV_BTN_CENTER_SHORT:
+        case EV_BTN_CENTER_SHORT: {
+            // ENTER always goes to LVGL; the bump only fires if the focused
+            // object can act on it. Scroll-only cards (tutorial/info/debug)
+            // have LV_OBJ_FLAG_CLICKABLE removed in EEZ so they stay silent;
+            // buttons/switches/dropdowns/menu panels keep it and bump.
+            lv_obj_t* focused = g ? lv_group_get_focused(g) : nullptr;
+            if (focused && lv_obj_has_flag(focused, LV_OBJ_FLAG_CLICKABLE)) {
+                g_vibe.play(HAPTIC_TICK);
+            }
             _enqueueKey(LV_KEY_ENTER);
             break;
+        }
 
         case EV_BTN_CENTER_LONG: {
+            // Party mode owns the long-press: it exits party and STAYS on the
+            // status page (a second long-press then backs out to the main menu).
+            // Must come first so the same press doesn't also navigate away.
+            if (g_party.active()) {
+                g_vibe.play(HAPTIC_BUMP);
+                g_party.stop();
+                break;
+            }
+
             // A modal popup (e.g. the device-detail msgbox) takes precedence:
             // long-press closes it instead of navigating back a screen. Match
             // only the msgbox backdrop so other top-layer content is untouched.
@@ -346,7 +425,30 @@ void UIController::onEvent(const Event& e) {
             }
             // Main menu has no "previous" — ignore the regular long-press
             // there. Sleep is reached via the longer EV_BTN_CENTER_HOLD.
-            if (lv_screen_active() != objects.main_menu) {
+            lv_obj_t* active = lv_screen_active();
+            if (active == objects.tutorial) {
+                // In the tutorial, back-nav returns to the splash instead of out
+                // to the main menu — it demos the "back a screen" gesture while
+                // keeping the user inside the tutorial flow. Leaving any other way
+                // never sets SKEY_TUTORIAL_SHOWN, so the tutorial would re-show
+                // after the next sleep/wake; only the End Tutorial button
+                // completes it. eez_flow_set_screen (not pop) because begin()
+                // loads the splash via raw lv_scr_load, so it isn't on the EEZ
+                // page stack — a pop would fall through to the main menu.
+                g_vibe.play(HAPTIC_BUMP);
+                eez_flow_set_screen(SCREEN_ID_TUTORIAL_SPLASH_SCREEN,
+                                    LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);
+            } else if (active == objects.overview) {
+                // The status page always backs out to the main menu — not
+                // whatever was open when party mode fired. Party navigates here
+                // via set_screen (clearing the stack), so there's nothing to pop
+                // anyway; go to the menu explicitly.
+                g_vibe.play(HAPTIC_BUMP);
+                eez_flow_set_screen(SCREEN_ID_MAIN_MENU, LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);
+            } else if (active != objects.main_menu
+                       && active != objects.tutorial_splash_screen) {
+                // The splash traps back-nav (no exit to the main menu, which
+                // would end the tutorial early); every other screen pops normally.
                 g_vibe.play(HAPTIC_BUMP);
                 eez_flow_pop_screen(LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);
             }

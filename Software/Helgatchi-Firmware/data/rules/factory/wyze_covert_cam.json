@@ -1,0 +1,15 @@
+{
+  "name": "wyze_covert_cam",
+  "title": "Wyze Camera nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["camera"],
+  "criteria": [
+    { "oui": ["2C:AA:8E", "7C:78:B2"] },
+    { "name": [".*wyze.*", ".*wyzecam.*"] },
+    { "oui_org": [".*wyze.*", ".*wyze labs.*"] },
+    { "mfg_org": [".*wyze.*"] }
+  ]
+}

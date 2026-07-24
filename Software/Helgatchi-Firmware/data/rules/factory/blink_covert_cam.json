@@ -1,0 +1,14 @@
+{
+  "name": "blink_covert_cam",
+  "title": "Blink Camera nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["camera"],
+  "criteria": [
+    { "oui": ["18:74:2E", "44:65:0D", "00:FC:8B", "FC:A6:67", "40:A2:DB"] },
+    { "name": [".*blink.*", ".*blinkcam.*"] },
+    { "oui_org": [".*blink home.*", ".*blink.*"] }
+  ]
+}

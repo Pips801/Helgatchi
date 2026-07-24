@@ -1,0 +1,15 @@
+{
+  "name": "withings",
+  "title": "Withings nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["fitness", "wearable"],
+  "criteria": [
+    { "oui": ["00:24:E4", "A4:7E:FA"] },
+    { "name": [".*withings.*", ".*scanwatch.*", ".*steel hr.*"] },
+    { "oui_org": [".*withings.*"] },
+    { "mfg_org": [".*withings.*"] }
+  ]
+}

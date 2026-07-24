@@ -1,0 +1,14 @@
+{
+  "name": "whoop",
+  "title": "WHOOP Strap nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["fitness", "wearable"],
+  "criteria": [
+    { "name": [".*whoop.*"] },
+    { "oui_org": [".*whoop.*"] },
+    { "mfg_org": [".*whoop.*"] }
+  ]
+}

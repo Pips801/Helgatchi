@@ -1,0 +1,16 @@
+{
+  "name": "polar",
+  "title": "Polar nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["fitness", "wearable"],
+  "criteria": [
+    { "mfg": ["0x006B", "0x00D1"] },
+    { "oui": ["00:22:D0", "24:AC:AC", "A0:9E:1A"] },
+    { "name": [".*polar.*", ".*verity.*", ".*vantage.*", ".*ignite.*"] },
+    { "oui_org": [".*polar electro.*", ".*polar.*"] },
+    { "mfg_org": [".*polar.*"] }
+  ]
+}

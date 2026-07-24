@@ -1,0 +1,14 @@
+{
+  "name": "Eufy SmartTrack",
+  "title": "Eufy SmartTrack nearby",
+  "vibe": "bump",
+  "led": "white_chaser",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Tracker"],
+  "criteria": [
+    { "mfg": ["0x0736"] },
+    { "name": [".*smarttrack.*", ".*eufy tag.*", ".*eufy card.*"] },
+    { "mfg_org": [".*anker.*", ".*eufy.*"] }
+  ]
+}

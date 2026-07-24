@@ -1,0 +1,13 @@
+{
+  "name": "Pebblebee",
+  "title": "Pebblebee Tracker nearby",
+  "vibe": "bump",
+  "led": "white_chaser",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Tracker"],
+  "criteria": [
+    { "name": [".*pebblebee.*"] },
+    { "mfg_org": [".*pebblebee.*"] }
+  ]
+}

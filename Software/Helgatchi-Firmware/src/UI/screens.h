@@ -172,6 +172,8 @@ typedef struct _objects_t {
     lv_obj_t *debug_screen_button;
     lv_obj_t *reset_device_container;
     lv_obj_t *reset_device_button;
+    lv_obj_t *ship_device_container;
+    lv_obj_t *reset_device_button_1;
     lv_obj_t *restart_tutorial_container;
     lv_obj_t *restart_tutorial_button;
     lv_obj_t *obj33;
@@ -181,16 +183,17 @@ typedef struct _objects_t {
     lv_obj_t *obj37;
     lv_obj_t *obj38;
     lv_obj_t *obj39;
+    lv_obj_t *obj40;
     lv_obj_t *device_info;
     lv_obj_t *version_info;
     lv_obj_t *hardware_specs_container;
     lv_obj_t *software_specs_container;
     lv_obj_t *credits_container;
-    lv_obj_t *obj40;
+    lv_obj_t *obj41;
     lv_obj_t *alert_container;
     lv_obj_t *no_alerts_label;
     lv_obj_t *devices_container;
-    lv_obj_t *obj41;
+    lv_obj_t *obj42;
     lv_obj_t *system___health_container;
     lv_obj_t *power_container;
     lv_obj_t *scanning_container;
@@ -200,9 +203,9 @@ typedef struct _objects_t {
     lv_obj_t *sleep_countdown_text;
     lv_obj_t *restart_button;
     lv_obj_t *power_off_;
-    lv_obj_t *obj42;
     lv_obj_t *obj43;
     lv_obj_t *obj44;
+    lv_obj_t *obj45;
     lv_obj_t *power_action_text;
     lv_obj_t *admin_command_container;
     lv_obj_t *admin_command_dropdown;
@@ -224,7 +227,6 @@ typedef struct _objects_t {
     lv_obj_t *no_tags_label;
     lv_obj_t *individual_rules_header;
     lv_obj_t *no_rulesets_label;
-    lv_obj_t *obj45;
     lv_obj_t *obj46;
     lv_obj_t *obj47;
     lv_obj_t *obj48;
@@ -238,6 +240,7 @@ typedef struct _objects_t {
     lv_obj_t *obj56;
     lv_obj_t *obj57;
     lv_obj_t *obj58;
+    lv_obj_t *obj59;
 } objects_t;
 
 extern objects_t objects;

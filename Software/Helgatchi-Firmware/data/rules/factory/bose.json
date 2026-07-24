@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["audio", "wearable"],
+  "tag": ["Audio", "Wearable"],
   "criteria": [
     { "mfg": ["0x009E"] },
     { "oui": [

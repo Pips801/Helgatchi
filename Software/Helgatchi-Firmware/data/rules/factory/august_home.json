@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["smart_home"],
+  "tag": ["Smart Home"],
   "criteria": [
     { "mfg": [] },
     { "oui": ["78:9C:85"] },

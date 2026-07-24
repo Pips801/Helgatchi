@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["camera"],
+  "tag": ["Camera"],
   "criteria": [
     { "oui": ["2C:AA:8E", "7C:78:B2"] },
     { "name": [".*wyze.*", ".*wyzecam.*"] },

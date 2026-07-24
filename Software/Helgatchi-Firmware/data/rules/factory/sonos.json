@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["smart_home", "audio"],
+  "tag": ["Smart Home", "Audio"],
   "criteria": [
     { "mfg": ["0x05A7"] },
     { "oui": [

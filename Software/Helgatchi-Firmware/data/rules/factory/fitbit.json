@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["fitness", "wearable"],
+  "tag": ["Fitness", "Wearable"],
   "criteria": [
     { "mfg": ["0x00E0", "0x018E"] },
     { "oui": ["18:00:DB", "58:A8:7B", "5C:75:AF", "C8:B6:FE", "F0:51:EA"] },

@@ -1,6 +1,6 @@
 {
   "name": "Samsung SmartTag",
-  "title": "Samsung SmartTag nearby",
+  "title": "Samsung ST nearby",
   "vibe": "bump",
   "led": "white_chaser",
   "type": "ble",

@@ -1,0 +1,20 @@
+{
+  "name": "sonos",
+  "title": "Sonos nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["smart_home", "audio"],
+  "criteria": [
+    { "mfg": ["0x05A7"] },
+    { "oui": [
+      "00:0E:58", "34:7E:5C", "38:42:0B", "48:A6:B8", "54:2A:1B",
+      "5C:AA:FD", "74:CA:60", "78:28:CA", "80:4A:F2", "94:9F:3E",
+      "B8:E9:37", "C4:38:75", "F0:F6:C1", "F8:5C:24"
+    ] },
+    { "name": [".*sonos.*"] },
+    { "oui_org": [".*sonos.*"] },
+    { "mfg_org": [".*sonos.*"] }
+  ]
+}

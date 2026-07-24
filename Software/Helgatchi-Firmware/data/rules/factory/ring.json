@@ -1,0 +1,20 @@
+{
+  "name": "ring",
+  "title": "Ring Doorbell / Camera nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["smart_home"],
+  "criteria": [
+    { "mfg": ["0x0171"] },
+    { "oui": [
+      "00:B4:63", "18:7F:88", "24:2B:D6", "34:3E:A4", "50:E4:67",
+      "54:E0:19", "5C:47:5E", "64:9A:63", "90:48:6C", "9C:76:13",
+      "AC:9F:C3", "C4:DB:AD", "CC:3B:FB"
+    ] },
+    { "name": [".*ring.*", ".*doorbell.*"] },
+    { "oui_org": [".*ring llc.*", ".*ring.*"] },
+    { "mfg_org": [".*amazon.*", ".*ring.*"] }
+  ]
+}

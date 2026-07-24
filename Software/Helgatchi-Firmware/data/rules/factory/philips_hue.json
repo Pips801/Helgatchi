@@ -1,0 +1,14 @@
+{
+  "name": "philips_hue",
+  "title": "Philips Hue nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["smart_home"],
+  "criteria": [
+    { "oui": ["00:17:88", "EC:B5:FA"] },
+    { "name": [".*hue.*", ".*philips hue.*"] },
+    { "oui_org": [".*philips lighting.*", ".*signify.*"] }
+  ]
+}

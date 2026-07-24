@@ -1,0 +1,20 @@
+{
+  "name": "bose",
+  "title": "Bose Audio device nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["audio", "wearable"],
+  "criteria": [
+    { "mfg": ["0x009E"] },
+    { "oui": [
+      "00:0C:8A", "04:52:C7", "08:DF:1F", "28:11:A5", "2C:41:A1",
+      "4C:87:5D", "60:AB:D2", "68:F2:1F", "78:2B:64", "AC:BF:71",
+      "BC:87:FA", "C8:7B:23", "E4:58:BC"
+    ] },
+    { "name": [".*bose.*", ".*quietcomfort.*", ".*soundlink.*"] },
+    { "oui_org": [".*bose.*"] },
+    { "mfg_org": [".*bose.*"] }
+  ]
+}

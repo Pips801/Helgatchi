@@ -1,0 +1,16 @@
+{
+  "name": "ecobee",
+  "title": "ecobee nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["smart_home"],
+  "criteria": [
+    { "mfg": ["0x07D6"] },
+    { "oui": ["44:61:32"] },
+    { "name": [".*ecobee.*"] },
+    { "oui_org": [".*ecobee.*"] },
+    { "mfg_org": [".*ecobee.*"] }
+  ]
+}

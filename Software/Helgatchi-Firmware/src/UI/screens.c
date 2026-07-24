@@ -2963,7 +2963,7 @@ void create_screen_overview() {
             objects.helga = obj;
             lv_obj_set_pos(obj, 0, 40);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-            static const lv_image_dsc_t *images[48] = {
+            static const lv_image_dsc_t *images[93] = {
                 &img_helga_sit_scoot1,
                 &img_helga_sit_scoot2,
                 &img_helga_walk1,
@@ -3012,8 +3012,53 @@ void create_screen_overview() {
                 &img_helga_idle6,
                 &img_helga_idle7,
                 &img_helga_idle8,
+                &img_helga_idle_fidget1,
+                &img_helga_idle_fidget2,
+                &img_helga_idle_fidget3,
+                &img_helga_idle_fidget4,
+                &img_helga_idle_fidget5,
+                &img_helga_idle_fidget6,
+                &img_helga_idle_fidget7,
+                &img_helga_idle_fidget8,
+                &img_helga_idle_sneeze1,
+                &img_helga_idle_sneeze2,
+                &img_helga_idle_sneeze3,
+                &img_helga_idle_sneeze4,
+                &img_helga_idle_sneeze5,
+                &img_helga_idle_sneeze6,
+                &img_helga_idle_sneeze7,
+                &img_helga_idle_sneeze8,
+                &img_helga_idle_wag1,
+                &img_helga_idle_wag2,
+                &img_helga_idle_wag3,
+                &img_helga_idle_wag4,
+                &img_helga_idle_wag5,
+                &img_helga_idle_wag6,
+                &img_helga_idle_wag7,
+                &img_helga_idle_wag8,
+                &img_helga_idle_head_tilt1,
+                &img_helga_idle_head_tilt2,
+                &img_helga_idle_head_tilt3,
+                &img_helga_idle_head_tilt4,
+                &img_helga_idle_head_tilt5,
+                &img_helga_idle_head_tilt6,
+                &img_helga_idle_head_tilt7,
+                &img_helga_idle_head_tilt8,
+                &img_helga_sleep1,
+                &img_helga_sleep2,
+                &img_helga_sleep3,
+                &img_helga_sleep4,
+                &img_helga_sleep5,
+                &img_helga_sleep6,
+                &img_helga_sleep_start1,
+                &img_helga_sleep_start2,
+                &img_helga_sleep_start3,
+                &img_helga_dance_transition1,
+                &img_helga_dance_transition2,
+                &img_helga_dance_trans_out1,
+                &img_helga_dance_trans_out2,
             };
-            lv_animimg_set_src(obj, (const void **)images, 48);
+            lv_animimg_set_src(obj, (const void **)images, 93);
             lv_animimg_set_duration(obj, 12000);
             lv_animimg_set_repeat_count(obj, LV_ANIM_REPEAT_INFINITE);
             lv_animimg_start(obj);

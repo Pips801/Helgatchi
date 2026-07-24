@@ -56,6 +56,51 @@ extern const lv_img_dsc_t img_helga_idle5;
 extern const lv_img_dsc_t img_helga_idle6;
 extern const lv_img_dsc_t img_helga_idle7;
 extern const lv_img_dsc_t img_helga_idle8;
+extern const lv_img_dsc_t img_helga_idle_fidget1;
+extern const lv_img_dsc_t img_helga_idle_fidget2;
+extern const lv_img_dsc_t img_helga_idle_fidget3;
+extern const lv_img_dsc_t img_helga_idle_fidget4;
+extern const lv_img_dsc_t img_helga_idle_fidget5;
+extern const lv_img_dsc_t img_helga_idle_fidget6;
+extern const lv_img_dsc_t img_helga_idle_fidget7;
+extern const lv_img_dsc_t img_helga_idle_fidget8;
+extern const lv_img_dsc_t img_helga_idle_sneeze1;
+extern const lv_img_dsc_t img_helga_idle_sneeze2;
+extern const lv_img_dsc_t img_helga_idle_sneeze3;
+extern const lv_img_dsc_t img_helga_idle_sneeze4;
+extern const lv_img_dsc_t img_helga_idle_sneeze5;
+extern const lv_img_dsc_t img_helga_idle_sneeze6;
+extern const lv_img_dsc_t img_helga_idle_sneeze7;
+extern const lv_img_dsc_t img_helga_idle_sneeze8;
+extern const lv_img_dsc_t img_helga_idle_wag1;
+extern const lv_img_dsc_t img_helga_idle_wag2;
+extern const lv_img_dsc_t img_helga_idle_wag3;
+extern const lv_img_dsc_t img_helga_idle_wag4;
+extern const lv_img_dsc_t img_helga_idle_wag5;
+extern const lv_img_dsc_t img_helga_idle_wag6;
+extern const lv_img_dsc_t img_helga_idle_wag7;
+extern const lv_img_dsc_t img_helga_idle_wag8;
+extern const lv_img_dsc_t img_helga_idle_head_tilt1;
+extern const lv_img_dsc_t img_helga_idle_head_tilt2;
+extern const lv_img_dsc_t img_helga_idle_head_tilt3;
+extern const lv_img_dsc_t img_helga_idle_head_tilt4;
+extern const lv_img_dsc_t img_helga_idle_head_tilt5;
+extern const lv_img_dsc_t img_helga_idle_head_tilt6;
+extern const lv_img_dsc_t img_helga_idle_head_tilt7;
+extern const lv_img_dsc_t img_helga_idle_head_tilt8;
+extern const lv_img_dsc_t img_helga_sleep1;
+extern const lv_img_dsc_t img_helga_sleep2;
+extern const lv_img_dsc_t img_helga_sleep3;
+extern const lv_img_dsc_t img_helga_sleep4;
+extern const lv_img_dsc_t img_helga_sleep5;
+extern const lv_img_dsc_t img_helga_sleep6;
+extern const lv_img_dsc_t img_helga_sleep_start1;
+extern const lv_img_dsc_t img_helga_sleep_start2;
+extern const lv_img_dsc_t img_helga_sleep_start3;
+extern const lv_img_dsc_t img_helga_dance_transition1;
+extern const lv_img_dsc_t img_helga_dance_transition2;
+extern const lv_img_dsc_t img_helga_dance_trans_out1;
+extern const lv_img_dsc_t img_helga_dance_trans_out2;
 
 #ifndef EXT_IMG_DESC_T
 #define EXT_IMG_DESC_T
@@ -65,7 +110,7 @@ typedef struct _ext_img_desc_t {
 } ext_img_desc_t;
 #endif
 
-extern const ext_img_desc_t images[49];
+extern const ext_img_desc_t images[94];
 
 #ifdef __cplusplus
 }

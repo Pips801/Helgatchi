@@ -28,7 +28,11 @@
 // Initialize AFTER g_ui.begin() (objects.* must exist).
 
 enum HelgaAnim {
-    HELGA_IDLE,     // default resting loop
+    HELGA_IDLE,
+    HELGA_IDLE2,
+    HELGA_IDLE3,
+    HELGA_IDLE4,
+    HELGA_IDLE5,// default resting loop
     HELGA_SIT,      // sit / scoot loop
     HELGA_WALK,     // walk cycle loop
     HELGA_PARTY,    // party loop
@@ -36,6 +40,7 @@ enum HelgaAnim {
     HELGA_SNIFF,    // sniff_start -> sniff_loop -> (exit) sniff_end
     HELGA_ALERT,    // sniff_start -> sniff_alert -> (exit) sniff_end
     HELGA_BRUSH,    // brushing loop
+    HELGA_SLEEP,
     HELGA__COUNT
 };
 

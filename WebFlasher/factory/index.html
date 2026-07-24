@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Helgatchi — Factory Line</title>
+  <meta name="description" content="Automated assembly-line flasher: connect a device, auto-update, validate, and ship." />
+  <style>
+    :root {
+      --bg: #0d1117; --panel: #161b22; --border: #30363d;
+      --text: #e6edf3; --muted: #8b949e; --accent: #2ea043; --accent-hover: #3fb950;
+      --danger: #da3633; --danger-hover: #f85149; --work: #1f6feb; --work-hover: #388bfd;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.5; -webkit-font-smoothing: antialiased;
+    }
+    main { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+    header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    h1 { font-size: 1.6rem; margin: 0; letter-spacing: -.02em; }
+    header a { color: var(--accent-hover); font-size: .9rem; }
+    a { color: var(--accent-hover); }
+
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem 1.5rem; margin-bottom: 1.25rem; }
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; }
+    .spread { justify-content: space-between; }
+
+    .unsupported { background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.4); color: var(--danger-hover); padding: .75rem 1rem; border-radius: 8px; }
+
+    /* ---- Big status banner ------------------------------------------------ */
+    #banner {
+      border-radius: 16px; padding: 2.5rem 2rem; text-align: center;
+      background: #21262d; border: 2px solid var(--border); transition: background .2s, border-color .2s;
+      margin-bottom: 1.25rem;
+    }
+    #bannerState { font-size: 3rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; margin: 0; }
+    #bannerDetail { font-size: 1.35rem; color: rgba(255,255,255,.85); margin: .6rem 0 0; min-height: 1.4em; }
+    #banner.idle  { background: #21262d; border-color: var(--border); }
+    #banner.work  { background: rgba(31,111,235,.18);  border-color: var(--work); }
+    #banner.ok    { background: rgba(46,160,67,.20);    border-color: var(--accent); }
+    #banner.err   { background: rgba(218,54,51,.20);    border-color: var(--danger); }
+    #banner.work #bannerState { color: var(--work-hover); }
+    #banner.ok   #bannerState { color: var(--accent-hover); }
+    #banner.err  #bannerState { color: var(--danger-hover); }
+
+    #bigProgress { width: 100%; height: 26px; accent-color: var(--work-hover); margin-top: 1.5rem; border-radius: 6px; }
+
+    /* ---- Big action buttons ----------------------------------------------- */
+    .actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    button {
+      background: var(--accent); color: #fff; border: none; border-radius: 12px;
+      padding: 1.1rem 2.5rem; font-size: 1.5rem; font-weight: 700; cursor: pointer;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    button.stop { background: var(--danger); }
+    button.stop:hover { background: var(--danger-hover); }
+    .hidden { display: none !important; }
+
+    /* ---- Config panel ----------------------------------------------------- */
+    .cfg { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem 1.5rem; }
+    .cfg fieldset { border: 1px solid var(--border); border-radius: 10px; padding: .8rem 1rem 1rem; margin: 0; }
+    .cfg legend { color: var(--muted); font-size: .9rem; padding: 0 .4rem; }
+    .cfg label.opt { display: flex; gap: .6rem; align-items: center; font-size: 1.05rem; cursor: pointer; margin: .5rem 0; }
+    .cfg label.opt.sub { margin-left: 1.6rem; font-size: .98rem; }
+    .cfg input[type=checkbox] { width: 1.2rem; height: 1.2rem; }
+    .cfg select {
+      width: 100%; padding: .6rem .7rem; font-size: 1.1rem; background: #010409; color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; margin-top: .3rem;
+    }
+    .cfg .disabled { opacity: .45; }
+
+    /* ---- Detected / target / action grid ---------------------------------- */
+    .info { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1.25rem; font-size: 1.15rem; }
+    .info .k { color: var(--muted); }
+    .info .v { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .count { font-size: 1.3rem; }
+    .count b { font-size: 1.8rem; color: var(--accent-hover); }
+
+    #log {
+      background: #010409; border: 1px solid var(--border); border-radius: 8px;
+      padding: .6rem .75rem; height: 200px; overflow-y: auto; white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .8rem; color: var(--muted);
+    }
+    h2 { font-size: 1.05rem; margin: 0 0 .8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Helgatchi — Factory Line</h1>
+      <a href="../">← Manual flasher &amp; console</a>
+    </header>
+
+    <div id="unsupported" class="unsupported hidden">
+      This browser can't talk to USB devices. Use desktop <strong>Chrome</strong>, <strong>Edge</strong>, or <strong>Opera</strong>.
+    </div>
+
+    <!-- Big status banner -->
+    <div id="banner" class="idle">
+      <p id="bannerState">READY</p>
+      <p id="bannerDetail">Set options below, then press Start.</p>
+      <progress id="bigProgress" class="hidden" max="100" value="0"></progress>
+    </div>
+
+    <!-- Primary actions -->
+    <div class="actions">
+      <button id="primaryBtn">▶ Start line</button>
+      <button id="stopBtn" class="stop hidden">■ Stop line</button>
+    </div>
+
+    <!-- Live device info -->
+    <div class="card">
+      <div class="row spread" style="align-items:flex-start">
+        <div class="info">
+          <span class="k">Target</span><span class="v" id="infoTarget">—</span>
+          <span class="k">Detected</span><span class="v" id="infoDetected">—</span>
+          <span class="k">Action</span><span class="v" id="infoAction">—</span>
+        </div>
+        <div class="count">Shipped this session: <b id="shipCount">0</b></div>
+      </div>
+    </div>
+
+    <!-- Operator config -->
+    <div class="card">
+      <h2>Line configuration</h2>
+      <div class="cfg">
+        <fieldset>
+          <legend>Target firmware</legend>
+          <select id="cfgVersion"></select>
+        </fieldset>
+
+        <fieldset>
+          <legend>Flash plan</legend>
+          <label class="opt"><input type="checkbox" id="cfgAuto" checked /> <strong>Auto-detect per device</strong></label>
+          <label class="opt sub"><input type="checkbox" id="cfgErase" checked disabled /> Full wipe (erase chip)</label>
+          <label class="opt sub"><input type="checkbox" id="cfgApp" checked disabled /> App firmware</label>
+          <label class="opt sub"><input type="checkbox" id="cfgFs" checked disabled /> Filesystem (rules)</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>After validation</legend>
+          <select id="cfgPost">
+            <option value="shipping" selected>Shipping mode (wipe + deep sleep)</option>
+            <option value="wipe">Wipe + reboot (first-boot)</option>
+            <option value="none">None (leave running)</option>
+          </select>
+        </fieldset>
+      </div>
+    </div>
+
+    <!-- Detail log -->
+    <div class="card">
+      <div class="row spread">
+        <h2 style="margin:0">Detail log</h2>
+        <button id="logClear" style="font-size:.85rem; padding:.35rem .8rem; background:#21262d; border:1px solid var(--border)">Clear</button>
+      </div>
+      <div id="log" style="margin-top:.7rem"></div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { Flasher, isNewer, sameVersion } from "../flasher-core.js";
+
+    const $ = (id) => document.getElementById(id);
+    const supported = "serial" in navigator;
+
+    // ---- Banner / log helpers ---------------------------------------------
+    function banner(state, headline, detail) {
+      const b = $("banner");
+      b.className = state;                       // idle | work | ok | err
+      $("bannerState").textContent = headline;
+      if (detail !== undefined) $("bannerDetail").textContent = detail;
+    }
+    function detail(t) { $("bannerDetail").textContent = t; }
+    function logLine(t) {
+      const el = $("log");
+      el.textContent += t + "\n";
+      el.scrollTop = el.scrollHeight;
+    }
+    function showProgress(on) {
+      const p = $("bigProgress");
+      p.classList.toggle("hidden", !on);
+      if (on) p.value = 0;
+    }
+
+    // ---- Shared flash core -------------------------------------------------
+    const F = new Flasher({
+      versionsUrl: "../versions.json",
+      firmwareBase: "../firmware",
+      onLine:     (t) => logLine(t),
+      onNote:     (t) => logLine(t),
+      onStatus:   (m) => detail(m),
+      onProgress: (p) => { showProgress(true); $("bigProgress").value = p; },
+      onInfo:     () => { $("infoDetected").textContent = F.installed?.fw
+                            ? `${F.installed.fw}  (${F.installed.chip || "?"}, ${F.rulesCache.length} rules)`
+                            : "no response"; },
+      onDrop:     () => { /* drops are expected between devices; the flow handles them */ },
+    });
+
+    // ---- Operator state ----------------------------------------------------
+    let armed = false;        // line is running
+    let busy  = false;        // a device is being processed right now
+    let shipped = 0;
+
+    function targetTag() { const e = F.entries[$("cfgVersion").value]; return e ? e.tag : null; }
+
+    function populateVersions() {
+      const sel = $("cfgVersion");
+      sel.innerHTML = "";
+      F.entries.forEach((e, i) => {
+        const o = document.createElement("option");
+        o.value = String(i);
+        o.textContent = e.tag + (e.prerelease ? " (pre-release)" : "");
+        sel.appendChild(o);
+      });
+      const firstStable = F.entries.findIndex((e) => !e.prerelease);
+      sel.value = String(firstStable === -1 ? 0 : firstStable);
+      $("infoTarget").textContent = targetTag() || "—";
+    }
+
+    // Enable/disable the manual toggles based on the Auto checkbox.
+    function syncModeUI() {
+      const auto = $("cfgAuto").checked;
+      ["cfgErase", "cfgApp", "cfgFs"].forEach((id) => {
+        $(id).disabled = auto;
+        $(id).closest("label").classList.toggle("disabled", auto);
+      });
+    }
+
+    // Lock/unlock config while a batch runs (version/plan shouldn't change mid-run).
+    function lockConfig(lock) {
+      ["cfgVersion", "cfgAuto", "cfgErase", "cfgApp", "cfgFs", "cfgPost"].forEach((id) => $(id).disabled = lock);
+      if (!lock) syncModeUI();
+    }
+
+    // Decide what to flash for the connected device.
+    function decidePlan() {
+      const tag = targetTag();
+      if ($("cfgAuto").checked) {
+        const fw = F.installed?.fw;
+        // Older, unknown, or blank (no webinfo) → full wipe + everything.
+        if (!fw || isNewer(tag, fw)) return { erase: true, wantFw: true, wantFs: true, why: "older/blank → full wipe + flash" };
+        // Up to date but no filesystem (no factory rules) → flash FS only.
+        if (!F.hasFactoryRules())    return { erase: false, wantFw: false, wantFs: true, why: "up to date, filesystem missing → flash rules" };
+        // Up to date with rules present → nothing to flash.
+        return { skip: true, why: "already up to date" };
+      }
+      // Manual mode — honour the toggles verbatim.
+      return {
+        erase:  $("cfgErase").checked,
+        wantFw: $("cfgApp").checked,
+        wantFs: $("cfgFs").checked,
+        why: "manual plan",
+      };
+    }
+
+    // Validate a device is fully ready to ship.
+    function validate() {
+      const tag = F.entries[$("cfgVersion").value]?.tag;
+      const fw = F.installed?.fw;
+      if (!fw)                              return "device didn't report a version after flashing";
+      if (!sameVersion(tag, fw))           return `version mismatch — wanted ${tag}, got ${fw}`;
+      if (F.installed.chip && F.installed.chip !== "ESP32-S3") return `unexpected chip: ${F.installed.chip}`;
+      if (!F.hasFactoryRules())            return "no filesystem — factory rules missing";
+      return null;   // all good
+    }
+
+    // ---- Per-device pipeline ----------------------------------------------
+    async function processDevice() {
+      busy = true;
+      $("primaryBtn").disabled = true;
+      $("infoAction").textContent = "—";
+      $("infoDetected").textContent = "reading…";
+      try {
+        // 1) Read what's on the device.
+        banner("work", "READING", "Checking installed version…");
+        await F.loadWebInfo();
+
+        // 2) Decide + flash.
+        const plan = decidePlan();
+        $("infoAction").textContent = plan.why;
+        if (!plan.skip && (plan.erase || plan.wantFw || plan.wantFs)) {
+          banner("work", "FLASHING", "");
+          const tag = targetTag();
+          const res = await F.doFlash({ tag, wantFw: plan.wantFw, wantFs: plan.wantFs, erase: plan.erase });
+          showProgress(false);
+          if (!res.ok) {
+            F.linkLive = false; await F.stopReadLoop(); await F.closePort(); F.port = null;
+            banner("err", "FLASH FAILED", res.error ? res.error : "didn't reconnect after flash — reconnect & retry");
+            return endDevice(false);
+          }
+        } else {
+          logLine("[plan] " + plan.why + " — no flash needed");
+        }
+
+        // 3) Validate.
+        banner("work", "VALIDATING", "Confirming version + filesystem…");
+        const bad = validate();
+        if (bad) {
+          F.linkLive = false; await F.stopReadLoop(); await F.closePort(); F.port = null;
+          banner("err", "VALIDATION FAILED", bad);
+          return endDevice(false);
+        }
+
+        // 4) Post-validation step (ship / wipe / none).
+        const post = $("cfgPost").value;
+        if (post === "shipping") {
+          banner("work", "SHIPPING", "Wiping + entering shipping sleep…");
+          F.userDisconnected = true;               // won't wake on its own — don't auto-reconnect
+          await F.doPower("shipping");
+        } else if (post === "wipe") {
+          banner("work", "WIPING", "Factory wipe + reboot…");
+          F.userDisconnected = true;
+          await F.doPower("wipe");
+        }
+        F.linkLive = false; await F.stopReadLoop(); await F.closePort(); F.port = null;
+
+        shipped++;
+        $("shipCount").textContent = String(shipped);
+        const done = post === "shipping" ? "SHIPPED" : post === "wipe" ? "WIPED" : "DONE";
+        banner("ok", "✔ " + done, "Remove this device and connect the next one.");
+        endDevice(true);
+      } catch (e) {
+        F.linkLive = false; await F.stopReadLoop(); await F.closePort(); F.port = null;
+        banner("err", "ERROR", e.message);
+        endDevice(false);
+      }
+    }
+
+    // Return to the waiting state after a device (armed) or idle (stopped).
+    function endDevice() {
+      busy = false;
+      showProgress(false);
+      if (armed) {
+        $("primaryBtn").textContent = "Connect next device";
+        $("primaryBtn").classList.remove("hidden");
+        $("primaryBtn").disabled = false;
+      } else {
+        toIdle();
+      }
+    }
+
+    // ---- Connect (needs a user gesture) -----------------------------------
+    async function connectAndProcess() {
+      if (busy) return;
+      try {
+        banner("work", "CONNECTING", "Select the device in the browser prompt…");
+        await F.openPort();                        // requestPort — the click is the gesture
+      } catch (e) {
+        if (e.name === "NotFoundError") { banner("idle", "WAITING", "No device selected. Connect the next device."); }
+        else                            { banner("err", "CONNECT FAILED", e.message); }
+        await F.closePort(); F.port = null;
+        if (armed) { $("primaryBtn").textContent = "Connect next device"; $("primaryBtn").disabled = false; }
+        return;
+      }
+      await processDevice();
+    }
+
+    // ---- Arm / disarm ------------------------------------------------------
+    function toIdle() {
+      armed = false;
+      lockConfig(false);
+      $("stopBtn").classList.add("hidden");
+      $("primaryBtn").textContent = "▶ Start line";
+      $("primaryBtn").classList.remove("hidden");
+      $("primaryBtn").disabled = false;
+      banner("idle", "READY", "Set options below, then press Start.");
+    }
+
+    function arm() {
+      if (!targetTag()) { banner("err", "NO FIRMWARE", "versions.json is empty — nothing to flash."); return; }
+      armed = true;
+      lockConfig(true);
+      $("infoTarget").textContent = targetTag();
+      $("stopBtn").classList.remove("hidden");
+    }
+
+    // ---- Wire up -----------------------------------------------------------
+    if (!supported) {
+      $("unsupported").classList.remove("hidden");
+      $("primaryBtn").disabled = true;
+    } else {
+      // Best-effort: if a granted device re-appears while we're waiting, nudge
+      // the operator. We still require the click (a new physical unit needs a
+      // fresh port grant), but this makes the "next device" state obvious.
+      navigator.serial.addEventListener("connect", () => {
+        if (armed && !busy) detail("Device detected — click “Connect next device”.");
+      });
+
+      $("cfgAuto").addEventListener("change", syncModeUI);
+      $("logClear").addEventListener("click", () => { $("log").textContent = ""; });
+
+      $("primaryBtn").addEventListener("click", async () => {
+        if (!armed) arm();          // Start line → arm, then connect the first device
+        if (!armed) return;         // arm() may have bailed (no firmware)
+        await connectAndProcess();
+      });
+
+      $("stopBtn").addEventListener("click", async () => {
+        armed = false;
+        if (!busy) { await F.stopReadLoop(); await F.closePort(); F.port = null; toIdle(); }
+        else       { detail("Stopping after the current device…"); }
+      });
+
+      // Load the release list up front (no device needed).
+      (async () => {
+        await F.loadVersions();
+        if (!F.entries.length) { banner("err", "NO FIRMWARE", "versions.json is empty or missing."); return; }
+        populateVersions();
+        syncModeUI();
+      })();
+
+      $("cfgVersion").addEventListener("change", () => { $("infoTarget").textContent = targetTag() || "—"; });
+    }
+  </script>
+</body>
+</html>

@@ -245,38 +245,12 @@
   </main>
 
   <script type="module">
-    // Pinned: the writeFlash data contract (Uint8Array) and reset behavior are
-    // version-specific and bricking-sensitive. Do not float this to "latest".
-    import { ESPLoader, Transport } from "https://unpkg.com/esptool-js@0.6.0/bundle.js";
-
-    const REPO_RAW = "";                 // same-origin
-    const VERSIONS_URL = "versions.json";
-    // Partition offsets — must match Software/Helgatchi-Firmware/partitions.csv.
-    const OFF = { bootloader: 0x0, partitions: 0x8000, app: 0x10000, fs: 0x510000 };
+    import { Flasher, isNewer, sleep } from "./flasher-core.js";
 
     const $ = (id) => document.getElementById(id);
     const supported = "serial" in navigator;
 
-    let port = null;
-    let reader = null;
-    let readLoopActive = false;
-    let lineListeners = [];              // {match, resolve} one-shot line matchers
-    let entries = [];                    // versions.json
-    let installed = null;                // parsed version info
-    let logMuted = 0;                    // >0 → suppress console logging (machine chatter)
     let helpShown = false;               // show `help` once per connection on first console open
-    let linkLive = false;                // a live text session exists right now
-    let userDisconnected = false;        // user hit Disconnect → don't auto-reconnect
-    let flashing = false;                // a flash is in progress → ignore USB connect/disconnect
-    let reconnecting = false;            // an auto-reconnect attempt is in flight
-    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-    // Run an app-driven serial transaction without echoing it to the console.
-    // A short grace after keeps the trailing command echo / blank line muted too.
-    async function withMute(fn) {
-      logMuted++;
-      try { return await fn(); }
-      finally { await sleep(120); logMuted = Math.max(0, logMuted - 1); }
-    }
 
     // ---- UI helpers --------------------------------------------------------
     function setConn(msg, err) { $("connStatus").textContent = msg; $("connStatus").classList.toggle("error", !!err); }
@@ -285,11 +259,8 @@
       return el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
     }
     function scrollConsole() { const el = $("consoleLog"); el.scrollTop = el.scrollHeight; }
-    function logLine(text) {
-      if (logMuted > 0) return;   // app-driven machine chatter — keep it out of the console
-      consoleNote(text);
-    }
-    // Always shown (ignores the mute) — for app notices like connect/disconnect.
+    // Always shown — for app notices like connect/disconnect and (unmuted)
+    // device output. The Flasher feeds both onLine (mute-filtered) and onNote here.
     function consoleNote(text) {
       const el = $("consoleLog");
       // Force to the end when Auto-scroll is on; otherwise only if already there
@@ -299,48 +270,68 @@
       if (stick) scrollConsole();
     }
 
-    // ---- Serial text phase (talking to the running app) --------------------
-    // Open the currently-selected port for text I/O and start the read loop.
-    async function beginTextSession() {
-      await port.open({ baudRate: 115200 });
-      // Assert DTR so the firmware console treats us as connected (it gates on
-      // (bool)Serial). RTS left low — on the S3 USB-Serial-JTAG neither resets.
-      try { await port.setSignals({ dataTerminalReady: true, requestToSend: false }); } catch {}
-      startReadLoop();
-    }
-    async function openPort() {
-      port = await navigator.serial.requestPort();
-      await beginTextSession();
-    }
-    // After a flash the S3 reboots and re-enumerates its USB. Reopen the same
-    // port and pull webinfo to confirm the new firmware is running.
-    async function reconnectAndValidate() {
-      for (let i = 0; i < 8; i++) {
-        await sleep(800);
-        try {
-          await beginTextSession();
-          await loadWebInfo();
-          if (installed?.fw) return true;
-          throw new Error("no response");
-        } catch {
-          await stopReadLoop();
-          try { await port.close(); } catch {}
-          // The re-enumerated device may surface as a new port object.
-          try { const ps = await navigator.serial.getPorts(); if (ps.length) port = ps[ps.length - 1]; } catch {}
-        }
-      }
-      return false;
+    // The shared serial/flash core. All bricking-sensitive mechanics live in
+    // flasher-core.js; this page owns the UI and wires the callbacks.
+    const F = new Flasher({
+      versionsUrl: "versions.json",
+      firmwareBase: "firmware",
+      onLine:     (t) => consoleNote(t),
+      onNote:     (t) => consoleNote(t),
+      onStatus:   (m, err) => (err ? flashErr(m) : flashStatus(m)),
+      onProgress: (p) => { $("flashProgress").classList.remove("hidden"); $("flashProgress").value = p; },
+      onInfo:     () => onDeviceInfo(),
+      onDrop:     () => handleDrop(),
+    });
+
+    // Thin aliases so the rules editor below reads like the original code.
+    const withMute = (fn) => F.withMute(fn);
+    const sendLine = (t) => F.sendLine(t);
+    const awaitLine = (m, ms) => F.awaitLine(m, ms);
+    const sendAndCollect = (c, ms) => F.sendAndCollect(c, ms);
+
+    // ---- Version panel -----------------------------------------------------
+    function populateVersionSelect() {
+      const sel = $("versionSel");
+      sel.innerHTML = "";
+      F.entries.forEach((e, i) => {
+        const o = document.createElement("option");
+        o.value = String(i);
+        o.textContent = e.tag + (e.prerelease ? " (pre-release)" : "");
+        sel.appendChild(o);
+      });
+      const firstStable = F.entries.findIndex((e) => !e.prerelease);
+      sel.value = String(firstStable === -1 ? 0 : firstStable);
     }
 
+    function refreshFirmwarePanel() {
+      $("fwInstalled").textContent = F.installed?.fw || "unknown";
+      $("hwRev").textContent = F.installed?.hw || "—";
+      const latest = F.entries[0]?.tag;
+      const latestEl = $("fwLatest");
+      if (!latest) { latestEl.textContent = "—"; return; }
+      const newer = isNewer(latest, F.installed?.fw);
+      latestEl.innerHTML = `${latest} ` + (newer
+        ? '<span class="badge new">update available</span>'
+        : '<span class="badge ok">up to date</span>');
+    }
+
+    // Fired after every F.loadWebInfo() (connect, reconnect, post-flash verify).
+    function onDeviceInfo() {
+      refreshFirmwarePanel();
+      renderRules();
+      rulesStatus(`${F.rulesCache.length} rule${F.rulesCache.length === 1 ? "" : "s"}.`);
+    }
+
+    // ---- Link lifecycle (UI policy — mechanics live in the Flasher) --------
     // The link went away on its own (device slept, unplugged, reset). Keep the
-    // last device info on screen and wait for it to come back. Not called for a
+    // last device info on screen and wait for it to come back. Not for a
     // user-initiated disconnect or during a flash.
     async function handleDrop() {
-      if (!linkLive || flashing) return;
-      linkLive = false;
-      await stopReadLoop();
-      try { await port?.close(); } catch {}
-      if (userDisconnected) return;
+      if (!F.linkLive || F.flashing) return;
+      F.linkLive = false;
+      await F.stopReadLoop();
+      await F.closePort();
+      if (F.userDisconnected) return;
       setConn("Lost connection — waiting for the device to wake…");
       toStale();          // device info stays; rules/console hide (need a live link)
     }
@@ -348,312 +339,107 @@
     // An authorized device reappeared (e.g. woke from sleep). Reopen silently —
     // open() on an already-granted port needs no user gesture.
     async function tryReconnect() {
-      if (linkLive || userDisconnected || flashing || reconnecting || !port) return;
-      reconnecting = true;
+      if (F.linkLive || F.userDisconnected || F.flashing || F.reconnecting || !F.port) return;
+      F.reconnecting = true;
       setConn("Device is back — reconnecting…");
       try {
         for (let i = 0; i < 5; i++) {
           try {
-            await beginTextSession();
-            await loadWebInfo();
-            if (installed?.fw) {
-              linkLive = true;
-              setConn(`Connected — ${installed.fw}`);
-              consoleNote(`Device reconnected — ${installed.fw}`);
+            await F.beginTextSession();
+            await F.loadWebInfo();
+            if (F.installed?.fw) {
+              F.linkLive = true;
+              setConn(`Connected — ${F.installed.fw}`);
+              consoleNote(`Device reconnected — ${F.installed.fw}`);
               toConnected();
               return;
             }
             throw new Error("no response");
           } catch {
-            await stopReadLoop();
-            try { await port.close(); } catch {}
-            try { const ps = await navigator.serial.getPorts(); if (ps.length) port = ps[ps.length - 1]; } catch {}
+            await F.stopReadLoop();
+            await F.closePort();
+            try { const ps = await navigator.serial.getPorts(); if (ps.length) F.port = ps[ps.length - 1]; } catch {}
             await sleep(600);
           }
         }
         setConn("Device seen but didn't respond — click Connect to retry.", true);
         toStale();
       } finally {
-        reconnecting = false;
+        F.reconnecting = false;
       }
     }
 
-    async function startReadLoop() {
-      readLoopActive = true;
-      const decoder = new TextDecoder();
-      let buf = "";
-      reader = port.readable.getReader();
-      try {
-        while (readLoopActive) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buf += decoder.decode(value, { stream: true });
-          let nl;
-          while ((nl = buf.indexOf("\n")) >= 0) {
-            const line = buf.slice(0, nl).replace(/\r$/, "");
-            buf = buf.slice(nl + 1);
-            logLine(line);
-            lineListeners = lineListeners.filter((l) => {
-              if (l.match(line)) { l.resolve(line); return false; }
-              return true;
-            });
-          }
-        }
-      } catch (e) {
-        if (readLoopActive) logLine("[read error] " + e.message);
-      } finally {
-        try { reader.releaseLock(); } catch {}
-      }
-      // The loop ended while we still thought we were connected → the link
-      // dropped (device slept/reset). Backstop the navigator.serial event.
-      if (readLoopActive) handleDrop();
-    }
-
-    async function stopReadLoop() {
-      readLoopActive = false;
-      if (reader) { try { await reader.cancel(); } catch {} reader = null; }
-    }
-
-    async function sendLine(text) {
-      const writer = port.writable.getWriter();
-      try { await writer.write(new TextEncoder().encode(text + "\n")); }
-      finally { writer.releaseLock(); }
-    }
-
-    function awaitLine(match, timeoutMs) {
-      return new Promise((resolve, reject) => {
-        const listener = { match, resolve };
-        lineListeners.push(listener);
-        setTimeout(() => {
-          lineListeners = lineListeners.filter((l) => l !== listener);
-          reject(new Error("timed out waiting for device"));
-        }, timeoutMs);
-      });
-    }
-
-    // ---- Version handling --------------------------------------------------
-    function parseSemver(v) {
-      const m = /v?(\d+)\.(\d+)\.(\d+)/.exec(v || "");
-      return m ? [+m[1], +m[2], +m[3]] : null;
-    }
-    function isNewer(latest, current) {
-      const a = parseSemver(latest), b = parseSemver(current);
-      if (!a) return false;
-      if (!b) return true;                     // dev/unknown build → offer update
-      for (let i = 0; i < 3; i++) { if (a[i] !== b[i]) return a[i] > b[i]; }
-      return false;
-    }
-
-    async function loadVersions() {
-      try {
-        const res = await fetch(`${VERSIONS_URL}?_=${Date.now()}`);
-        if (res.ok) entries = await res.json();
-      } catch {}
-      entries = Array.isArray(entries) ? entries : [];
-      const sel = $("versionSel");
-      sel.innerHTML = "";
-      entries.forEach((e, i) => {
-        const o = document.createElement("option");
-        o.value = String(i);
-        o.textContent = e.tag + (e.prerelease ? " (pre-release)" : "");
-        sel.appendChild(o);
-      });
-      const firstStable = entries.findIndex((e) => !e.prerelease);
-      sel.value = String(firstStable === -1 ? 0 : firstStable);
-    }
-
-    function refreshFirmwarePanel() {
-      $("fwInstalled").textContent = installed?.fw || "unknown";
-      $("hwRev").textContent = installed?.hw || "—";
-      const latest = entries[0]?.tag;
-      const latestEl = $("fwLatest");
-      if (!latest) { latestEl.textContent = "—"; return; }
-      const newer = isNewer(latest, installed?.fw);
-      latestEl.innerHTML = `${latest} ` + (newer
-        ? '<span class="badge new">update available</span>'
-        : '<span class="badge ok">up to date</span>');
-    }
-
-    // ---- Flashing (esptool-js) --------------------------------------------
-    // esptool-js writeFlash consumes each part's `data` as a Uint8Array — it
-    // slices / deflates / pads it. Passing a binary string corrupts the image
-    // and bricks the device (unbootable). This MUST stay a Uint8Array.
-    async function fetchPart(tag, name, address) {
-      const res = await fetch(`firmware/${encodeURIComponent(tag)}/${name}?_=${Date.now()}`);
-      if (!res.ok) throw new Error(`missing ${name} for ${tag}`);
-      return { data: new Uint8Array(await res.arrayBuffer()), address };
-    }
-
+    // ---- Flash / restart / shipping (UI wrappers over the Flasher) ---------
     async function doFlash({ erase }) {
-      const tag = entries[$("versionSel").value]?.tag;
+      const tag = F.entries[$("versionSel").value]?.tag;
       if (!tag) { flashErr("No firmware version selected."); return; }
       const wantFw = erase || $("optFw").checked;
       const wantFs = erase || $("optFs").checked;
       if (!wantFw && !wantFs) { flashErr("Pick something to flash."); return; }
 
       setFlashUI(true);
-      flashing = true;          // the reset re-enumerates USB — ignore connect/disconnect
-      let transport = null, esploader = null;
-      try {
-        // 1) Assemble the parts to write.
-        flashStatus("Downloading firmware…");
-        const parts = [];
-        if (wantFw) {
-          parts.push(await fetchPart(tag, "bootloader.bin", OFF.bootloader));
-          parts.push(await fetchPart(tag, "partitions.bin", OFF.partitions));
-          parts.push(await fetchPart(tag, "firmware.bin", OFF.app));
-        }
-        if (wantFs) parts.push(await fetchPart(tag, "littlefs.bin", OFF.fs));
-
-        // 2) Tell the RUNNING app to paint its "updating" screen, then wait for
-        //    the ack — must happen before we reset into the bootloader.
-        flashStatus("Preparing device…");
-        try { await sendLine("update"); await awaitLine((l) => l.includes('"updating"'), 3000); }
-        catch { /* older firmware without `update`: proceed anyway */ }
-
-        // 3) Release the text port and hand it to esptool-js.
-        await stopReadLoop();
-        await port.close();
-
-        flashStatus("Connecting to bootloader…");
-        transport = new Transport(port, true);
-        esploader = new ESPLoader({
-          transport, baudrate: 115200,
-          terminal: { clean() {}, writeLine: (d) => logLine(d), write: (d) => logLine(d) },
-        });
-        await esploader.main();
-
-        if (erase) { flashStatus("Erasing flash…"); await esploader.eraseFlash(); }
-
-        flashStatus("Writing…");
-        $("flashProgress").classList.remove("hidden");
-        await esploader.writeFlash({
-          fileArray: parts,
-          flashMode: "keep", flashFreq: "keep", flashSize: "keep",
-          compress: true,
-          reportProgress: (_i, written, total) => { $("flashProgress").value = Math.round((written / total) * 100); },
-        });
-
-        // Reboot into the freshly-written firmware via a hard reset on RST.
-        flashStatus("Rebooting device…");
-        await hardResetIntoApp(transport, esploader);
-
-        // Keep the device panel up and try to reconnect + re-read the version to
-        // confirm the new firmware is actually running.
-        flashStatus("Flashed — reconnecting to verify…");
-        const ok = await reconnectAndValidate();
-        if (ok) {
-          // reconnectAndValidate already pulled webinfo (version + rules + patterns).
-          linkLive = true;
-          setConn(`Connected — ${installed?.fw || "reconnected"}`);
-          flashStatus(`Update complete — running ${installed?.fw || "the new firmware"}.`);
-          consoleNote(`Device reconnected — ${installed?.fw || "new firmware"}`);
-          toConnected();
-        } else {
-          linkLive = false;
-          flashStatus("Flashed and rebooted. If it didn't reconnect, click Connect to reverify.");
-          toStale();          // device info stays on screen
-        }
-      } catch (e) {
+      const res = await F.doFlash({ tag, wantFw, wantFs, erase });
+      if (res.ok) {
+        // reconnectAndValidate already pulled webinfo (version + rules + patterns).
+        F.linkLive = true;
+        setConn(`Connected — ${F.installed?.fw || "reconnected"}`);
+        flashStatus(`Update complete — running ${F.installed?.fw || "the new firmware"}.`);
+        consoleNote(`Device reconnected — ${F.installed?.fw || "new firmware"}`);
+        toConnected();
+      } else if (res.error) {
         // Failure leaves the chip in USB-recoverable download mode. Keep the
         // panel + info; the user can reconnect and retry. Never a battery pull.
-        linkLive = false;
-        flashErr("Flash failed: " + e.message +
+        F.linkLive = false;
+        flashErr("Flash failed: " + res.error +
                  " — device is in USB recovery mode. Click Connect, then Install again to retry; do NOT unplug the battery.");
-        try { await transport?.disconnect(); } catch {}
-        try { await port?.close(); } catch {}
         toStale();
-      } finally {
-        flashing = false;      // re-arm sleep/wake auto-reconnect
-        setFlashUI(false);
+      } else {
+        F.linkLive = false;
+        flashStatus("Flashed and rebooted. If it didn't reconnect, click Connect to reverify.");
+        toStale();          // device info stays on screen
       }
+      setFlashUI(false);
     }
 
-    // Hard-reset the chip on its RST pin so it (re)boots the app. This is the
-    // exact sequence esp-web-tools uses and that is proven on the S3's
-    // USB-Serial-JTAG: ASSERT RTS, hold briefly, then release it via after().
-    // The RTS *pulse* is what reboots the chip — a bare after() (which only
-    // releases RTS) never asserts it and leaves the chip parked in the
-    // bootloader, which was the "stuck after flash" symptom. Caller owns the
-    // Transport/ESPLoader and any reconnect afterwards.
-    async function hardResetIntoApp(transport, esploader) {
-      try {
-        await transport.setRTS(true);
-        await sleep(100);
-        await esploader.after();          // HardReset: releases RTS → chip runs
-      } catch { /* the reset re-enumerates USB and may reject; reboot still happened */ }
-      try { await transport.disconnect(); } catch {}
-    }
-
-    // Restart button — reboot the running device without reflashing. Same RST
-    // pulse esptool does at the end of a flash: hand the text port to
-    // esptool-js, sync to the ROM bootloader, then hard-reset into the app.
-    // (Raw port.setSignals RTS toggling alone doesn't reset this USB-JTAG board;
-    // the bootloader handshake is what makes the RST pulse land.)
     async function doRestart() {
-      if (flashing) return;
-      if (!port || !linkLive) { flashErr("Not connected — click Connect first."); return; }
+      if (F.flashing) return;
+      if (!F.port || !F.linkLive) { flashErr("Not connected — click Connect first."); return; }
       setFlashUI(true);
-      flashing = true;          // the reset re-enumerates USB — ignore connect/disconnect
-      let transport = null, esploader = null;
-      try {
-        await stopReadLoop();
-        await port.close();
-
-        flashStatus("Resetting device…");
-        transport = new Transport(port, true);
-        esploader = new ESPLoader({
-          transport, baudrate: 115200,
-          terminal: { clean() {}, writeLine: (d) => logLine(d), write: (d) => logLine(d) },
-        });
-        await esploader.main();
-        await hardResetIntoApp(transport, esploader);
-
-        flashStatus("Restarted — reconnecting…");
-        const ok = await reconnectAndValidate();
-        if (ok) {
-          linkLive = true;
-          setConn(`Connected — ${installed?.fw || "reconnected"}`);
-          flashStatus(`Device restarted — running ${installed?.fw || "firmware"}.`);
-          consoleNote(`Device reconnected — ${installed?.fw || "firmware"}`);
-          toConnected();
-        } else {
-          linkLive = false;
-          flashStatus("Restarted. If it didn't reconnect, click Connect.");
-          toStale();          // device info stays on screen
-        }
-      } catch (e) {
-        linkLive = false;
-        flashErr("Restart failed: " + e.message + " — click Connect to reconnect.");
-        try { await transport?.disconnect(); } catch {}
-        try { await port?.close(); } catch {}
+      const res = await F.restart();
+      if (res.ok) {
+        F.linkLive = true;
+        setConn(`Connected — ${F.installed?.fw || "reconnected"}`);
+        flashStatus(`Device restarted — running ${F.installed?.fw || "firmware"}.`);
+        consoleNote(`Device reconnected — ${F.installed?.fw || "firmware"}`);
+        toConnected();
+      } else if (res.error) {
+        F.linkLive = false;
+        flashErr("Restart failed: " + res.error + " — click Connect to reconnect.");
         toStale();
-      } finally {
-        flashing = false;
-        setFlashUI(false);
+      } else {
+        F.linkLive = false;
+        flashStatus("Restarted. If it didn't reconnect, click Connect.");
+        toStale();          // device info stays on screen
       }
+      setFlashUI(false);
     }
 
-    // Factory shipping mode — end-of-assembly-line command. Sends `power
-    // shipping`, which acks with "OK" then factory-wipes (settings/rules/alerts)
-    // and deep-sleeps. The link drops on its own; treat it as an intentional
-    // disconnect so we don't auto-reconnect (the device only wakes on a long
-    // CENTER hold). No bootloader reset here — this is a plain serial command.
+    // Factory shipping mode — sends `power shipping`, which acks "OK" then
+    // factory-wipes (settings/rules/alerts) and deep-sleeps. The link drops on
+    // its own; treat it as intentional so we don't auto-reconnect (the device
+    // only wakes on a long CENTER hold).
     async function doShipping() {
-      if (flashing) return;
-      if (!port || !linkLive) { flashErr("Not connected — click Connect first."); return; }
+      if (F.flashing) return;
+      if (!F.port || !F.linkLive) { flashErr("Not connected — click Connect first."); return; }
       if (!confirm("Factory shipping mode wipes ALL settings, rules, and alerts, then deep-sleeps the device for shipping. Wake it later with a long-press of CENTER. Continue?")) return;
       setFlashUI(true);
-      userDisconnected = true;    // device won't come back on its own — don't auto-reconnect
+      F.userDisconnected = true;    // device won't come back on its own — don't auto-reconnect
       try {
         flashStatus("Sending shipping command…");
-        // Wait for the "OK" ack before the device wipes + sleeps. Older firmware
-        // without the ack: proceed anyway (it may already be sleeping).
-        try { await sendLine("power shipping"); await awaitLine((l) => l.trim() === "OK", 3000); }
-        catch {}
-        linkLive = false;
-        await stopReadLoop();
-        try { await port.close(); } catch {}
+        await F.doPower("shipping");
+        F.linkLive = false;
+        await F.stopReadLoop();
+        await F.closePort();
         flashStatus("Device wiped and in shipping mode — long-press CENTER to wake.");
         consoleNote("Device entered shipping mode (wiped + deep sleep).");
         toStale();          // device info stays on screen; rules/console hide
@@ -663,54 +449,21 @@
     }
 
     // ---- Rules editor ------------------------------------------------------
-    let rulesCache = [];
     function rulesStatus(m, err) { const e = $("rulesStatus"); e.textContent = m || ""; e.classList.toggle("error", !!err); }
     function ruleEditStatus(m, err) { const e = $("ruleEditStatus"); e.textContent = m || ""; e.classList.toggle("error", !!err); }
     function escapeHtml(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
-
-    // One-shot bootstrap: version + LED/vibe registries + rules in a single
-    // muted `webinfo` round-trip. Falls back to the individual commands for
-    // firmware that predates `webinfo`.
-    async function loadWebInfo() {
-      return withMute(async () => {
-        try {
-          await sendLine("webinfo");
-          const line = await awaitLine((l) => l.trim().startsWith("{") && l.includes('"fw"'), 3500);
-          const info = JSON.parse(line);
-          installed  = { fw: info.fw, hw: info.hw, chip: info.chip, game: info.game, ui: info.ui };
-          ledNames   = Array.isArray(info.led)   ? info.led   : [];
-          vibeNames  = Array.isArray(info.vibe)  ? info.vibe  : [];
-          rulesCache = Array.isArray(info.rules) ? info.rules : [];
-        } catch {
-          installed = null;
-          try {
-            await sendLine("ver");
-            installed = JSON.parse(await awaitLine((l) => l.trim().startsWith("{") && l.includes('"fw"'), 2000));
-          } catch {}
-          try { ledNames  = parseList(await sendAndCollect("led list"));  } catch { ledNames = []; }
-          try { vibeNames = parseList(await sendAndCollect("vibe list")); } catch { vibeNames = []; }
-          try {
-            await sendLine("rule dump");
-            rulesCache = JSON.parse(await awaitLine((l) => l.trim().startsWith("["), 3000));
-          } catch { rulesCache = []; }
-        }
-        refreshFirmwarePanel();
-        renderRules();
-        rulesStatus(`${rulesCache.length} rule${rulesCache.length === 1 ? "" : "s"}.`);
-      });
-    }
 
     // Refresh just the rules after a mutation (muted).
     async function loadRules() {
       return withMute(async () => {
         try {
           await sendLine("rule dump");
-          rulesCache = JSON.parse(await awaitLine((l) => l.trim().startsWith("["), 3000));
+          F.rulesCache = JSON.parse(await awaitLine((l) => l.trim().startsWith("["), 3000));
         } catch (e) {
           rulesStatus("Couldn't load rules: " + e.message, true);
           return;
         }
-        rulesStatus(`${rulesCache.length} rule${rulesCache.length === 1 ? "" : "s"}.`);
+        rulesStatus(`${F.rulesCache.length} rule${F.rulesCache.length === 1 ? "" : "s"}.`);
         renderRules();
       });
     }
@@ -718,7 +471,7 @@
     function renderRules() {
       const el = $("rulesList");
       el.innerHTML = "";
-      rulesCache.forEach((r) => {
+      F.rulesCache.forEach((r) => {
         const row = document.createElement("div");
         row.className = "row spread";
         row.style.cssText = "border-bottom:1px solid var(--border); padding:.55rem 0;";
@@ -814,7 +567,6 @@
       return { how: "regex", value: pat };
     }
     const TYPE_OPTS = [["", "Auto"], ["ble", "BLE"], ["wifi", "Wi-Fi"], ["sys", "System"], ["batt", "Battery"]];
-    let vibeNames = [], ledNames = [];
 
     function fillSelect(sel, options, current) {
       sel.innerHTML = "";
@@ -894,8 +646,8 @@
       $("reName").readOnly = !!r;          // name is the id — don't rename an existing rule
       $("reTitle").value = rule.title || "";
       fillSelect($("reType"), TYPE_OPTS, rule.type || "");
-      fillSelect($("reVibe"), ["", ...vibeNames], rule.vibe || "");
-      fillSelect($("reLed"), ["", ...ledNames], rule.led || "");
+      fillSelect($("reVibe"), ["", ...F.vibeNames], rule.vibe || "");
+      fillSelect($("reLed"), ["", ...F.ledNames], rule.led || "");
       const host = $("reClauses"); host.innerHTML = "";
       const crit = (rule.criteria && rule.criteria.length) ? rule.criteria : [{}];
       crit.forEach((c) => {
@@ -940,23 +692,6 @@
       } catch (e) { ruleEditStatus("Save failed: " + e.message, true); return; }
       $("ruleEditor").classList.add("hidden");
       await loadRules();
-    }
-
-    // Parse a `led list` / `vibe list` table into an array of pattern names
-    // (fallback path for firmware without `webinfo`).
-    function parseList(lines) {
-      const out = [];
-      for (const l of lines) { const m = /^\s*\d+\s+(\S.*?)\s*$/.exec(l); if (m) out.push(m[1]); }
-      return out;
-    }
-    async function sendAndCollect(cmd, ms = 500) {
-      const lines = [];
-      const collector = { match: (l) => { lines.push(l); return false; } };  // never resolves
-      lineListeners.push(collector);
-      try { await sendLine(cmd); } catch {}
-      await sleep(ms);
-      lineListeners = lineListeners.filter((l) => l !== collector);
-      return lines;
     }
 
     async function deleteRule(name) {
@@ -1014,39 +749,40 @@
       // The device dropping (sleep/reset/unplug) and coming back re-enumerates
       // USB, which fires these. Auto-reconnect on wake; stand down during a flash.
       navigator.serial.addEventListener("disconnect", (e) => {
-        if (!flashing && port && e.target === port) handleDrop();
+        if (!F.flashing && F.port && e.target === F.port) handleDrop();
       });
       navigator.serial.addEventListener("connect", () => {
-        if (!flashing && !userDisconnected && !linkLive) tryReconnect();
+        if (!F.flashing && !F.userDisconnected && !F.linkLive) tryReconnect();
       });
     }
 
     $("connectBtn").addEventListener("click", async () => {
       try {
         setConn("Connecting…");
-        userDisconnected = false;
+        F.userDisconnected = false;
         helpShown = false;
         $("consoleLog").textContent = "";
-        await loadVersions();
-        await openPort();
+        await F.loadVersions();
+        populateVersionSelect();
+        await F.openPort();
         toConnected();
         // One muted round-trip fetches version + LED/vibe registries + rules.
-        await loadWebInfo();
-        linkLive = true;
-        setConn(installed ? `Connected — ${installed.fw}` : "Connected (no version reported).");
+        await F.loadWebInfo();
+        F.linkLive = true;
+        setConn(F.installed ? `Connected — ${F.installed.fw}` : "Connected (no version reported).");
       } catch (e) {
         setConn(e.name === "NotFoundError" ? "Not connected." : "Connect failed: " + e.message, true);
-        try { await port?.close(); } catch {}
-        port = null;
+        await F.closePort();
+        F.port = null;
       }
     });
 
     $("disconnectBtn").addEventListener("click", async () => {
-      userDisconnected = true;    // intentional — don't auto-reconnect
-      linkLive = false;
-      await stopReadLoop();
-      try { await port?.close(); } catch {}
-      port = null;
+      F.userDisconnected = true;    // intentional — don't auto-reconnect
+      F.linkLive = false;
+      await F.stopReadLoop();
+      await F.closePort();
+      F.port = null;
       toDisconnected();
     });
 
@@ -1055,7 +791,7 @@
       card.classList.toggle("hidden");
       // First time the console is opened this session, run `help` so the user
       // immediately sees what commands exist (shown, not muted).
-      if (!card.classList.contains("hidden") && !helpShown && port) {
+      if (!card.classList.contains("hidden") && !helpShown && F.port) {
         helpShown = true;
         try { await sendLine("help"); } catch {}
       }
@@ -1091,11 +827,11 @@
     $("consoleAutoscroll").addEventListener("change", () => { if ($("consoleAutoscroll").checked) scrollConsole(); });
     async function sendFromInput() {
       const v = $("consoleInput").value.trim();
-      if (!v || !port) return;
+      if (!v || !F.port) return;
       if (cmdHistory[cmdHistory.length - 1] !== v) cmdHistory.push(v);   // skip consecutive dupes
       historyIdx = -1; historyDraft = "";
       $("consoleInput").value = "";
-      try { await sendLine(v); } catch (e) { logLine("[write error] " + e.message); }
+      try { await sendLine(v); } catch (e) { consoleNote("[write error] " + e.message); }
       if ($("consoleAutoscroll")?.checked) scrollConsole();
     }
 

@@ -1,8 +1,8 @@
 {
-  "name": "ring",
-  "title": "Ring Doorbell / Camera nearby",
-  "vibe": "double_tap",
-  "led": "red_blue",
+  "name": "Ring",
+  "title": "Ring nearby",
+  "vibe": "bump",
+  "led": "rainbow_slow",
   "type": "ble",
   "action": "alert",
   "tag": ["Smart Home"],

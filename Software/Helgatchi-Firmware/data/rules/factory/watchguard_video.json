@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["tactical", "camera"],
+  "tag": ["Tactical", "Camera"],
   "criteria": [
     { "oui": ["00:1D:96"] },
     { "name": [".*watchguard.*", ".*video.*", ".*dashcam.*"] },

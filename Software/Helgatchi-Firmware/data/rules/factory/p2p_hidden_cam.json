@@ -1,7 +1,7 @@
 {
-  "name": "p2p_hidden_cam",
+  "name": "P2P Hidden Cam",
   "title": "P2P Hidden Camera",
-  "vibe": "double_tap",
+  "vibe": "bump",
   "led": "red_blue",
   "type": "ble",
   "action": "alert",

@@ -1,7 +1,7 @@
 {
-  "name": "tuya_covert_cam",
+  "name": "Tuya Covert Cam",
   "title": "Tuya Covert Camera",
-  "vibe": "double_tap",
+  "vibe": "bump",
   "led": "red_blue",
   "type": "ble",
   "action": "alert",

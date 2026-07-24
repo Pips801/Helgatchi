@@ -1,7 +1,7 @@
 {
-  "name": "wyze_covert_cam",
+  "name": "Wyze Covert Cam",
   "title": "Wyze Camera nearby",
-  "vibe": "double_tap",
+  "vibe": "long_buzz",
   "led": "red_blue",
   "type": "ble",
   "action": "alert",

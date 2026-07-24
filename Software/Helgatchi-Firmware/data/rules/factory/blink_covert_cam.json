@@ -1,8 +1,8 @@
 {
-  "name": "blink_covert_cam",
+  "name": "Blink Covert Cam",
   "title": "Blink Camera nearby",
-  "vibe": "double_tap",
-  "led": "red_blue",
+  "vibe": "long_buzz",
+  "led": "white_chaser",
   "type": "ble",
   "action": "alert",
   "tag": ["Camera"],

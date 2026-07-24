@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["tactical"],
+  "tag": ["Tactical"],
   "criteria": [
     { "oui": ["00:19:8A"] },
     { "name": [".*northrop.*", ".*grumman.*"] },

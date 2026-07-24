@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["tactical", "camera"],
+  "tag": ["Tactical", "Camera"],
   "criteria": [
     { "oui": ["D4:2D:C5"] },
     { "name": [".*i-pro.*"] },

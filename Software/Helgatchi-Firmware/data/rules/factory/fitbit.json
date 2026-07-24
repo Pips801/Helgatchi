@@ -1,8 +1,8 @@
 {
-  "name": "fitbit",
+  "name": "Fitbit",
   "title": "Fitbit nearby",
-  "vibe": "double_tap",
-  "led": "red_blue",
+  "vibe": "bump",
+  "led": "white_chaser",
   "type": "ble",
   "action": "alert",
   "tag": ["Fitness", "Wearable"],

@@ -1,8 +1,8 @@
 {
-  "name": "bose",
+  "name": "Bose",
   "title": "Bose Audio device nearby",
-  "vibe": "double_tap",
-  "led": "red_blue",
+  "vibe": "bump",
+  "led": "rainbow_slow",
   "type": "ble",
   "action": "alert",
   "tag": ["Audio", "Wearable"],

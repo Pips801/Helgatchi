@@ -1,11 +1,11 @@
 {
-  "name": "Xtramus Technologies",
+  "name": "Xtramus",
   "title": "Xtramus Technologies device nearby",
   "vibe": "double_tap",
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["tactical"],
+  "tag": ["Tactical"],
   "criteria": [
     { "oui": ["00:22:A2"] },
     { "name": [".*xtramus.*"] },

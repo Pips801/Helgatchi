@@ -60,7 +60,13 @@
       "Bash(rm -f test/test_re_lite.cpp scripts/validate_rules.py docs/TESTING_RULES.md docs/REGEX.md docs/RULES_SCHEMA.md)",
       "Bash(rmdir test *)",
       "Bash(cd /Users/kaydanlindsey/Documents/Github/Helgatchi/Software/Helgatchi-Firmware; find . -path ./node_modules -prune -o -name \"chipsets.h\" -print 2>/dev/null; echo \"---\"; find ~/.platformio -name \"chipsets.h\" 2>/dev/null | head; find . -name \"*.h\" -path \"*FastLED*\" 2>/dev/null | head)",
-      "Read(//Users/kaydanlindsey/.platformio/**)"
+      "Read(//Users/kaydanlindsey/.platformio/**)",
+      "Bash(cd /Users/kaydanlindsey/Documents/Github/Helgatchi && find . -iname \"CLAUDE.md\" -not -path './.git/*' 2>/dev/null; echo \"---webinfo/shipping in firmware---\"; grep -rn \"webinfo\\\\|power shipping\\\\|\\\\\"shipping\\\\\"\\\\|rule dump\\\\|\\\\\"fw\\\\\"\" Software/Helgatchi-Firmware/src Software/Helgatchi-Firmware 2>/dev/null | grep -iv node_modules | head -40)",
+      "Read(//Users/kaydanlindsey/Documents/Github/Helgatchi/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Read(//Users/kaydanlindsey/.nvm/versions/**)",
+      "Bash(python3 -)",
+      "Bash(cd /Users/kaydanlindsey/Documents/Github/Helgatchi && ls -la .github/workflows/ 2>/dev/null; echo \"=== grep deploy refs to WebFlasher/index or firmware ===\"; grep -rniE \"webflasher|firmware/|versions.json|pages|upload-pages|actions/deploy\" .github 2>/dev/null | head -40)"
     ]
   }
 }

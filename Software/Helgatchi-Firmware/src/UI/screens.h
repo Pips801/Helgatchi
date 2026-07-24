@@ -173,7 +173,7 @@ typedef struct _objects_t {
     lv_obj_t *reset_device_container;
     lv_obj_t *reset_device_button;
     lv_obj_t *ship_device_container;
-    lv_obj_t *reset_device_button_1;
+    lv_obj_t *ship_device_button;
     lv_obj_t *restart_tutorial_container;
     lv_obj_t *restart_tutorial_button;
     lv_obj_t *obj33;

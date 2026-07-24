@@ -49,6 +49,7 @@ static void _applyDebugVisibility() {
     _setHidden(objects.debug_level_container,       hidden);
     _setHidden(objects.device_info_container,       hidden);
     _setHidden(objects.reset_device_container,      hidden);
+    _setHidden(objects.ship_device_container,       hidden);
     _setHidden(objects.restart_tutorial_container,  hidden);
 }
 
@@ -202,6 +203,14 @@ static void _on_reset_device_button(lv_event_t* /*e*/) {
     g_power_menu_screen.beginAction(CMD_POWER_FACTORY_RESET);
 }
 
+static void _on_ship_device_button(lv_event_t* /*e*/) {
+    // Same as the serial `power shipping`: full factory wipe then shipping deep
+    // sleep (no timer wake — only a CENTER long-hold brings it back). Routed
+    // through the Power Action screen ("Wiping for shipping...", cancellable
+    // during the hold). Debug-gated, so it's only reachable with debug options on.
+    g_power_menu_screen.beginAction(CMD_POWER_SHIPPING_RESET);
+}
+
 // ---------------------------------------------------------------------------
 // Screen load — fires after EEZ's handler (registered after ui_init)
 // ---------------------------------------------------------------------------
@@ -243,6 +252,7 @@ void SettingsScreen::begin(EventBus& bus) {
     // only reset-device is C-wired (debug screen + restart tutorial navigate
     // via EEZ flow).
     lv_obj_add_event_cb(objects.reset_device_button, _on_reset_device_button, LV_EVENT_CLICKED, nullptr);
+    lv_obj_add_event_cb(objects.ship_device_button,  _on_ship_device_button,  LV_EVENT_CLICKED, nullptr);
 }
 
 // ---------------------------------------------------------------------------

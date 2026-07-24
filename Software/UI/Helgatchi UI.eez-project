@@ -7506,7 +7506,7 @@
                       "hiddenInEditor": false,
                       "timeline": [],
                       "eventHandlers": [],
-                      "identifier": "reset device Button_1",
+                      "identifier": "ship device button",
                       "leftUnit": "px",
                       "topUnit": "px",
                       "widthUnit": "%",

@@ -2900,7 +2900,7 @@
           "left": 332,
           "top": 150,
           "width": 317,
-          "height": 54,
+          "height": 53,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -3268,7 +3268,7 @@
                       },
                       "group": "",
                       "groupIndex": 0,
-                      "text": "\"This device is for authorized testing and educational purposes only.\\n\\nUsing of any its features on unauthorized devices is strictly prohibited.\\n\\nBy continuining, you agree to these terms.\"",
+                      "text": "\"This device is for authorized testing and educational purposes only.\\n\\nUsing any of its features on unauthorized devices is strictly prohibited.\\n\\nBy continuining, you agree to these terms.\"",
                       "textType": "expression",
                       "longMode": "WRAP",
                       "recolor": false
@@ -4188,7 +4188,7 @@
           "left": 375,
           "top": 49,
           "width": 207,
-          "height": 54,
+          "height": 53,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -4208,7 +4208,7 @@
           "left": 388,
           "top": 249,
           "width": 317,
-          "height": 54,
+          "height": 53,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -4234,7 +4234,7 @@
           "left": 235,
           "top": 395,
           "width": 329,
-          "height": 54,
+          "height": 53,
           "customInputs": [],
           "customOutputs": [],
           "actions": [

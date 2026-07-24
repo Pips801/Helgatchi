@@ -1,0 +1,14 @@
+{
+  "name": "lockheed",
+  "title": "Lockheed Martin nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "criteria": [
+    { "oui": ["00:50:C2:03:0", "00:07:EF"] },
+    { "name": [".*lockheed.*", ".*eagan.*", ".*tactical.*"] },
+    { "oui_org": [".*lockheed martin tactical defense.*", ".*lockheed martin tactical.*"] },
+    { "mfg_org": [".*lockheed martin.*"] }
+  ]
+}

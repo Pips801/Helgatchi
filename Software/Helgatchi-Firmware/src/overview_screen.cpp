@@ -25,6 +25,14 @@ enum Clip {
     CLIP_SNIFF_START,
     CLIP_BRUSH,
     CLIP_IDLE,
+    CLIP_IDLE_FIDGET,
+    CLIP_IDLE_SNEEZE,
+    CLIP_IDLE_WAG,
+    CLIP_IDLE_HEAD_TILT,
+    CLIP_SLEEP,
+    CLIP_SLEEP_START,
+    CLIP_DANCE_TRANSITION,
+    CLIP_DANCE_TRANS_OUT,
     CLIP__COUNT
 };
 
@@ -39,16 +47,24 @@ struct ClipDef {
 
 // first, count
 static const ClipDef CLIPS[CLIP__COUNT] = {
-    /* CLIP_SIT_SCOOT   */ {  0, 2 },
-    /* CLIP_WALK        */ {  2, 4 },
-    /* CLIP_PARTY       */ {  6, 8 },
-    /* CLIP_DANCE       */ { 14, 8 },
-    /* CLIP_SNIFF_ALERT */ { 22, 4 },
-    /* CLIP_SNIFF_END   */ { 26, 3 },
-    /* CLIP_SNIFF_LOOP  */ { 29, 4 },
-    /* CLIP_SNIFF_START */ { 33, 2 },
-    /* CLIP_BRUSH       */ { 35, 5 },
-    /* CLIP_IDLE        */ { 40, 8 },
+    /* CLIP_SIT_SCOOT       */ {  0, 2 },
+    /* CLIP_WALK            */ {  2, 4 },
+    /* CLIP_PARTY           */ {  6, 8 },
+    /* CLIP_DANCE           */ { 14, 8 },
+    /* CLIP_SNIFF_ALERT     */ { 22, 4 },
+    /* CLIP_SNIFF_END       */ { 26, 3 },
+    /* CLIP_SNIFF_LOOP      */ { 29, 4 },
+    /* CLIP_SNIFF_START     */ { 33, 2 },
+    /* CLIP_BRUSH           */ { 35, 5 },
+    /* CLIP_IDLE            */ { 40, 8 },
+    /* CLIP_IDLE_FIDGET     */ { 48, 8 },
+    /* CLIP_IDLE_SNEEZE     */ { 56, 8 },
+    /* CLIP_IDLE_WAG        */ { 64, 8 },
+    /* CLIP_IDLE_HEAD_TILT  */ { 72, 8 },
+    /* CLIP_SLEEP           */ { 80, 6 },
+    /* CLIP_SLEEP_START     */ { 86, 3 },
+    /* CLIP_DANCE_TRANSITION*/ { 89, 2 },
+    /* CLIP_DANCE_TRANS_OUT */ { 91, 2 },
 };
 
 // Composite animations: an optional intro (once), the sustained loop, and an
@@ -61,14 +77,19 @@ struct AnimDef {
 };
 
 static const AnimDef ANIMS[HELGA__COUNT] = {
-    /* HELGA_IDLE  */ { -1,               CLIP_IDLE,        -1             },
-    /* HELGA_SIT   */ { -1,               CLIP_SIT_SCOOT,   -1             },
-    /* HELGA_WALK  */ { -1,               CLIP_WALK,        -1             },
-    /* HELGA_PARTY */ { -1,               CLIP_PARTY,       -1             },
-    /* HELGA_DANCE */ { -1,               CLIP_DANCE,       -1             },
-    /* HELGA_SNIFF */ { CLIP_SNIFF_START, CLIP_SNIFF_LOOP,  CLIP_SNIFF_END },
-    /* HELGA_ALERT */ { -1,               CLIP_SNIFF_ALERT, -1             },
-    /* HELGA_BRUSH */ { -1,               CLIP_BRUSH,       -1             },
+    /* HELGA_IDLE  */ { -1,                     CLIP_IDLE,          -1                  },
+    /* HELGA_IDLE2 */ { -1,                     CLIP_IDLE_FIDGET,   -1                  },
+    /* HELGA_IDLE3 */ { -1,                     CLIP_IDLE_SNEEZE,   -1                  },
+    /* HELGA_IDLE4 */ { -1,                     CLIP_IDLE_WAG,      -1                  },
+    /* HELGA_IDLE5 */ { -1,                     CLIP_IDLE_HEAD_TILT,-1                  },
+    /* HELGA_SIT   */ { -1,                     CLIP_SIT_SCOOT,     -1                  },
+    /* HELGA_WALK  */ { -1,                     CLIP_WALK,          -1                  },
+    /* HELGA_PARTY */ { CLIP_DANCE_TRANSITION,  CLIP_PARTY,         CLIP_DANCE_TRANS_OUT},
+    /* HELGA_DANCE */ { CLIP_DANCE_TRANSITION,  CLIP_DANCE,         CLIP_DANCE_TRANS_OUT},
+    /* HELGA_SNIFF */ { CLIP_SNIFF_START,       CLIP_SNIFF_LOOP,    CLIP_SNIFF_END      },
+    /* HELGA_ALERT */ { -1,                     CLIP_SNIFF_ALERT,   -1                  },
+    /* HELGA_BRUSH */ { -1,                     CLIP_BRUSH,         -1                  },
+    /* HELGA_SLEEP */ { CLIP_SLEEP_START,       CLIP_SLEEP,         -1                  },
 };
 
 // ---------------------------------------------------------------------------

@@ -260,7 +260,7 @@ public:
         // after promotion).
         r.service_count = 0;
         const size_t n_svc = dev->getServiceUUIDCount();
-        for (size_t i = 0; i < n_svc && r.service_count < 4; i++) {
+        for (size_t i = 0; i < n_svc && r.service_count < SCAN_MAX_SERVICE_UUIDS; i++) {
             NimBLEUUID big(dev->getServiceUUID(i));
             big.to128();
             const uint8_t* bytes = big.getValue();

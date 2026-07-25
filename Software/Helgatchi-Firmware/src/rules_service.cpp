@@ -710,7 +710,7 @@ bool RulesService::_criterionMatches(const Criterion& c, const ScanResult& s,
         case CRIT_MFG:
             return s.mfg_id != 0 && s.mfg_id == c.v.mfg_id;
         case CRIT_SERVICE:
-            for (uint8_t i = 0; i < s.service_count && i < 4; i++) {
+            for (uint8_t i = 0; i < s.service_count && i < SCAN_MAX_SERVICE_UUIDS; i++) {
                 if (memcmp(s.service_uuids[i], c.v.uuid, 16) == 0) return true;
             }
             return false;

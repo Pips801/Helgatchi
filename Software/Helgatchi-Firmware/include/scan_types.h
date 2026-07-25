@@ -73,6 +73,11 @@ inline const char* macTypeName(uint8_t t) {
     }
 }
 
+// Max advertised BLE service UUIDs captured per sighting. Raven-style detection
+// keys on custom service UUIDs in the advertisement; some devices advertise
+// several, so we keep enough slots that the distinctive one isn't crowded out.
+static constexpr uint8_t SCAN_MAX_SERVICE_UUIDS = 8;
+
 struct ScanResult {
     uint8_t  domain;            // ScanDomain
     uint8_t  mac[6];
@@ -91,10 +96,10 @@ struct ScanResult {
     // 128-bit UUIDs in BLE wire order (LSB first). 16/32-bit UUIDs from
     // NimBLE are promoted via the BLE base UUID at scan-emit time so
     // rule matching has a single canonical form.
-    uint8_t  service_uuids[4][16];
+    uint8_t  service_uuids[SCAN_MAX_SERVICE_UUIDS][16];
     uint32_t timestamp_ms;      // millis() at the scan callback (i.e. last seen)
     uint32_t first_seen_ms;     // millis() first added to the seen map. Maintained
                                 // by ScanService::_updateSeen; unused in the ring.
 };
 
-static_assert(sizeof(ScanResult) <= 192, "ScanResult bloating — reduce service slots, ie_sig, or name");
+static_assert(sizeof(ScanResult) <= 256, "ScanResult bloating — reduce service slots, ie_sig, or name");

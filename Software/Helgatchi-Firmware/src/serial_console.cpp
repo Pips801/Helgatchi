@@ -1198,7 +1198,8 @@ void SerialConsole::_cmdScan(char* args) {
     if (sub && strcasecmp(sub, "inject") == 0) {
         if (!rest) {
             Serial.println("usage: scan inject domain=bt|wifi mac=AA:BB:CC:11:22:33 "
-                           "[rssi=-50] [name=foo] [mfg=0x004C] [type=random]");
+                           "[rssi=-50] [name=foo] [mfg=0x004C] [type=random] "
+                           "[frame=probe|beacon] [ie_sig=2;12;221:506f9a...]");
             return;
         }
 
@@ -1239,6 +1240,17 @@ void SerialConsole::_cmdScan(char* args) {
                     Serial.printf("bad type '%s' (expected static|rotating|random)\n", v);
                     return;
                 }
+            } else if (strcasecmp(k, "frame") == 0) {
+                if      (strcasecmp(v, "probe")  == 0 ||
+                         strcasecmp(v, "probe_req") == 0) r.frame_kind = FRAME_PROBE_REQ;
+                else if (strcasecmp(v, "beacon") == 0)    r.frame_kind = FRAME_BEACON;
+                else {
+                    Serial.printf("bad frame '%s' (expected probe|beacon)\n", v);
+                    return;
+                }
+            } else if (strcasecmp(k, "ie_sig") == 0) {
+                strncpy(r.ie_sig, v, sizeof(r.ie_sig) - 1);
+                r.ie_sig[sizeof(r.ie_sig) - 1] = '\0';
             } else {
                 Serial.printf("ignoring unknown key '%s'\n", k);
             }

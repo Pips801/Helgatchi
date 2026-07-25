@@ -12,10 +12,14 @@
 #include <freertos/queue.h>
 #include <string.h>
 
-// Per-channel dwell for the passive WiFi sweep. ≥ one ~102 ms beacon interval
-// so each AP's beacon is reliably caught on every channel. Hardcoded to match
-// the BLE side (interval/window also fixed constants, not settings).
-static constexpr uint32_t WIFI_DWELL_MS = 120;
+// WiFi promiscuous sniffer channel hopping. We dwell on each of the three
+// non-overlapping 2.4 GHz channels long enough to catch a beacon (~102 ms
+// interval) and several of a probe-requesting station's bursts (Flock STAs emit
+// at ~125 ms intervals), then hop. 300 ms per channel = a full 1/6/11 cycle
+// under a second.
+static constexpr uint8_t  WIFI_HOP_CHANNELS[] = {1, 6, 11};
+static constexpr uint8_t  WIFI_HOP_COUNT      = sizeof(WIFI_HOP_CHANNELS);
+static constexpr uint32_t WIFI_HOP_DWELL_MS   = 300;
 
 ScanEngine g_scan_engine;
 
@@ -50,6 +54,15 @@ volatile int8_t*   s_lockon_rssi    = nullptr;
 volatile uint32_t* s_lockon_last_ms = nullptr;
 volatile bool*     s_lockon_have    = nullptr;
 
+// WiFi promiscuous SNIFFER state (normal discovery, distinct from lock-on). While
+// s_sniff_active the sniffer callback parses management frames and enqueues a
+// ScanResult per beacon / probe request. s_sniff_channel is the channel the hop
+// scheduler last pinned (main loop writes, callback reads — aligned byte, atomic).
+// Sniffer and lock-on are mutually exclusive: only one installs its rx callback
+// and flips its flag at a time.
+volatile bool    s_sniff_active  = false;
+volatile uint8_t s_sniff_channel = 0;
+
 // Record a target sighting from either radio callback. RSSI/last-seen are
 // aligned scalars → atomic single writes on Xtensa; `have` publishes last.
 inline void s_lockonHit(int8_t rssi) {
@@ -75,6 +88,87 @@ void wifiPromiscRxCb(void* buf, wifi_promiscuous_pkt_type_t /*type*/) {
         memcmp(h + 4,  s_lockon_mac, 6) == 0) {
         s_lockonHit((int8_t)p->rx_ctrl.rssi);
     }
+}
+
+// Append one hex byte (lowercase) to buf[cap], advancing *sp. Silently stops at
+// capacity so the signature truncates rather than overflowing.
+inline void s_sigHexByte(char* buf, int cap, int* sp, uint8_t b) {
+    static const char hx[] = "0123456789abcdef";
+    if (*sp + 2 > cap - 1) { *sp = cap - 1; return; }
+    buf[(*sp)++] = hx[b >> 4];
+    buf[(*sp)++] = hx[b & 0xF];
+}
+
+// WiFi promiscuous SNIFFER callback (runs on the WiFi task). Parses 802.11
+// management frames — beacons (subtype 8) and probe requests (subtype 4) — into a
+// ScanResult and marshals it through the same queue the BLE path uses, so
+// ScanService::publish() stays single-threaded (drained in tick()). Builds the IE
+// fingerprint string (r.ie_sig) that the CRIT_IE_SIG rule criterion matches; this
+// is how a probe-only STA (e.g. a Flock camera in station mode) becomes visible —
+// WiFi.scanNetworks() only ever surfaced APs. Bounds-checked throughout: sig_len
+// includes the 4-byte FCS tail, which we strip before walking IEs.
+void wifiSniffRxCb(void* buf, wifi_promiscuous_pkt_type_t /*type*/) {
+    if (!s_sniff_active || s_lockon_active || !buf || !s_queue) return;
+    const wifi_promiscuous_pkt_t* p = (const wifi_promiscuous_pkt_t*)buf;
+    const int sig_len = (int)p->rx_ctrl.sig_len;
+    if (sig_len < 24) return;                              // too short for a full MAC header
+    const uint8_t* h = p->payload;
+
+    // Frame control: [version:2][type:2][subtype:4]. Management = type 0.
+    const uint8_t fc0     = h[0];
+    const uint8_t ftype   = (uint8_t)((fc0 >> 2) & 0x3);
+    const uint8_t subtype = (uint8_t)((fc0 >> 4) & 0xF);
+    if (ftype != 0) return;
+    uint8_t frame_kind;
+    int     ie_start;                                     // offset of the first IE
+    if (subtype == 8)      { frame_kind = FRAME_BEACON;    ie_start = 36; }  // 24 hdr + 12 fixed params
+    else if (subtype == 4) { frame_kind = FRAME_PROBE_REQ; ie_start = 24; }  // IEs start right after hdr
+    else return;
+
+    ScanResult r{};
+    r.domain       = SCAN_WIFI;
+    r.mac_type     = MAC_TYPE_UNKNOWN;
+    r.frame_kind   = frame_kind;
+    r.rssi         = (int8_t)p->rx_ctrl.rssi;
+    r.channel      = s_sniff_channel;
+    r.timestamp_ms = millis();
+    memcpy(r.mac, h + 10, 6);                             // addr2 = transmitter (the STA/AP itself)
+
+    // IE body ends before the 4-byte FCS. Walk TLVs (tag, len, value), extracting
+    // the SSID (tag 0) into r.name and building the tag-order fingerprint into
+    // r.ie_sig. Vendor IEs (tag 221) expand to "221:<first ≤8 payload bytes hex>";
+    // SSID is skipped from the signature. Entries joined by ';' so commas stay free
+    // as the rule criterion-value separator.
+    const int frame_end = sig_len - 4;                    // strip FCS
+    const int sig_cap   = (int)sizeof(r.ie_sig);
+    int sp = 0;
+    for (int i = ie_start; i + 2 <= frame_end; ) {
+        const uint8_t tag  = h[i];
+        const uint8_t elen = h[i + 1];
+        if (i + 2 + (int)elen > frame_end) break;         // declared length overruns the buffer
+        const uint8_t* val = h + i + 2;
+        if (tag == 0) {
+            const uint8_t n = elen < (uint8_t)(sizeof(r.name) - 1) ? elen
+                                                                   : (uint8_t)(sizeof(r.name) - 1);
+            memcpy(r.name, val, n);
+            r.name[n] = '\0';
+        } else if (sp < sig_cap - 1) {
+            if (sp > 0) r.ie_sig[sp++] = ';';
+            if (tag == 221) {
+                sp += snprintf(r.ie_sig + sp, sig_cap - sp, "221:");
+                if (sp > sig_cap - 1) sp = sig_cap - 1;
+                const uint8_t nb = elen < 8 ? elen : 8;
+                for (uint8_t b = 0; b < nb; b++) s_sigHexByte(r.ie_sig, sig_cap, &sp, val[b]);
+            } else {
+                sp += snprintf(r.ie_sig + sp, sig_cap - sp, "%u", (unsigned)tag);
+                if (sp > sig_cap - 1) sp = sig_cap - 1;
+            }
+        }
+        i += 2 + (int)elen;
+    }
+    r.ie_sig[sp] = '\0';
+
+    xQueueSend(s_queue, &r, 0);                           // non-blocking; drop-on-full is fine
 }
 
 // Classify a BLE address into a MacAddrType. `ble_type` is ble_addr_t.type
@@ -246,13 +340,13 @@ size_t ScanEngine::queueDepth() const {
 }
 
 void ScanEngine::tick() {
-    // Radio phase sequencing (BLE→WiFi handoff) and WiFi result polling run
-    // every tick, independent of the BLE callback queue below. Skipped while
+    // Radio phase sequencing (BLE→WiFi handoff) and WiFi sniffer channel hopping
+    // run every tick, independent of the BLE callback queue below. Skipped while
     // hunting: lock-on owns the radio outright (continuous BLE scan, or WiFi
-    // promiscuous — never esp_wifi_scan_start, which _pollWifi would call).
+    // promiscuous pinned to one channel — never the hopping discovery sniffer).
     if (!_lockon_active) {
         _advancePhaseIfDue();
-        _pollWifi();
+        _pollWifiSniff();
     }
 
     if (!_queue) return;
@@ -271,8 +365,22 @@ void ScanEngine::tick() {
         if (xQueueReceive((QueueHandle_t)_queue, &r, 0) != pdTRUE) break;
         g_scan_service.publish(r);
         _pub_count++;
+        if (r.domain == SCAN_WIFI) _wifi_result_count++;
 
-        if (log_raw) {
+        if (log_raw && r.domain == SCAN_WIFI) {
+            // WiFi promiscuous sniffer frame — show frame class + IE fingerprint
+            // so a real Flock probe's ie_sig can be read off serial and compared.
+            const char* oui_org = vendor_for_mac(r.mac);
+            Serial.printf("[scan] %02X:%02X:%02X:%02X:%02X:%02X "
+                          "wifi     rssi=%-4d ch=%-2u %-6s "
+                          "oui=%-16.16s ssid=\"%s\" ie=\"%s\"\n",
+                          r.mac[0], r.mac[1], r.mac[2],
+                          r.mac[3], r.mac[4], r.mac[5],
+                          (int)r.rssi, (unsigned)r.channel,
+                          r.frame_kind == FRAME_PROBE_REQ ? "probe" :
+                          r.frame_kind == FRAME_BEACON    ? "beacon" : "-",
+                          oui_org ? oui_org : "----", r.name, r.ie_sig);
+        } else if (log_raw) {
             const char* oui_org = vendor_for_mac(r.mac);
             const char* mfg_org = r.mfg_id ? vendor_mfg_lookup(r.mfg_id) : nullptr;
             Serial.printf("[scan] %02X:%02X:%02X:%02X:%02X:%02X "
@@ -391,9 +499,9 @@ void ScanEngine::_startBleLockon() {
     _emitScanState(SCAN_BLE, true);
 }
 
-// Promiscuous sniff pinned to the target's channel. No esp_wifi_scan_start, so
-// it avoids the back-to-back-scan fault (see _pollWifi) entirely — the rx
-// callback just reads RSSI off every matching frame.
+// Promiscuous sniff pinned to the target's channel — like the discovery sniffer
+// but single-channel and target-filtered: the rx callback (wifiPromiscRxCb) just
+// reads RSSI off every frame matching the locked-on MAC.
 void ScanEngine::_startWifiLockon() {
     if (_scan_inhibited) return;
     ensureWifi();
@@ -527,23 +635,23 @@ void ScanEngine::_stopBle() {
 // ---------------------------------------------------------------------------
 // WiFi control
 //
-// WiFi scanning runs on the main loop: an async sweep is kicked and its
-// completion is polled in tick() (unlike BLE, which is callback-driven off the
-// host task). Because we publish from tick(), no marshalling queue is needed —
-// ScanService::publish() stays single-threaded. WiFi and BLE never run at the
-// same time (see the phase sequence), so there's no radio coexistence to
-// manage: each fully owns the radio for its phase.
+// WiFi discovery is a promiscuous management-frame sniffer, not an AP scan. The
+// radio is put in promiscuous mode with a MGMT-only filter; the sniffer callback
+// (wifiSniffRxCb, on the WiFi task) parses each beacon and probe request into a
+// ScanResult and marshals it through the same queue the BLE path uses, so
+// ScanService::publish() stays single-threaded (drained in tick()). tick() also
+// hops the channel across 1/6/11.
 //
-// The WiFi driver is initialized once (STA, never associates) and reused across
-// scan windows, one sweep per phase (we don't deinit between windows or restart
-// back-to-back). WiFi's buffers live in PSRAM (the build ships
-// CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y) — that's fine, there's ample PSRAM.
+// Why promiscuous instead of WiFi.scanNetworks(): scanNetworks only enumerates
+// APs (beacons / probe responses), so a probe-requesting STA — e.g. a Flock
+// camera running in station mode — was completely invisible. It was also flagged
+// KNOWN-UNSTABLE (back-to-back esp_wifi_scan_start faulted on this S3+PSRAM
+// build). Promiscuous capture is the same mechanism the lock-on path has used
+// reliably; it sees beacons AND probe requests and never calls scan_start.
 //
-// EXPERIMENTAL / KNOWN-UNSTABLE: enabling WiFi scanning (SCAN_MODE bit 1) has
-// caused intermittent memory-corruption crashes on this board that we have not
-// yet root-caused (needs a source-built toolchain with heap poisoning to trace
-// the wild write — see docs / the phase notes). The default SCAN_MODE is
-// BLE-only, which is stable; treat WiFi as opt-in until the corruption is fixed.
+// WiFi and BLE never run at the same time (see the phase sequence), so there's no
+// radio coexistence to manage. The WiFi driver is initialized once (STA, never
+// associates) and reused across windows.
 // ---------------------------------------------------------------------------
 
 void ScanEngine::ensureWifi() {
@@ -553,98 +661,50 @@ void ScanEngine::ensureWifi() {
     _wifi_initialized = true;
 }
 
-bool ScanEngine::_kickWifiScan() {
-    // Passive by default: listen for beacons only, never transmit probe
-    // requests (doesn't betray our presence). SKEY_SCAN_ACTIVE flips to active
-    // probing — the same toggle that governs BLE active/passive scan.
-    const bool passive = !g_settings.getBool(SKEY_SCAN_ACTIVE);
-    const int16_t rc = WiFi.scanNetworks(/*async*/true, /*show_hidden*/true,
-                                         passive, WIFI_DWELL_MS);
-    _wifi_scan_inflight = (rc == WIFI_SCAN_RUNNING);
-    return _wifi_scan_inflight;
-}
-
 void ScanEngine::_startWifi() {
     if (_wifi_scanning) return;
     if (_scan_inhibited) return;   // an admin broadcast is using the radio
     ensureWifi();
+
+    // Promiscuous MGMT sniffer: passive by nature (we only listen), so
+    // SKEY_SCAN_ACTIVE doesn't apply to WiFi. Pin the first hop channel, then
+    // tick() rotates 1/6/11.
+    wifi_promiscuous_filter_t filt = {};
+    filt.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT;
+    esp_wifi_set_promiscuous_filter(&filt);
+    esp_wifi_set_promiscuous_rx_cb(&wifiSniffRxCb);
+    esp_wifi_set_promiscuous(true);
+    _sniff_hop_idx = 0;
+    s_sniff_channel = WIFI_HOP_CHANNELS[0];
+    esp_wifi_set_channel(s_sniff_channel, WIFI_SECOND_CHAN_NONE);
+    _sniff_hop_ms  = millis();
+    s_sniff_active = true;
+    _wifi_promisc  = true;
     _wifi_scanning = true;
     _emitScanState(SCAN_WIFI, true);
-    _kickWifiScan();
 }
 
 void ScanEngine::_stopWifi() {
     if (!_wifi_scanning) return;
-    // Lightweight stop: free the result buffer and mark the radio idle. The WiFi
-    // driver stays initialized (no deinit — esp_wifi_deinit faulted freeing a
-    // PSRAM buffer, and with buffers now internal there's no need to tear down).
-    // A mid-sweep scan simply finishes into a buffer we ignore; the next phase
-    // starts fresh via _startWifi.
-    WiFi.scanDelete();
-    _wifi_scanning      = false;
-    _wifi_scan_inflight = false;
+    s_sniff_active = false;         // stop the callback enqueuing first
+    if (_wifi_promisc) {
+        esp_wifi_set_promiscuous(false);
+        _wifi_promisc = false;
+    }
+    _wifi_scanning = false;
     _emitScanState(SCAN_WIFI, false);
 }
 
-void ScanEngine::_pollWifi() {
-    if (!_wifi_scanning || _scan_inhibited) return;
-
-    // ONE sweep per WiFi phase — we never re-kick within a live WiFi session.
-    // Restarting a scan back-to-back corrupts memory on this S3+PSRAM build
-    // (the first sweep always works; the second esp_wifi_scan_start faults —
-    // spinlock assert or scheduler TCB corruption), and adding an inter-scan
-    // delay made it worse, not better. So the phase does a single all-channel
-    // sweep; the next fresh sweep is the next scan window's WiFi phase, after a
-    // full stop + the between-window gap (never a rapid restart).
-    if (!_wifi_scan_inflight) return;   // sweep already consumed this phase
-
-    const int n = WiFi.scanComplete();
-    if (n == WIFI_SCAN_RUNNING) return;   // -1: still sweeping this channel set
-
-    if (n >= 0) {
-        const bool log_raw = g_settings.getBool(SKEY_DEBUG_SERIAL_ENABLED) &&
-                             g_settings.get(SKEY_DEBUG_LEVEL) == DEBUG_SCANNING_PERF;
-        for (int i = 0; i < n; i++) {
-            ScanResult r{};
-            r.domain       = SCAN_WIFI;
-            r.mac_type     = MAC_TYPE_UNKNOWN;   // WiFi BSSIDs aren't BLE-classified
-            r.timestamp_ms = millis();
-
-            const uint8_t* bssid = WiFi.BSSID(i);   // 6 bytes, display order (MSB first)
-            if (bssid) memcpy(r.mac, bssid, 6);
-            r.rssi    = (int8_t)WiFi.RSSI(i);
-            r.channel = (uint8_t)WiFi.channel(i);   // so WiFi lock-on can pin promiscuous to this channel
-
-            const String ssid = WiFi.SSID(i);       // empty string for hidden APs
-            strncpy(r.name, ssid.c_str(), sizeof(r.name) - 1);
-            r.name[sizeof(r.name) - 1] = '\0';
-
-            // On the main loop → publish() is single-threaded, no queue needed.
-            g_scan_service.publish(r);
-            _pub_count++;
-            _wifi_result_count++;
-
-            if (log_raw) {
-                const char* oui_org = vendor_for_mac(r.mac);
-                Serial.printf("[scan] %02X:%02X:%02X:%02X:%02X:%02X "
-                              "wifi     rssi=%-4d ch=%-2ld "
-                              "oui=%-16.16s ssid=\"%s\"\n",
-                              r.mac[0], r.mac[1], r.mac[2],
-                              r.mac[3], r.mac[4], r.mac[5],
-                              (int)r.rssi, (long)WiFi.channel(i),
-                              oui_org ? oui_org : "----", r.name);
-            }
-        }
-        WiFi.scanDelete();
-        _wifi_scan_count++;
-    } else {
-        WiFi.scanDelete();   // WIFI_SCAN_FAILED — free any partial result buffer
-    }
-
-    // Sweep consumed. Do NOT re-kick — the radio idle-listens until the phase
-    // ends (CMD_SCAN_STOP → _stopWifi). wifiBusy() now reads false so a sleep
-    // isn't blocked.
-    _wifi_scan_inflight = false;
+// Channel-hop the sniffer across 1/6/11. The callback captures frames on the
+// WiFi task as they arrive; this just advances the pinned channel each dwell.
+void ScanEngine::_pollWifiSniff() {
+    if (!_wifi_scanning || !_wifi_promisc || _scan_inhibited) return;
+    if ((millis() - _sniff_hop_ms) < WIFI_HOP_DWELL_MS) return;
+    _sniff_hop_idx = (uint8_t)((_sniff_hop_idx + 1) % WIFI_HOP_COUNT);
+    if (_sniff_hop_idx == 0) _wifi_scan_count++;   // one full 1/6/11 cycle == a "sweep"
+    s_sniff_channel = WIFI_HOP_CHANNELS[_sniff_hop_idx];
+    esp_wifi_set_channel(s_sniff_channel, WIFI_SECOND_CHAN_NONE);
+    _sniff_hop_ms  = millis();
 }
 
 void ScanEngine::setScanInhibited(bool inhibit) {

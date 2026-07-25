@@ -45,6 +45,7 @@ enum CriterionKind : uint8_t {
     CRIT_SSID_MATCH,       // pattern vs scan.name, gated to SCAN_WIFI
     CRIT_OUI_ORG,          // pattern vs the MAC-OUI vendor name, resolved at match time
     CRIT_MFG_ORG,          // pattern vs the mfg-id company name, resolved at match time
+    CRIT_IE_SIG,           // pattern vs scan.ie_sig (802.11 IE fingerprint), gated to SCAN_WIFI
     CRIT_KIND_COUNT,
 };
 
@@ -62,12 +63,12 @@ enum PatShape : uint8_t {
     PAT_REGEX,     // otherwise → re_lite_full_match(pattern, name)
 };
 
-// The four pattern-valued kinds: NAME/SSID (vs the device name) and
-// OUI_ORG/MFG_ORG (vs the resolved vendor name). All store a pattern in v.str
-// plus a classified shape.
+// The pattern-valued kinds: NAME/SSID (vs the device name), OUI_ORG/MFG_ORG
+// (vs the resolved vendor name), and IE_SIG (vs the WiFi frame's IE
+// fingerprint). All store a pattern in v.str plus a classified shape.
 struct Criterion {
     CriterionKind kind;
-    PatShape      pat_shape;         // valid for the pattern kinds (NAME/SSID/OUI_ORG/MFG_ORG)
+    PatShape      pat_shape;         // valid for the pattern kinds (NAME/SSID/OUI_ORG/MFG_ORG/IE_SIG)
     uint8_t       pat_off;           // literal-core offset within v.str (fast-path shapes)
     uint8_t       pat_len;           // literal-core length
     union {
@@ -142,8 +143,9 @@ public:
     bool setRuleField(const char* name, const char* field, const char* value);
 
     // Add criteria. `field` is the rule-file field name (oui, mac, mfg,
-    // service, name, ssid, oui_org, mfg_org). name/ssid/oui_org/mfg_org take
-    // case-insensitive full-match patterns (see PatShape / docs/WRITING_RULES.md).
+    // service, name, ssid, oui_org, mfg_org, ie_sig). The pattern fields
+    // (name/ssid/oui_org/mfg_org/ie_sig) take case-insensitive full-match
+    // patterns (see PatShape / docs/WRITING_RULES.md).
     // `values_csv` is one or more comma-separated values for that field;
     // each becomes its own atomic criterion. Returns the count of criteria
     // added, or -1 on parse error / invalid pattern.

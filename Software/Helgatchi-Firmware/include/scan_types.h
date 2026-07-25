@@ -18,6 +18,14 @@ enum ScanDomain : uint8_t {
     SCAN_WIFI = 1,
 };
 
+// 802.11 management-frame class for WiFi sightings, set by the promiscuous
+// sniffer. FRAME_UNKNOWN covers BLE and any non-classified row (injected tests).
+enum FrameKind : uint8_t {
+    FRAME_UNKNOWN   = 0,   // BLE / not a classified 802.11 frame
+    FRAME_BEACON    = 1,   // 802.11 beacon (type 0, subtype 8) — AP announcement
+    FRAME_PROBE_REQ = 2,   // 802.11 probe request (type 0, subtype 4) — STA seeking APs
+};
+
 // BLE MAC address classification, derived from the advertised address type
 // plus (for random addresses) the two most-significant bits of the address.
 // WiFi results and injected test rows are MAC_TYPE_UNKNOWN.
@@ -59,7 +67,13 @@ struct ScanResult {
     uint8_t  mac_type;          // MacAddrType — BLE address classification; MAC_TYPE_UNKNOWN for WiFi
     int8_t   rssi;
     uint8_t  channel;           // WiFi primary channel (1..14). 0 for BLE / unknown. Used by WiFi lock-on.
+    uint8_t  frame_kind;        // FrameKind — 802.11 frame class (WiFi promiscuous sniffer). FRAME_UNKNOWN for BLE.
     char     name[32];          // BLE adv name OR WiFi SSID. NUL-terminated; truncated if longer.
+    // Observed 802.11 IE fingerprint for WiFi frames: comma-separated tag list
+    // with vendor (tag 221) IEs expanded to "221:<hex>". Empty for BLE / frames
+    // with no notable IEs. Matched by the CRIT_IE_SIG rule criterion. See
+    // docs/WRITING_RULES.md and the Flock detector in data/rules/factory/.
+    char     ie_sig[64];
     uint16_t mfg_id;            // BT SIG company ID (BLE). 0 = none. Unused for WiFi.
     uint8_t  service_count;     // number of populated entries in service_uuids
     // 128-bit UUIDs in BLE wire order (LSB first). 16/32-bit UUIDs from
@@ -71,4 +85,4 @@ struct ScanResult {
                                 // by ScanService::_updateSeen; unused in the ring.
 };
 
-static_assert(sizeof(ScanResult) <= 128, "ScanResult bloating — reduce service slots or trim name");
+static_assert(sizeof(ScanResult) <= 192, "ScanResult bloating — reduce service slots, ie_sig, or name");

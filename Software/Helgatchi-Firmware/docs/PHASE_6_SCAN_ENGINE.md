@@ -143,32 +143,35 @@ In the callback, build `ScanResult`:
 
 Then `g_scan_service.publish(r)`.
 
-### WiFi
+### WiFi — promiscuous MGMT sniffer (not `WiFi.scanNetworks`)
 
-ESP32 WiFi scan is "async" via `WiFi.scanNetworks(true /* async */, true /* show hidden */)`.
-Poll on tick with `WiFi.scanComplete()`:
+WiFi discovery is a **promiscuous management-frame sniffer**, not an AP scan.
+`WiFi.scanNetworks()` only enumerates access points (from their beacons / probe
+responses), so a probe-requesting **station** — e.g. a Flock camera which (as of
+~Dec 2025) runs in STA mode and only sprays wildcard probe requests — is
+completely invisible to it. `scanNetworks` was also unstable on this S3+PSRAM
+build (back-to-back `esp_wifi_scan_start` faulted). The sniffer is the same
+mechanism the lock-on path uses reliably.
 
-```cpp
-int n = WiFi.scanComplete();
-if (n >= 0) {
-    for (int i = 0; i < n; i++) {
-        ScanResult r{};
-        r.domain = SCAN_WIFI;
-        memcpy(r.mac, WiFi.BSSID(i), 6);
-        r.rssi = WiFi.RSSI(i);
-        strncpy(r.name, WiFi.SSID(i).c_str(), sizeof(r.name) - 1);
-        r.timestamp_ms = millis();
-        g_scan_service.publish(r);
-    }
-    WiFi.scanDelete();
-    // optionally trigger next scan or wait
-}
-```
+`ScanEngine::_startWifi()` puts the radio in promiscuous mode with a MGMT-only
+filter and installs `wifiSniffRxCb` (on the WiFi task). That callback:
 
-For channel hop control beyond what `scanNetworks` does internally, you may
-need `esp_wifi_scan_start()` with explicit `wifi_scan_config_t`. Start with
-`WiFi.scanNetworks` — only drop to esp_wifi APIs if dwell/hop settings need
-tighter control.
+- accepts management frames (`type == 0`) of subtype 8 (beacon → `FRAME_BEACON`)
+  or subtype 4 (probe request → `FRAME_PROBE_REQ`);
+- takes `addr2` (transmitter) as the MAC, RSSI + current hop channel from
+  `rx_ctrl`;
+- walks the information elements (TLV, bounds-checked; `sig_len` includes the
+  4-byte FCS tail, stripped before the walk) to extract the SSID (tag 0 → `name`,
+  empty ⇒ wildcard) and build the IE fingerprint into `ScanResult::ie_sig`
+  (tag order, SSID skipped, vendor tag 221 → `221:<≤8 bytes hex>`, `;`-joined);
+- marshals the `ScanResult` through the same FreeRTOS queue the BLE path uses, so
+  `publish()` stays single-threaded (drained in `tick()`).
+
+`tick()` (via `_pollWifiSniff()`) hops the channel across `{1, 6, 11}` at
+`WIFI_HOP_DWELL_MS` (300 ms). The `ie_sig` string feeds the `CRIT_IE_SIG` rule
+criterion — see `docs/WRITING_RULES.md` and `data/rules/factory/flock_safety.json`
+for the Flock fingerprint. Because the sniffer is passive (listen-only),
+`SKEY_SCAN_ACTIVE` does not apply to WiFi.
 
 ### Concurrency
 

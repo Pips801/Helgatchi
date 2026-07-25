@@ -15,8 +15,9 @@
 //   CMD_SCAN_START — PowerManager opens a scan window
 //   CMD_SCAN_STOP  — scan window closes
 //
-// SKEY_SCAN_MODE bit 0 gates BLE (bit 1 reserved for WiFi). Settings
-// changes that touch SMASK_SCAN re-apply parameters on the next start.
+// SKEY_SCAN_MODE bit 0 gates BLE, bit 1 gates WiFi (a promiscuous
+// management-frame sniffer — beacons + probe requests). Settings changes that
+// touch SMASK_SCAN re-apply parameters on the next start.
 // ---------------------------------------------------------------------------
 
 class ScanEngine : public IEventHandler {
@@ -70,10 +71,11 @@ public:
     uint32_t wifiScans()      const { return _wifi_scan_count; }
     uint32_t wifiResults()    const { return _wifi_result_count; }
 
-    // True while an async WiFi sweep is in flight (esp_wifi busy). PowerManager
-    // folds this into its pre-sleep drain gate so we never deep-sleep mid-sweep
-    // (before CMD_SCAN_STOP has been dispatched to abort it).
-    bool     wifiBusy()       const { return _wifi_scan_inflight; }
+    // Kept for PowerManager's pre-sleep drain gate. The promiscuous sniffer has
+    // no in-flight async operation that must complete before stop (unlike the old
+    // esp_wifi_scan_start sweep), so there's nothing to wait on — always false.
+    // The gate still covers the queue/ring via queueDepth() + ring counters.
+    bool     wifiBusy()       const { return false; }
 
     // Number of ScanResults sitting in the BLE-host→main-loop queue. Used
     // by PowerManager to decide when post-scan-stop drain is complete.
@@ -91,7 +93,9 @@ private:
 
     bool      _wifi_initialized   = false;
     bool      _wifi_scanning      = false;   // WiFi is the active radio this phase
-    bool      _wifi_scan_inflight = false;   // the single per-phase WiFi.scanNetworks() is running
+    // Promiscuous sniffer channel-hop cursor (main loop advances it in tick()).
+    uint8_t   _sniff_hop_idx      = 0;       // index into WIFI_HOP_CHANNELS
+    uint32_t  _sniff_hop_ms       = 0;       // millis() of the last channel hop
 
     // Lock-on / foxhunt. When active the normal phase machine is bypassed; the
     // callbacks (BLE onResult, WiFi promiscuous rx) update _lockon_rssi /
@@ -141,10 +145,9 @@ private:
     // radio for scanning). Pre-called in begin() when WiFi scanning is enabled
     // so the WiFi stack comes up before NimBLE (ARCHITECTURE.md coex ordering).
     void ensureWifi();
-    bool _kickWifiScan();   // start one async passive sweep; returns true if it launched
-    void _startWifi();
-    void _stopWifi();
-    void _pollWifi();       // consume completed sweep + re-kick; called from tick()
+    void _startWifi();       // enter promiscuous MGMT sniffer, pin the first hop channel
+    void _stopWifi();        // leave promiscuous mode
+    void _pollWifiSniff();   // advance the 1/6/11 channel hop; called from tick()
 
     // Phase sequencing helpers.
     void _startDomain(uint8_t domain);   // SCAN_BLE / SCAN_WIFI

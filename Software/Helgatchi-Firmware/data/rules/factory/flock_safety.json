@@ -3,10 +3,11 @@
   "title": "Flock nearby",
   "vibe": "double_tap",
   "led": "red_blue",
-  "type": "ble",
+  "type": "auto",
   "action": "alert",
   "tag": ["Tactical", "Camera"],
   "criteria": [
+    { "ie_sig": ["2;12;127;221:506f9a16030103;45;191;221:0050f208000000"] },
     { "oui": ["B4:1E:52"] },
     { "name": [".*flock.*", ".*alpr.*", ".*camera.*"] },
     { "oui_org": [".*flock safety.*"] },

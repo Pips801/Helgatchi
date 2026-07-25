@@ -349,6 +349,7 @@ void RulesService::_freeCriterion(Criterion& c) {
         case CRIT_SSID_MATCH:
         case CRIT_OUI_ORG:
         case CRIT_MFG_ORG:
+        case CRIT_IE_SIG:
             if (c.v.str) heap_caps_free((void*)c.v.str);
             c.v.str = nullptr;
             break;
@@ -580,7 +581,7 @@ int RulesService::_addCriteriaToRule(Rule& r, const char* field, const char* val
     // replaced are gone.
     enum FieldKind {
         F_OUI, F_MAC, F_MFG, F_SERVICE,
-        F_NAME, F_SSID, F_OUI_ORG, F_MFG_ORG,
+        F_NAME, F_SSID, F_OUI_ORG, F_MFG_ORG, F_IE_SIG,
         F_UNKNOWN
     };
     FieldKind fk =
@@ -592,6 +593,7 @@ int RulesService::_addCriteriaToRule(Rule& r, const char* field, const char* val
         (strcasecmp(field, "ssid")    == 0) ? F_SSID     :
         (strcasecmp(field, "oui_org") == 0) ? F_OUI_ORG  :
         (strcasecmp(field, "mfg_org") == 0) ? F_MFG_ORG  :
+        (strcasecmp(field, "ie_sig")  == 0) ? F_IE_SIG   :
         F_UNKNOWN;
     if (fk == F_UNKNOWN) return -1;
 
@@ -649,12 +651,15 @@ int RulesService::_addCriteriaToRule(Rule& r, const char* field, const char* val
             case F_NAME:
             case F_SSID:
             case F_OUI_ORG:
-            case F_MFG_ORG: {
+            case F_MFG_ORG:
+            case F_IE_SIG: {
                 // Pattern kinds. Store the pattern verbatim (original case) for
                 // `rules show` and JSON round-trip, and classify its shape once
                 // so the hot path skips the regex engine for plain shapes.
                 // name/ssid match the device name; oui_org/mfg_org match the
-                // vendor name resolved per sighting at match time.
+                // vendor name resolved per sighting at match time; ie_sig matches
+                // the WiFi frame's IE fingerprint (tags joined by ';' so commas
+                // stay free as the criterion-value separator).
                 if (!re_lite_valid(tok)) { free(buf); return -1; }
                 uint8_t off = 0, len = 0;
                 const PatShape shape = _classifyPattern(tok, &off, &len);
@@ -662,7 +667,8 @@ int RulesService::_addCriteriaToRule(Rule& r, const char* field, const char* val
                 if (!dup) { free(buf); return -1; }
                 c.kind      = (fk == F_NAME)    ? CRIT_NAME_MATCH :
                               (fk == F_SSID)    ? CRIT_SSID_MATCH :
-                              (fk == F_OUI_ORG) ? CRIT_OUI_ORG    : CRIT_MFG_ORG;
+                              (fk == F_OUI_ORG) ? CRIT_OUI_ORG    :
+                              (fk == F_MFG_ORG) ? CRIT_MFG_ORG    : CRIT_IE_SIG;
                 c.pat_shape = shape;
                 c.pat_off   = off;
                 c.pat_len   = len;
@@ -719,6 +725,9 @@ bool RulesService::_criterionMatches(const Criterion& c, const ScanResult& s,
         case CRIT_MFG_ORG:
             return mfg_org && c.v.str &&
                    _patMatch(c.v.str, c.pat_shape, c.pat_off, c.pat_len, mfg_org);
+        case CRIT_IE_SIG:
+            return s.domain == SCAN_WIFI && c.v.str &&
+                   _patMatch(c.v.str, c.pat_shape, c.pat_off, c.pat_len, s.ie_sig);
         default:
             return false;
     }
@@ -834,6 +843,7 @@ static const char* _kindToField(CriterionKind k) {
         case CRIT_SSID_MATCH:  return "ssid";
         case CRIT_OUI_ORG:     return "oui_org";
         case CRIT_MFG_ORG:     return "mfg_org";
+        case CRIT_IE_SIG:      return "ie_sig";
         default:               return nullptr;
     }
 }
@@ -887,6 +897,7 @@ static void _appendCriterionValue(JsonArray arr, const Criterion& c) {
         case CRIT_SSID_MATCH:
         case CRIT_OUI_ORG:
         case CRIT_MFG_ORG:
+        case CRIT_IE_SIG:
             arr.add(c.v.str ? c.v.str : "");
             break;
         default:

@@ -73,6 +73,19 @@ A ruleset is one JSON file. Minimal shape:
 | `ssid`    | name, Wi-Fi only                 | **pattern** |
 | `oui_org` | IEEE vendor name for the OUI     | **pattern** (matched at runtime) |
 | `mfg_org` | BT SIG company name              | **pattern** (matched at runtime) |
+| `ie_sig`  | Wi-Fi 802.11 IE fingerprint, Wi-Fi only | **pattern** (see below) |
+
+`ie_sig` matches the ordered information-element fingerprint the WiFi sniffer
+builds for each captured beacon / probe request: the IE tag numbers in order,
+SSID (tag 0) omitted, joined by `;`, with vendor IEs (tag 221) expanded to
+`221:<first up-to-8 payload bytes in lowercase hex>`. Example (a Flock camera's
+station-mode probe request):
+`2;12;127;221:506f9a16030103;45;191;221:0050f208000000`. Use `;` — not `,` —
+between tags (comma is the criterion value separator). This fingerprint identifies
+a device by *how* it probes, independent of its (often shared or randomized) MAC —
+it's how the Flock ruleset tells a real camera from any other Espressif/Liteon
+device. To capture one from a real device, enable WiFi scanning and read the `ie=`
+field off the `scan` debug log (`debug level scan`).
 
 **Pattern cheat sheet** (case-insensitive, matches the *whole* value)
 

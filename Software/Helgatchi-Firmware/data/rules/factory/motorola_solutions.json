@@ -8,7 +8,7 @@
   "tag": ["Tactical", "Camera"],
   "criteria": [
     { "oui": ["4C:CC:34"] },
-    { "mfg": ["0x0008"] },
+    { "mfg": ["0x04EC"] },
     { "name": [".*motorola.*", ".*radio.*"] },
     { "oui_org": [".*motorola solutions.*"] },
     { "mfg_org": [".*motorola.*"] }

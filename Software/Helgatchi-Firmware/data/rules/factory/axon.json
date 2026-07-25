@@ -7,10 +7,10 @@
   "action": "alert",
   "tag": ["Tactical", "Camera"],
   "criteria": [
-    { "oui": ["00:25:DF", "00:58:28", "00:C0:D4", "84:70:03"] },
-    { "mfg": ["0x05D2"] },
+    { "oui": ["00:25:DF"] },
+    { "mfg": ["0x034D"] },
     { "name": [".*axon.*", ".*body cam.*", ".*evidence.*", ".*taser.*"] },
-    { "oui_org": [".*axon enterprise.*", ".*axon networks.*"] },
-    { "mfg_org": [".*axon.*"] }
+    { "oui_org": [".*axon enterprise.*", ".*taser.*"] },
+    { "mfg_org": [".*axon enterprise.*", ".*taser.*"] }
   ]
 }

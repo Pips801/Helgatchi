@@ -1,0 +1,13 @@
+{
+  "name": "Pro-Vision",
+  "title": "Pro-Vision bodycam nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "auto",
+  "action": "alert",
+  "tag": ["Tactical", "Camera"],
+  "criteria": [
+    { "oui": ["9C:83:BF"] },
+    { "oui_org": [".*pro-vision.*"] }
+  ]
+}

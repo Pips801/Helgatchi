@@ -1,0 +1,12 @@
+{
+  "name": "Boblov",
+  "title": "Boblov bodycam nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "wifi",
+  "action": "alert",
+  "tag": ["Camera"],
+  "criteria": [
+    { "ssid": ["amba-boss.*", "D1-.*", "A27-.*", "XR01_.*"] }
+  ]
+}

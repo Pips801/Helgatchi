@@ -66,7 +66,9 @@
       "Read(//opt/homebrew/bin/**)",
       "Read(//Users/kaydanlindsey/.nvm/versions/**)",
       "Bash(python3 -)",
-      "Bash(cd /Users/kaydanlindsey/Documents/Github/Helgatchi && ls -la .github/workflows/ 2>/dev/null; echo \"=== grep deploy refs to WebFlasher/index or firmware ===\"; grep -rniE \"webflasher|firmware/|versions.json|pages|upload-pages|actions/deploy\" .github 2>/dev/null | head -40)"
+      "Bash(cd /Users/kaydanlindsey/Documents/Github/Helgatchi && ls -la .github/workflows/ 2>/dev/null; echo \"=== grep deploy refs to WebFlasher/index or firmware ===\"; grep -rniE \"webflasher|firmware/|versions.json|pages|upload-pages|actions/deploy\" .github 2>/dev/null | head -40)",
+      "Bash(python -c \"import json,sys; d=json.load\\(open\\('data/rules/factory/axon.json'\\)\\); print\\('OK name=',repr\\(d['name']\\),'criteria=',len\\(d['criteria']\\)\\)\")",
+      "Bash(node -e \"const d=require\\('./data/rules/factory/axon.json'\\); console.log\\('OK name=',d.name,'criteria=',d.criteria.length\\)\")"
     ]
   }
 }

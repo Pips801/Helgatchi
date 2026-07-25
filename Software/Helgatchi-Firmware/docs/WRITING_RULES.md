@@ -52,7 +52,7 @@ A ruleset is one JSON file. Minimal shape:
 
 | Field      | Required | Value |
 |------------|----------|-------|
-| `name`     | yes | unique id, `[a-z0-9_]`, ≤ 55 chars (also the filename) |
+| `name`     | yes | unique id, ≤ 55 chars. For **user** rulesets it is also the on-disk filename (`/rules/user/<name>.json`), so keep it path-safe — `[a-z0-9_]`. Factory rulesets are read-only (never written back) and may use display-style names, including spaces (e.g. `"Flock Safety"`). |
 | `title`    | no  | text on the alert card (defaults to `name`) |
 | `type`     | no  | `ble` \| `wifi` \| `sys` \| `batt` \| `auto` (default: infer) |
 | `action`   | no  | `alert` (default) \| `party` |
@@ -674,7 +674,7 @@ use the new fields.
 
 - **Storage.** Rulesets live in PSRAM (`RulesService`, `src/rules_service.cpp`).
   In the code a ruleset is a `Rule` and a rule is a `Criterion`; the caps are
-  `MAX_RULES = 32` (rulesets) and `MAX_CRITERIA = 256` (rules per ruleset). The
+  `MAX_RULES = 64` (rulesets) and `MAX_CRITERIA = 256` (rules per ruleset). The
   pattern kinds (`name`/`ssid`/`oui_org`/`mfg_org`) store a verbatim string plus
   a classified shape. `oui_org`/`mfg_org` are resolved at match time against the
   sighting's vendor name (one cached bsearch per sighting), not expanded at load.

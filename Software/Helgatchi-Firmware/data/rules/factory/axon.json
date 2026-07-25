@@ -1,9 +1,5 @@
 {
-<<<<<<< HEAD
-  "name": "Axon Enterprise",
-=======
   "name": "Axon",
->>>>>>> 793b236 (refactor: update factory rules for names, viberations, and led.)
   "title": "Axon nearby",
   "vibe": "double_tap",
   "led": "red_blue",

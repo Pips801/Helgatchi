@@ -215,6 +215,7 @@ public:
 
         ScanResult r{};
         r.domain        = SCAN_BLE;
+        r.frame_kind    = FRAME_BLE_ADV;   // everything we observe over BLE is an advertisement
         r.timestamp_ms  = millis();
 
         // MAC — NimBLEAddress::getBase() returns ble_addr_t with `val` in
@@ -377,18 +378,18 @@ void ScanEngine::tick() {
                           r.mac[0], r.mac[1], r.mac[2],
                           r.mac[3], r.mac[4], r.mac[5],
                           (int)r.rssi, (unsigned)r.channel,
-                          r.frame_kind == FRAME_PROBE_REQ ? "probe" :
-                          r.frame_kind == FRAME_BEACON    ? "beacon" : "-",
+                          frameKindName(r.frame_kind),
                           oui_org ? oui_org : "----", r.name, r.ie_sig);
         } else if (log_raw) {
             const char* oui_org = vendor_for_mac(r.mac);
             const char* mfg_org = r.mfg_id ? vendor_mfg_lookup(r.mfg_id) : nullptr;
             Serial.printf("[scan] %02X:%02X:%02X:%02X:%02X:%02X "
-                          "type=%-8s rssi=%-4d mfg=0x%04X svc=%u "
+                          "type=%-8s frame=%-6s rssi=%-4d mfg=0x%04X svc=%u "
                           "oui=%-16.16s mfg_org=%-16.16s name=\"%s\"\n",
                           r.mac[0], r.mac[1], r.mac[2],
                           r.mac[3], r.mac[4], r.mac[5],
                           macTypeName(r.mac_type),
+                          frameKindName(r.frame_kind),
                           (int)r.rssi, (unsigned)r.mfg_id,
                           (unsigned)r.service_count,
                           oui_org ? oui_org : "----",

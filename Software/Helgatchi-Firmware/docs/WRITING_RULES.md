@@ -712,3 +712,57 @@ use the new fields.
 > and the `/rules/` directories predate the ruleset/rule vocabulary and still say
 > "rule" for the file. This doc uses ruleset (file) / rule (match entry); the API
 > names are unchanged.
+
+## 15. Roadmap — rules-engine v2
+
+The engine is evolving under a locked v2 design. **Shipped so far:**
+
+- **Regex + pattern fields** — `lib/re_lite/`, the `name`/`ssid`/`oui_org`/`mfg_org`
+  pattern kinds and their fast-path shapes (§14).
+- **Variable-length OUI prefixes** — 24/28/36/48-bit (MA-L / MA-M / MA-S / full
+  MAC), nibble-wise (§1, `oui`).
+- **Match-time vendor resolution** for `oui_org` / `mfg_org`.
+- **Wi-Fi IE fingerprint** matching (`ie_sig`, §1) for probe / beacon frames.
+
+**Not yet built:**
+
+- **AND groups.** Every rule in a ruleset is OR'd (§2); there is no way to require
+  "OUI X *and* SSID Y" as one condition. No workaround today.
+- **Cross-ruleset alert de-duplication (rule priority)** — see below.
+
+### 15.1 Cross-ruleset double-alerting (planned: rule priority / suppression)
+
+**Problem.** Alert dedup is keyed on `<ruleset-name>:<MAC>` (built in
+`RulesService::_fire`, `src/rules_service.cpp`), so it only coalesces re-fires
+*within a single ruleset*. When two **different** rulesets match the same device,
+each raises its own alert card. `_matchScan` evaluates every enabled ruleset
+independently (first matching criterion fires that ruleset, then `break`), so
+there is no cross-ruleset arbitration.
+
+This is most visible for Flock. A Flock camera's probe request matches
+`flock_safety.json` via `ie_sig` **and** `liteon_tech.json` (or
+`motorola_solutions.json`) via the camera's module-vendor OUI — two or three cards
+for one physical device. Those supplier-OUI rulesets are also inherently broad:
+Liteon/Motorola OUIs (and `mfg 0x0008`) fire on *any* Liteon/Motorola gear, not
+just Flock, and they carry the same `Tactical`/`Camera` tags as `flock_safety`, so
+a tag bulk-enable switches all of them on together.
+
+**Planned v2 fix.** Add a per-ruleset confidence/priority field. During the
+`_matchScan` drain, once a high-confidence ruleset (e.g. one matching on `ie_sig`)
+fires for a MAC, suppress lower-confidence OUI-only rulesets for that same MAC
+within the batch. This keeps broad OUI rules as a genuine fallback — they fire
+only when the precise rule doesn't — without the duplicate card.
+
+**Interim mitigations (data-only, no code change):**
+
+- **Retire / disable** the `(Flock) Liteon` and `(Flock) Motorola` supplier
+  rulesets. `ie_sig` plus Flock's own registered OUI `B4:1E:52` (already in
+  `flock_safety.json`) cover Flock cleanly; the supplier OUIs add mostly noise.
+- **Or de-scope them:** rename to plain vendor rulesets and drop the
+  `Tactical`/`Camera` tags, so a bulk-enable can't turn them on alongside
+  `flock_safety`.
+
+**Heavier alternative (not planned).** Re-key dedup to one card per **MAC**,
+listing every ruleset that matched. This removes all cross-ruleset duplication
+structurally, but reworks the alert model and the existing per-(rule, MAC) +
+RTC-persistence dedup, so it is out of scope for v2.

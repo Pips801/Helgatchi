@@ -285,6 +285,7 @@ static void _openMsgbox(uint8_t domain, const uint8_t mac[6]) {
     snprintf(line, sizeof(line), "Name: %s",        r->name[0] ? r->name : "(none)");  lv_msgbox_add_text(mb, line);
     snprintf(line, sizeof(line), "MAC: %s",         macbuf);                            lv_msgbox_add_text(mb, line);
     snprintf(line, sizeof(line), "Address type: %s", macTypeName(r->mac_type));         lv_msgbox_add_text(mb, line);
+    snprintf(line, sizeof(line), "Frame: %s",       frameKindName(r->frame_kind));      lv_msgbox_add_text(mb, line);
     snprintf(line, sizeof(line), "First seen: %s",  first_ago);                         lv_msgbox_add_text(mb, line);
     snprintf(line, sizeof(line), "Last seen: %s",   last_ago);                          lv_msgbox_add_text(mb, line);
     snprintf(line, sizeof(line), "RSSI: %d dBm",    (int)r->rssi);                      lv_msgbox_add_text(mb, line);

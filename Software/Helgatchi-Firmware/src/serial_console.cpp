@@ -1151,8 +1151,8 @@ void SerialConsole::_cmdScan(char* args) {
                       (unsigned)n, n == 1 ? "" : "s",
                       (unsigned long)g_scan_service.writePos());
         if (n == 0) return;
-        Serial.println(" #  dom   mac                type      rssi  age      mfg   oui-org         mfg-org         name");
-        Serial.println("--  ----  -----------------  --------  ----  -------  ----  --------------  --------------  ----");
+        Serial.println(" #  dom   mac                type      frame   rssi  age      mfg   oui-org         mfg-org         name");
+        Serial.println("--  ----  -----------------  --------  ------  ----  -------  ----  --------------  --------------  ----");
         const uint32_t now = millis();
         char age_buf[16];
         for (size_t i = 0; i < n; i++) {
@@ -1171,11 +1171,12 @@ void SerialConsole::_cmdScan(char* args) {
             if (!mfg_org) mfg_org = "----";
             // %.14s truncates each column to 14 chars to keep the table aligned;
             // for the full name use `vendor oui <prefix>` or `vendor mfg <id>`.
-            Serial.printf("%2u  %-4s  %02X:%02X:%02X:%02X:%02X:%02X  %-8s  %4d  %-7s  %s  %-14.14s  %-14.14s  %s\n",
+            Serial.printf("%2u  %-4s  %02X:%02X:%02X:%02X:%02X:%02X  %-8s  %-6s  %4d  %-7s  %s  %-14.14s  %-14.14s  %s\n",
                           (unsigned)i,
                           _scanDomainName((ScanDomain)r.domain),
                           r.mac[0], r.mac[1], r.mac[2], r.mac[3], r.mac[4], r.mac[5],
                           macTypeName(r.mac_type),
+                          frameKindName(r.frame_kind),
                           (int)r.rssi,
                           age_buf,
                           mfg_buf,

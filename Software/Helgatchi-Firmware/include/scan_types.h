@@ -18,13 +18,25 @@ enum ScanDomain : uint8_t {
     SCAN_WIFI = 1,
 };
 
-// 802.11 management-frame class for WiFi sightings, set by the promiscuous
-// sniffer. FRAME_UNKNOWN covers BLE and any non-classified row (injected tests).
+// Frame class for a sighting: 802.11 management subtype for WiFi (set by the
+// promiscuous sniffer) or a BLE advertisement. FRAME_UNKNOWN is the default for
+// non-classified rows (e.g. injected tests).
 enum FrameKind : uint8_t {
-    FRAME_UNKNOWN   = 0,   // BLE / not a classified 802.11 frame
+    FRAME_UNKNOWN   = 0,   // not a classified frame
     FRAME_BEACON    = 1,   // 802.11 beacon (type 0, subtype 8) — AP announcement
     FRAME_PROBE_REQ = 2,   // 802.11 probe request (type 0, subtype 4) — STA seeking APs
+    FRAME_BLE_ADV   = 3,   // BLE advertisement (everything we observe over BLE)
 };
+
+// Short label for `scan list` / debug / the device-detail popup. Never null.
+inline const char* frameKindName(uint8_t k) {
+    switch (k) {
+        case FRAME_BEACON:    return "beacon";   // WiFi AP
+        case FRAME_PROBE_REQ: return "probe";    // WiFi client
+        case FRAME_BLE_ADV:   return "adv";      // BLE advertisement
+        default:              return "-";
+    }
+}
 
 // BLE MAC address classification, derived from the advertised address type
 // plus (for random addresses) the two most-significant bits of the address.

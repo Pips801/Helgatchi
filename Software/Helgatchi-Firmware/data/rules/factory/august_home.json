@@ -1,0 +1,16 @@
+{
+  "name": "August Home",
+  "title": "August Smart Lock nearby",
+  "vibe": "bump",
+  "led": "rainbow_slow",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Smart Home"],
+  "criteria": [
+    { "mfg": [] },
+    { "oui": ["78:9C:85"] },
+    { "name": [".*august.*", ".*august lock.*"] },
+    { "oui_org": [".*august home.*", ".*august.*"] },
+    { "mfg_org": [".*august home.*"] }
+  ]
+}

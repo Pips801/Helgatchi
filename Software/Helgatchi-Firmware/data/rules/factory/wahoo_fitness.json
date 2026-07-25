@@ -1,0 +1,15 @@
+{
+  "name": "Wahoo Fitness",
+  "title": "Wahoo Fitness nearby",
+  "vibe": "bump",
+  "led": "white_chaser",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Fitness", "Wearable"],
+  "criteria": [
+    { "oui": ["B4:6F:2D"] },
+    { "name": [".*wahoo.*", ".*elemnt.*", ".*tickr.*"] },
+    { "oui_org": [".*wahoo.*"] },
+    { "mfg_org": [".*wahoo.*"] }
+  ]
+}

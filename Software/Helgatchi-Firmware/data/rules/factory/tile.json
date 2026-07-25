@@ -1,0 +1,14 @@
+{
+  "name": "Tile",
+  "title": "Tile Tracker nearby",
+  "vibe": "bump",
+  "led": "white_chaser",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Tracker"],
+  "criteria": [
+    { "mfg": ["0x067C"] },
+    { "name": [".*tile.*"] },
+    { "mfg_org": [".*tile.*"] }
+  ]
+}

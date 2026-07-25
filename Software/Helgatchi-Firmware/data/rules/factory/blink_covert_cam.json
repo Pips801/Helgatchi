@@ -1,0 +1,14 @@
+{
+  "name": "Blink Covert Cam",
+  "title": "Blink Camera nearby",
+  "vibe": "long_buzz",
+  "led": "white_chaser",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Camera"],
+  "criteria": [
+    { "oui": ["18:74:2E", "44:65:0D", "00:FC:8B", "FC:A6:67", "40:A2:DB"] },
+    { "name": [".*blink.*", ".*blinkcam.*"] },
+    { "oui_org": [".*blink home.*", ".*blink.*"] }
+  ]
+}

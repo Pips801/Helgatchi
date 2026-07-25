@@ -1,0 +1,16 @@
+{
+  "name": "Tuya Covert Cam",
+  "title": "Tuya Covert Camera",
+  "vibe": "bump",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Camera"],
+  "criteria": [
+    { "mfg": [] },
+    { "oui": ["70:89:76", "68:57:2D", "D4:A6:51", "18:69:D8", "A0:92:08"] },
+    { "name": [".*tuya.*", ".*smartlife.*", ".*smart life.*", ".*tuyacam.*", ".*smartcam.*"] },
+    { "oui_org": [".*tuya.*", ".*hangzhou tuya.*"] },
+    { "mfg_org": [".*tuya.*"] }
+  ]
+}

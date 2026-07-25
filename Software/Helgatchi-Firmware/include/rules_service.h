@@ -96,6 +96,8 @@ struct Rule {
                                      // filename segment ("<name>.json" ≤ 63);
                                      // AlertRecord::identifier must fit name+':'+12 hex MAC
     char            title[40];       // alert title shown in UI
+    char            tags[4][24];      // up to 4 tags per rule (e.g. "Smart Home", "Audio")
+    uint8_t         tag_count;
     HapticPatternId vibe;             // HAPTIC_PATTERN_COUNT = service default
     LedPatternId    led;              // LED_PATTERN_COUNT    = service default
     AlertType       alert_type;       // ALERT_TYPE_COUNT     = infer from scan domain
@@ -110,7 +112,7 @@ struct Rule {
 
 class RulesService : public IEventHandler {
 public:
-    static constexpr uint16_t MAX_RULES        = 32;
+    static constexpr uint16_t MAX_RULES        = 64;
     static constexpr uint16_t MAX_CRITERIA     = 256;   // hard cap per rule, protects against runaway org expansion
     static constexpr size_t   DRAIN_BATCH      = 16;    // scans processed per tick()
 
@@ -157,6 +159,12 @@ public:
     // of enabled names, so first boot / post-erase / factory reset all mean
     // "nothing enabled" until the user opts in.
     bool setEnabled(const char* name, bool enabled);
+
+    // --- Tag API ---
+    bool hasTag(const Rule& r, const char* tag) const;
+    bool isTagEnabled(const char* tag) const;
+    bool setTagEnabled(const char* tag, bool enabled);
+    uint16_t getUniqueTags(char out_tags[][24], uint16_t max_tags) const;
 
     // --- Machine-readable I/O for the web companion ---
 

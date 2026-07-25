@@ -16,11 +16,7 @@ RulesScreen g_rules_screen;
 // layout). C owns the data flow — one card per loaded ruleset, labelled with
 // the ruleset's `name` (the machine id the serial console uses). The switch
 // calls g_rules.setEnabled(); RulesService posts EV_RULES_CHANGED on every
-// mutation, so serial-console toggles (and the upcoming tag bulk-toggles)
-// flip the switches in place.
-//
-// Cards append to the end of the container's flex column — after
-// no_rulesets_label, i.e. under the "INDIVIDUAL RULES" header.
+// mutation, so serial-console toggles and tag bulk-toggles flip switches.
 // ---------------------------------------------------------------------------
 
 struct RuleCard {
@@ -30,11 +26,23 @@ struct RuleCard {
     char      name[sizeof(Rule::name)] = {};
 };
 
+struct TagCard {
+    lv_obj_t* panel = nullptr;
+    lv_obj_t* label = nullptr;
+    lv_obj_t* sw    = nullptr;
+    char      tag[24] = {};
+};
+
 static RuleCard _cards[RulesService::MAX_RULES];
 static uint16_t _card_count = 0;
-static bool     _inhibit    = false;   // guards switch callbacks during programmatic sync
+
+static TagCard  _tag_cards[16];
+static uint16_t _tag_card_count = 0;
+
+static bool     _inhibit = false;   // guards switch callbacks during programmatic sync
 
 static void _setSwitch(lv_obj_t* sw, bool on) {
+    if (!sw) return;
     if (on) lv_obj_add_state(sw, LV_STATE_CHECKED);
     else    lv_obj_remove_state(sw, LV_STATE_CHECKED);
 }
@@ -46,22 +54,19 @@ static void _onSwitchChanged(lv_event_t* e) {
     auto* card = (RuleCard*)lv_event_get_user_data(e);
     const bool checked = lv_obj_has_state(card->sw, LV_STATE_CHECKED);
     if (!g_rules.setEnabled(card->name, checked)) {
-        // Stale card (ruleset vanished mid-frame) — revert the switch; the
-        // pending EV_RULES_CHANGED rebuild will reconcile the list.
         _inhibit = true;
         _setSwitch(card->sw, !checked);
         _inhibit = false;
     }
 }
 
-// Instantiate the EEZ-designed Rule user widget so its layout and styles come
-// straight from create_user_widget_rule() in src/UI/screens.c — the single
-// place to edit them. The generated builder stores its child pointers into
-// objects[startWidgetIndex + 0..2]; the widget isn't placed on a screen (so
-// it has no reserved slots) and is never ticked by EEZ, so we lend it slots
-// [0..2] for the call, read the created objects back, then restore the
-// originals. Index mapping matches create_user_widget_rule(): +0 panel,
-// +1 label, +2 switch.
+static void _onTagSwitchChanged(lv_event_t* e) {
+    if (_inhibit) return;
+    auto* card = (TagCard*)lv_event_get_user_data(e);
+    const bool checked = lv_obj_has_state(card->sw, LV_STATE_CHECKED);
+    g_rules.setTagEnabled(card->tag, checked);
+}
+
 static void _buildCard(lv_obj_t* parent, RuleCard* out) {
     lv_obj_t** slots = (lv_obj_t**)&objects;
     lv_obj_t*  saved[3];
@@ -75,17 +80,43 @@ static void _buildCard(lv_obj_t* parent, RuleCard* out) {
 
     for (int i = 0; i < 3; i++) slots[i] = saved[i];
 
-    // Cap the label short of the switch so a long ruleset name ellipsizes
-    // instead of running underneath it.
     lv_obj_set_width(out->label, LV_PCT(72));
     lv_label_set_long_mode(out->label, LV_LABEL_LONG_MODE_DOTS);
 
     lv_obj_add_event_cb(out->sw, _onSwitchChanged, LV_EVENT_VALUE_CHANGED, out);
 }
 
-// Keypad nav: EEZ's rules screen-load handler clears groups.UINavigation, so
-// re-add every card switch in visual order (alerts-screen pattern).
+static void _buildTagCard(lv_obj_t* parent, TagCard* out) {
+    lv_obj_t** slots = (lv_obj_t**)&objects;
+    lv_obj_t*  saved[3];
+    for (int i = 0; i < 3; i++) saved[i] = slots[i];
+
+    create_user_widget_rule(parent, nullptr, 0);
+
+    out->panel = slots[0];
+    out->label = slots[1];
+    out->sw    = slots[2];
+
+    for (int i = 0; i < 3; i++) slots[i] = saved[i];
+
+    lv_obj_set_width(out->label, LV_PCT(72));
+    lv_label_set_long_mode(out->label, LV_LABEL_LONG_MODE_DOTS);
+
+    // Place tag cards right before the individual_rules_header inside rules_container
+    if (objects.individual_rules_header) {
+        int32_t header_idx = lv_obj_get_index(objects.individual_rules_header);
+        if (header_idx >= 0) {
+            lv_obj_move_to_index(out->panel, header_idx);
+        }
+    }
+
+    lv_obj_add_event_cb(out->sw, _onTagSwitchChanged, LV_EVENT_VALUE_CHANGED, out);
+}
+
 static void _populateNavGroup() {
+    for (uint16_t i = 0; i < _tag_card_count; i++) {
+        if (_tag_cards[i].sw) lv_group_add_obj(groups.UINavigation, _tag_cards[i].sw);
+    }
     for (uint16_t i = 0; i < _card_count; i++) {
         if (_cards[i].sw) lv_group_add_obj(groups.UINavigation, _cards[i].sw);
     }
@@ -93,7 +124,7 @@ static void _populateNavGroup() {
 
 static void _updateChrome() {
     const uint16_t n_rules = g_rules.count();
-    const uint16_t n_tags  = 0;   // no tags yet — wired for the tags pass
+    const uint16_t n_tags  = _tag_card_count;
 
     lv_label_set_text_fmt(objects.individual_rules_header,
                           "%u INDIVIDUAL RULE%s", (unsigned)n_rules, n_rules == 1 ? "" : "S");
@@ -106,8 +137,6 @@ static void _updateChrome() {
     else             lv_obj_remove_flag(objects.no_tags_label, LV_OBJ_FLAG_HIDDEN);
 }
 
-// True when the loaded ruleset list still matches the cards one-to-one (same
-// count, same names in order) — i.e. only enabled state can have changed.
 static bool _cardsMatchRules() {
     if (_card_count != g_rules.count()) return false;
     for (uint16_t i = 0; i < _card_count; i++) {
@@ -118,6 +147,16 @@ static bool _cardsMatchRules() {
 }
 
 static void _rebuild() {
+    // Clean old tag cards
+    for (uint16_t i = 0; i < _tag_card_count; i++) {
+        if (_tag_cards[i].panel && lv_obj_is_valid(_tag_cards[i].panel)) {
+            lv_obj_del(_tag_cards[i].panel);
+        }
+        _tag_cards[i] = TagCard{};
+    }
+    _tag_card_count = 0;
+
+    // Clean old rule cards
     for (uint16_t i = 0; i < _card_count; i++) {
         if (_cards[i].panel && lv_obj_is_valid(_cards[i].panel)) {
             lv_obj_del(_cards[i].panel);
@@ -126,6 +165,21 @@ static void _rebuild() {
     }
     _card_count = 0;
 
+    // Build Tag filter cards
+    char tags[16][24];
+    uint16_t num_tags = g_rules.getUniqueTags(tags, 16);
+    for (uint16_t i = 0; i < num_tags; i++) {
+        TagCard* card = &_tag_cards[_tag_card_count];
+        _buildTagCard(objects.rules_container, card);
+        strncpy(card->tag, tags[i], sizeof(card->tag) - 1);
+        lv_label_set_text(card->label, tags[i]);
+        _inhibit = true;
+        _setSwitch(card->sw, g_rules.isTagEnabled(tags[i]));
+        _inhibit = false;
+        _tag_card_count++;
+    }
+
+    // Build Rule cards
     const uint16_t n = g_rules.count();
     for (uint16_t i = 0; i < n && i < RulesService::MAX_RULES; i++) {
         const Rule* r = g_rules.get(i);
@@ -141,10 +195,14 @@ static void _rebuild() {
     }
 }
 
-// Sync UI to g_rules. Same ruleset set → just re-sync switch states (the
-// common case: a serial or tag toggle; preserves scroll position). Set
-// changed (create/delete/reload) → full rebuild.
 static void _refresh() {
+    // Re-sync tag switches
+    _inhibit = true;
+    for (uint16_t i = 0; i < _tag_card_count; i++) {
+        _setSwitch(_tag_cards[i].sw, g_rules.isTagEnabled(_tag_cards[i].tag));
+    }
+    _inhibit = false;
+
     if (_cardsMatchRules()) {
         _inhibit = true;
         for (uint16_t i = 0; i < _card_count; i++) {
@@ -169,13 +227,9 @@ static void _refresh() {
 void RulesScreen::begin(EventBus& bus) {
     bus.subscribe(EV_RULES_CHANGED, this);
 
-    // g_rules loads before g_ui in setup(), so the list is ready now.
     _rebuild();
     _updateChrome();
 
-    // Repopulate the keypad nav group with the card switches when the rules
-    // screen loads (EEZ's own handler clears the group first), and apply any
-    // change that arrived while another screen was active.
     if (objects.rules) {
         lv_obj_add_event_cb(objects.rules, [](lv_event_t* /*e*/) {
             if (g_rules_screen._dirty) {

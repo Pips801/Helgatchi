@@ -1,0 +1,16 @@
+{
+  "name": "Google Nest",
+  "title": "Google Nest nearby",
+  "vibe": "bump",
+  "led": "rainbow_slow",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Smart Home"],
+  "criteria": [
+    { "mfg": ["0x00E0", "0x018E"] },
+    { "oui": ["18:B4:30", "64:16:66"] },
+    { "name": [".*nest.*", ".*google home.*", ".*nest hub.*"] },
+    { "oui_org": [".*nest labs.*", ".*google.*"] },
+    { "mfg_org": [".*google.*"] }
+  ]
+}

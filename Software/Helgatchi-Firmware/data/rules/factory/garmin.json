@@ -1,0 +1,20 @@
+{
+  "name": "Garmin",
+  "title": "Garmin nearby",
+  "vibe": "bump",
+  "led": "white_chaser",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Fitness", "Wearable"],
+  "criteria": [
+    { "mfg": ["0x0087"] },
+    { "oui": [
+      "00:05:4F", "0C:7E:24", "10:4E:89", "10:C6:FC", "14:13:0B",
+      "14:8F:21", "38:F9:F5", "60:3C:68", "64:A3:37", "90:F1:57",
+      "A0:28:84", "B4:C2:6A", "C4:CB:33", "E0:48:24", "F0:99:19"
+    ] },
+    { "name": [".*garmin.*", ".*forerunner.*", ".*fenix.*", ".*vivosmart.*", ".*venu.*", ".*epix.*"] },
+    { "oui_org": [".*garmin.*"] },
+    { "mfg_org": [".*garmin.*"] }
+  ]
+}

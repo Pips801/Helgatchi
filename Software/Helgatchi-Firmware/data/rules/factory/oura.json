@@ -1,0 +1,16 @@
+{
+  "name": "Oura",
+  "title": "Oura Ring nearby",
+  "vibe": "bump",
+  "led": "white_chaser",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Fitness", "Wearable"],
+  "criteria": [
+    { "mfg": ["0x0304", "0x02B2"] },
+    { "oui": ["A0:38:F8"] },
+    { "name": [".*oura.*"] },
+    { "oui_org": [".*oura.*"] },
+    { "mfg_org": [".*oura.*"] }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "P2P Hidden Cam",
+  "title": "P2P Hidden Camera",
+  "vibe": "bump",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Camera"],
+  "criteria": [
+    { "name": [
+      ".*lookcam.*", ".*look-cam.*", ".*iwfcam.*", ".*bvcam.*",
+      ".*hdminicam.*", ".*hdlivecam.*", ".*hdcam.*", ".*ipcam.*",
+      ".*fredi.*", ".*lxmimi.*"
+    ] },
+    { "ssid": [
+      "BK.*", "DBK.*", "BVCAM.*", "IWFCAM.*",
+      "CM.*", "YM.*", "JJ.*", "LOOKCAM.*",
+      "HDCAM.*", "IPCAM.*", "HDLIVECAM.*", "FREDI.*", "LXMIMI.*"
+    ] },
+    { "oui_org": [".*lookcam.*", ".*iwfcam.*", ".*bvcam.*", ".*hdminicam.*", ".*hdlivecam.*"] },
+    { "mfg_org": [".*lookcam.*", ".*iwfcam.*", ".*bvcam.*", ".*hdminicam.*", ".*hdlivecam.*"] }
+  ]
+}

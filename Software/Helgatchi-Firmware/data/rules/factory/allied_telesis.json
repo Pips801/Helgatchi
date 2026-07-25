@@ -5,6 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
+  "tag": ["Tactical", "Networking"],
   "criteria": [
     { "oui": ["00:15:77"] },
     { "name": [".*allied telesis.*", ".*telesis.*"] },

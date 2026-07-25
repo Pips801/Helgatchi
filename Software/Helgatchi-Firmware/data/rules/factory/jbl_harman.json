@@ -1,0 +1,14 @@
+{
+  "name": "JBL Harman Audio",
+  "title": "JBL / Harman Audio nearby",
+  "vibe": "bump",
+  "led": "rainbow_slow",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Audio"],
+  "criteria": [
+    { "mfg": ["0x0057"] },
+    { "name": [".*jbl.*", ".*harman.*", ".*flip.*", ".*charge.*", ".*clip.*", ".*pulse.*", ".*boombox.*", ".*xtreme.*"] },
+    { "mfg_org": [".*harman.*", ".*jbl.*"] }
+  ]
+}

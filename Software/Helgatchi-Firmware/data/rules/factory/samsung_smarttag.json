@@ -1,0 +1,18 @@
+{
+  "name": "Samsung SmartTag",
+  "title": "Samsung ST nearby",
+  "vibe": "bump",
+  "led": "white_chaser",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Tracker"],
+  "criteria": [
+    { "mfg": ["0x0075"] },
+    { "oui": [
+      "00:7C:2D", "00:B5:D0", "04:B1:A1", "04:B4:29",
+      "04:B9:E3", "04:E4:B6", "28:9F:04"
+    ] },
+    { "name": [".*smarttag.*", ".*smart tag.*"] },
+    { "mfg_org": [".*samsung.*"] }
+  ]
+}

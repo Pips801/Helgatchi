@@ -1,15 +1,20 @@
 {
+<<<<<<< HEAD
   "name": "Axon Enterprise",
+=======
+  "name": "Axon",
+>>>>>>> 793b236 (refactor: update factory rules for names, viberations, and led.)
   "title": "Axon nearby",
   "vibe": "double_tap",
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
+  "tag": ["Tactical", "Camera"],
   "criteria": [
-    { "oui": ["00:25:DF"] },
+    { "oui": ["00:25:DF", "00:58:28", "00:C0:D4", "84:70:03"] },
     { "mfg": ["0x05D2"] },
     { "name": [".*axon.*", ".*body cam.*", ".*evidence.*", ".*taser.*"] },
-    { "oui_org": [".*axon enterprise.*"] },
+    { "oui_org": [".*axon enterprise.*", ".*axon networks.*"] },
     { "mfg_org": [".*axon.*"] }
   ]
 }

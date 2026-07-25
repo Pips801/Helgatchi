@@ -1,0 +1,14 @@
+{
+  "name": "Moto Tag",
+  "title": "Motorola Moto Tag nearby",
+  "vibe": "bump",
+  "led": "white_chaser",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Tracker"],
+  "criteria": [
+    { "mfg": ["0x00E0", "0x000F"] },
+    { "name": [".*moto tag.*", ".*mototag.*"] },
+    { "mfg_org": [".*motorola.*"] }
+  ]
+}

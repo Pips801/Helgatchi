@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "auto",
   "action": "alert",
-  "tag": ["Tactical", "Audio"],
+  "tag": ["Surveillance"],
   "criteria": [
     { "oui": ["D4:11:D6"] },
     { "oui_org": [".*shotspotter.*", ".*soundthinking.*"] }

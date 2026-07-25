@@ -5,7 +5,7 @@
   "led": "rainbow_slow",
   "type": "ble",
   "action": "alert",
-  "tag": ["Audio", "Wearable"],
+  "tag": ["Audio"],
   "criteria": [
     { "mfg": ["0x009E"] },
     { "oui": [

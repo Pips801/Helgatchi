@@ -5,7 +5,7 @@
   "led": "white_chaser",
   "type": "ble",
   "action": "alert",
-  "tag": ["Fitness", "Wearable"],
+  "tag": ["Wearable"],
   "criteria": [
     { "name": [".*whoop.*"] },
     { "oui_org": [".*whoop.*"] },

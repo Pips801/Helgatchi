@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "wifi",
   "action": "alert",
-  "tag": ["Camera"],
+  "tag": ["Tactical"],
   "criteria": [
     { "ssid": ["amba-boss.*", "D1-.*", "A27-.*", "XR01_.*"] }
   ]

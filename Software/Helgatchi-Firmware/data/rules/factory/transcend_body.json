@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "auto",
   "action": "alert",
-  "tag": ["Tactical", "Camera"],
+  "tag": ["Tactical"],
   "criteria": [
     { "oui": ["7C:35:48"] },
     { "oui_org": [".*transcend information.*"] },

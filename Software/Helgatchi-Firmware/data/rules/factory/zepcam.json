@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "auto",
   "action": "alert",
-  "tag": ["Tactical", "Camera"],
+  "tag": ["Tactical"],
   "criteria": [
     { "oui": ["48:46:8D"] },
     { "oui_org": [".*zepcam.*"] }

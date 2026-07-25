@@ -5,7 +5,7 @@
   "led": "white_chaser",
   "type": "ble",
   "action": "alert",
-  "tag": ["Fitness", "Wearable"],
+  "tag": ["Wearable"],
   "criteria": [
     { "mfg": ["0x0304", "0x02B2"] },
     { "oui": ["A0:38:F8"] },

@@ -5,7 +5,7 @@
   "led": "white_chaser",
   "type": "ble",
   "action": "alert",
-  "tag": ["Fitness", "Wearable"],
+  "tag": ["Wearable"],
   "criteria": [
     { "oui": ["00:24:E4", "A4:7E:FA"] },
     { "name": [".*withings.*", ".*scanwatch.*", ".*steel hr.*"] },

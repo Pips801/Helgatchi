@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "auto",
   "action": "alert",
-  "tag": ["Tactical", "Camera"],
+  "tag": ["Tactical"],
   "criteria": [
     { "oui": ["FC:01:9E"] },
     { "oui_org": [".*vievu.*"] }

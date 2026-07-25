@@ -5,7 +5,7 @@
   "led": "rainbow_slow",
   "type": "ble",
   "action": "alert",
-  "tag": ["Smart Home"],
+  "tag": ["Camera"],
   "criteria": [
     { "mfg": ["0x00E0", "0x018E"] },
     { "oui": ["18:B4:30", "64:16:66"] },

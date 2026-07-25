@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "auto",
   "action": "alert",
-  "tag": ["Tactical"],
+  "tag": ["Surveillance"],
   "criteria": [
     { "oui": ["00:17:3D"] },
     { "oui_org": [".*neology.*"] }

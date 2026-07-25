@@ -5,10 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": [
-    "Tactical",
-    "Camera"
-  ],
+  "tag": ["Surveillance"],
   "criteria": [
     {
       "oui": [

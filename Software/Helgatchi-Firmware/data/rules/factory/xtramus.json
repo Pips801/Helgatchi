@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["Tactical"],
+  "tag": ["Networking"],
   "criteria": [
     { "oui": ["00:22:A2"] },
     { "name": [".*xtramus.*"] },

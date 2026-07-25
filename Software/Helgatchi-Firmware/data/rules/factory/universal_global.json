@@ -5,7 +5,7 @@
   "led": "red_blue",
   "type": "ble",
   "action": "alert",
-  "tag": ["Tactical"],
+  "tag": ["Networking"],
   "criteria": [
     { "oui": ["08:3a:88", "E0:4F:43"] },
     { "name": [".*universal global.*", ".*ugsi.*"] },

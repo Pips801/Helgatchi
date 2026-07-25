@@ -1,0 +1,13 @@
+{
+  "name": "Genetec",
+  "title": "Genetec system nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "auto",
+  "action": "alert",
+  "tag": ["Tactical", "Camera"],
+  "criteria": [
+    { "oui": ["0C:BF:15", "00:BF:15", "00:0A:B1"] },
+    { "oui_org": [".*genetec.*"] }
+  ]
+}

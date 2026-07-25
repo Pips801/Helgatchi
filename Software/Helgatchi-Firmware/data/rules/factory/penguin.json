@@ -1,0 +1,13 @@
+{
+  "name": "Penguin",
+  "title": "Penguin device nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "auto",
+  "action": "alert",
+  "tag": ["Tactical", "Camera"],
+  "criteria": [
+    { "name": ["penguin"] },
+    { "ssid": ["penguin"] }
+  ]
+}

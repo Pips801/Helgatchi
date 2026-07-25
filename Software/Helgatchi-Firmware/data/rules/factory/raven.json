@@ -1,0 +1,13 @@
+{
+  "name": "Flock Raven",
+  "title": "Flock Raven nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "ble",
+  "action": "alert",
+  "tag": ["Tactical", "Audio"],
+  "criteria": [
+    { "service": ["3100", "3200", "3300", "3400", "3500"] },
+    { "name": [".*raven.*"] }
+  ]
+}

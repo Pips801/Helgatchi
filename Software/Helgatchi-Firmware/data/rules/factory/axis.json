@@ -1,0 +1,13 @@
+{
+  "name": "Axis Communications",
+  "title": "Axis camera nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "auto",
+  "action": "alert",
+  "tag": ["Tactical", "Camera"],
+  "criteria": [
+    { "oui": ["B8:A4:4F", "00:40:8C", "E8:27:25", "AC:CC:8E"] },
+    { "oui_org": [".*axis communications.*"] }
+  ]
+}

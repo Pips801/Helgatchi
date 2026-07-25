@@ -9,7 +9,8 @@
   "criteria": [
     { "ie_sig": ["2;12;127;221:506f9a16030103;45;191;221:0050f208000000"] },
     { "oui": ["B4:1E:52"] },
-    { "name": [".*flock.*", ".*alpr.*", ".*camera.*"] },
+    { "name": [".*flock.*", ".*alpr.*", ".*camera.*", ".*fs ext battery.*"] },
+    { "ssid": [".*fs ext battery.*"] },
     { "oui_org": [".*flock safety.*"] },
     { "mfg_org": [".*flock.*"] }
   ]

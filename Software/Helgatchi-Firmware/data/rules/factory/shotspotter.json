@@ -1,0 +1,13 @@
+{
+  "name": "ShotSpotter",
+  "title": "ShotSpotter sensor nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "auto",
+  "action": "alert",
+  "tag": ["Tactical", "Audio"],
+  "criteria": [
+    { "oui": ["D4:11:D6"] },
+    { "oui_org": [".*shotspotter.*", ".*soundthinking.*"] }
+  ]
+}

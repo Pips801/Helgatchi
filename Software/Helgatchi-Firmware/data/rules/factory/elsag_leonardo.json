@@ -1,0 +1,13 @@
+{
+  "name": "ELSAG Leonardo",
+  "title": "ELSAG/Leonardo nearby",
+  "vibe": "double_tap",
+  "led": "red_blue",
+  "type": "auto",
+  "action": "alert",
+  "tag": ["Tactical", "Camera"],
+  "criteria": [
+    { "oui": ["00:40:DE", "00:17:28", "00:80:E7"] },
+    { "oui_org": [".*elsag.*", ".*leonardo.*", ".*selex.*"] }
+  ]
+}

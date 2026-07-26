@@ -76,6 +76,8 @@ enum EventId : uint16_t {
     EV_BTN_CENTER_SHORT,    // center released before long-press threshold
     EV_BTN_CENTER_LONG,     // center held >= HAL_LONG_PRESS_MS
     EV_BTN_CENTER_HOLD,     // center still held at HAL_HOLD_MS (fires once per press)
+    EV_BTN_WAKE,            // press landed on a dark screen — consumed as "wake display",
+                            // the whole press cycle is swallowed (no LEFT/RIGHT/SHORT/LONG/HOLD)
 
     EVENT_ID_COUNT,
     EVENT_ID_INVALID = 0xFFFF

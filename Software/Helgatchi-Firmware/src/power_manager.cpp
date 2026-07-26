@@ -143,6 +143,7 @@ void PowerManager::begin(EventBus& bus) {
     bus.subscribe(EV_BTN_RIGHT,             this);
     bus.subscribe(EV_BTN_CENTER_SHORT,      this);
     bus.subscribe(EV_BTN_CENTER_LONG,       this);
+    bus.subscribe(EV_BTN_WAKE,              this);
 
     _wake_ms          = millis();
     _last_batt_ms     = _wake_ms;
@@ -410,6 +411,7 @@ void PowerManager::onEvent(const Event& e) {
         case EV_BTN_RIGHT:
         case EV_BTN_CENTER_SHORT:
         case EV_BTN_CENTER_LONG:
+        case EV_BTN_WAKE:   // dark-screen press HAL swallowed — wake is its whole job
             _screen_off_override = false;
             _user_active         = true;
             _last_activity_ms    = millis();

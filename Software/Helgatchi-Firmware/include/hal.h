@@ -114,6 +114,7 @@ private:
     struct BtnDebounce {
         bool     state        = false;
         bool     raw_prev     = false;
+        bool     wake_swallow = false;   // press began on a dark screen — cycle emits no EV_BTN_*
         uint32_t stable_since = 0;
     };
 
@@ -122,6 +123,11 @@ private:
     bool        _center_long_fired = false;
     bool        _center_hold_fired = false;
     esp_timer_handle_t _btn_timer  = nullptr;   // periodic button-poll timer (HAL_BTN_POLL_MS)
+
+    // True while the backlight is fully off (sleepDisplay). Sampled at each
+    // press's falling edge to decide whether that press means "wake" (#53).
+    // begin() leaves the screen off, so start asleep.
+    bool     _display_asleep    = true;
 
     bool     _usb_attached      = false;
     bool     _serial_open       = false;   // (bool)Serial edge tracking for EV_SERIAL_*

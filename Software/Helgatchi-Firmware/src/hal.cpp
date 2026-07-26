@@ -176,14 +176,17 @@ void HAL::wakeDisplay() {
     uint8_t bl = g_settings.get(SKEY_SCREEN_BRIGHTNESS);
     if (bl >= SCREEN_BRIGHTNESS_COUNT) bl = SCREEN_BRIGHTNESS_HIGH;
     ledcWrite(HAL_BL_LEDC_CH, HAL_BL_LEVELS[bl]);
+    _display_asleep = false;
 }
 
 void HAL::dimDisplay() {
     ledcWrite(HAL_BL_LEDC_CH, HAL_BL_LEVELS[SCREEN_BRIGHTNESS_MIN]);
+    _display_asleep = false;   // DIM is still visible — presses act normally
 }
 
 void HAL::sleepDisplay() {
     ledcWrite(HAL_BL_LEDC_CH, 0);
+    _display_asleep = true;
 }
 
 void HAL::prepareForSleep() {
@@ -345,17 +348,29 @@ void HAL::_pollButtons() {
 
         if (!was && _btn[i].state) {
             // Falling edge (press)
-            _bus->post(EV_UI_ACTIVITY);
-            if      (i == 0) _bus->post(EV_BTN_LEFT);
-            else if (i == 1) _bus->post(EV_BTN_RIGHT);
-            else {
-                _center_down_at    = now;
-                _center_long_fired = false;
-                _center_hold_fired = false;
+            if (_display_asleep) {
+                // Press landed on a dark screen — its only meaning is "wake"
+                // (#53). Swallow the entire press cycle so it can't also
+                // navigate/click; EV_BTN_WAKE turns the display on (and clears
+                // a manual screen-off) in PowerManager. Input resumes on the
+                // next press, which lands on a lit screen.
+                _btn[i].wake_swallow = true;
+                _bus->post(EV_BTN_WAKE);
+            } else {
+                _bus->post(EV_UI_ACTIVITY);
+                if      (i == 0) _bus->post(EV_BTN_LEFT);
+                else if (i == 1) _bus->post(EV_BTN_RIGHT);
+                else {
+                    _center_down_at    = now;
+                    _center_long_fired = false;
+                    _center_hold_fired = false;
+                }
             }
         } else if (was && !_btn[i].state) {
             // Rising edge (release)
-            if (i == 2 && !_center_long_fired) {
+            if (_btn[i].wake_swallow) {
+                _btn[i].wake_swallow = false;   // wake press ends here, silently
+            } else if (i == 2 && !_center_long_fired) {
                 _bus->post(EV_BTN_CENTER_SHORT);
             }
         }
@@ -364,7 +379,9 @@ void HAL::_pollButtons() {
     // Long-press detection for center button. Two thresholds:
     //   HAL_LONG_PRESS_MS (~600 ms)  → EV_BTN_CENTER_LONG  (back / pop screen)
     //   HAL_HOLD_MS       (~2000 ms) → EV_BTN_CENTER_HOLD  (sleep on main menu)
-    if (_btn[2].state) {
+    // A wake-swallowed center press arms neither threshold (its down-timestamp
+    // is stale), so it's excluded here too.
+    if (_btn[2].state && !_btn[2].wake_swallow) {
         const uint32_t held = now - _center_down_at;
         if (!_center_long_fired && held >= HAL_LONG_PRESS_MS) {
             _center_long_fired = true;

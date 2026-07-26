@@ -65,6 +65,7 @@ static DebugLevel _minLevelForEvent(EventId id) {
         case EV_BTN_CENTER_SHORT:
         case EV_BTN_CENTER_LONG:
         case EV_BTN_CENTER_HOLD:
+        case EV_BTN_WAKE:
         case EV_BATTERY_UPDATED:
         case CMD_SETTINGS_SET:
         case CMD_SETTINGS_SAVE:
@@ -543,6 +544,7 @@ const char* LogService::_eventName(EventId id) {
         case EV_BTN_CENTER_SHORT:        return "EV_BTN_CENTER_SHORT";
         case EV_BTN_CENTER_LONG:         return "EV_BTN_CENTER_LONG";
         case EV_BTN_CENTER_HOLD:         return "EV_BTN_CENTER_HOLD";
+        case EV_BTN_WAKE:                return "EV_BTN_WAKE";
         default:                         return "UNKNOWN";
     }
 }

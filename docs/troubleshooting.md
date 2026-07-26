@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Symptoms first, theory later. If a fix here doesn't work, open an issue with
+If a fix here doesn't work, open an issue with
 your firmware version (`stats` on the [serial console](serial-console.md)).
 
 ## It won't turn on

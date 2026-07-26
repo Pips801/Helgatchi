@@ -6,6 +6,7 @@
 #include <lvgl.h>
 #include <esp_random.h>
 #include <cstdio>
+#include <string.h>
 
 OverviewScreen g_overview_screen;
 
@@ -92,6 +93,38 @@ static const AnimDef ANIMS[HELGA__COUNT] = {
     /* HELGA_SLEEP */ { CLIP_SLEEP_START,       CLIP_SLEEP,         -1                  },
 };
 
+// Names for the serial console, index-matched to HelgaAnim / ANIMS.
+static const char* const s_anim_name[] = {
+    "idle",     // HELGA_IDLE
+    "fidget",   // HELGA_IDLE2
+    "sneeze",   // HELGA_IDLE3
+    "wag",      // HELGA_IDLE4
+    "head_tilt",// HELGA_IDLE5
+    "sit",      // HELGA_SIT
+    "walk",     // HELGA_WALK
+    "party",    // HELGA_PARTY
+    "dance",    // HELGA_DANCE
+    "sniff",    // HELGA_SNIFF
+    "alert",    // HELGA_ALERT
+    "brush",    // HELGA_BRUSH
+    "sleep",    // HELGA_SLEEP
+};
+static_assert(sizeof(s_anim_name) / sizeof(s_anim_name[0]) == HELGA__COUNT,
+              "s_anim_name out of sync with HelgaAnim");
+
+const char* helgaAnimName(HelgaAnim id) {
+    if (id >= HELGA__COUNT) return "?";
+    return s_anim_name[id];
+}
+
+HelgaAnim helgaAnimByName(const char* name) {
+    if (!name || !*name) return HELGA__COUNT;
+    for (uint8_t i = 0; i < HELGA__COUNT; i++) {
+        if (strcasecmp(name, s_anim_name[i]) == 0) return (HelgaAnim)i;
+    }
+    return HELGA__COUNT;
+}
+
 // ---------------------------------------------------------------------------
 // Sequencer state
 //
@@ -116,6 +149,16 @@ static int8_t  _desired = HELGA_IDLE;  // last animation the bus/API asked for,
 static bool    _held    = false;       // when set, ignore bus-driven state changes
                                        // (scan/alert) so a caller-owned animation
                                        // (e.g. party mode) sustains — see hold()
+
+// Idle variety: while the default idle loop sustains, each loop completion has
+// a 1-in-IDLE_VARIANT_ODDS chance of playing one variant clip once before
+// settling back into the default loop. At 8 frames * 200 ms per loop that's a
+// variant roughly every 13 s on average.
+static constexpr uint8_t IDLE_VARIANT_ODDS = 6;
+static const int8_t IDLE_VARIANT_CLIPS[] = {
+    CLIP_IDLE_FIDGET, CLIP_IDLE_SNEEZE, CLIP_IDLE_WAG, CLIP_IDLE_HEAD_TILT
+};
+static bool _variant_oneshot = false;  // a variant clip is playing right now
 
 static void _startClip(int8_t clip) {
     const ClipDef& c = CLIPS[clip];
@@ -143,8 +186,19 @@ static void _startNext() {
 // early_apply re-applies the first frame synchronously before the next render,
 // so the internal anim's terminal end-value frame is never displayed.
 static void _completedCb(lv_anim_t* /*a*/) {
-    if (_qlen > 0) _startNext();
-    else           _startClip(_current);   // re-arm the sustained loop
+    if (_qlen > 0) { _startNext(); return; }
+    if (_variant_oneshot) {   // variant done: settle back into the default loop
+        _variant_oneshot = false;
+        _startClip(ANIMS[_active].loop);
+        return;
+    }
+    if (_active == HELGA_IDLE && esp_random() % IDLE_VARIANT_ODDS == 0) {
+        _variant_oneshot = true;
+        _startClip(IDLE_VARIANT_CLIPS[esp_random() %
+                   (sizeof(IDLE_VARIANT_CLIPS) / sizeof(IDLE_VARIANT_CLIPS[0]))]);
+        return;
+    }
+    _startClip(_current);   // re-arm the sustained loop
 }
 
 static void _request(HelgaAnim next) {
@@ -152,6 +206,7 @@ static void _request(HelgaAnim next) {
 
     _qhead = 0;
     _qlen  = 0;
+    _variant_oneshot = false;   // an in-flight variant no longer owns the loop
     if (_active >= 0 && ANIMS[_active].outro >= 0) _queue[_qlen++] = ANIMS[_active].outro;
     if (ANIMS[next].intro >= 0)                    _queue[_qlen++] = ANIMS[next].intro;
     _queue[_qlen++] = ANIMS[next].loop;
@@ -189,12 +244,17 @@ static uint8_t _batt_pct      = 100;   // 0..100 real; BATT_PCT_* sentinels (>10
 static bool    _alert_latched = false;
 static int8_t  _status_state  = ST_INVALID;
 
-static const char* const IDLE_WORDS[]  = { "bored", "chilling", "idle" };
-static const char* const SNIFF_VERBS[] = { "sniffing", "snorting", "hoovering" };
-static const char* const BLE_NOUNS[]   = { "BLE packets", "BLE advertisements", "BLE data" };
-static const char* const WIFI_NOUNS[]  = { "WiFi frames", "WiFi packets", "WiFi data" };
-static const char* const TIRED_WORDS[] = { "tired", "sleepy" };
-static const char* const PARTY_WORDS[] = { "getting crunk", "getting turnt", "partying" };
+static const char* const IDLE_WORDS[]  = { "bored", "chilling", "idle", "loafing",
+                                           "vibing", "daydreaming", "lounging",
+                                           "zoning out", "thinking about WiFi", "thinking about BLE", "thinking about snacks", "happy", "relaxing" };
+static const char* const SNIFF_VERBS[] = { "sniffing", "snorting", "hoovering up", "sucking up", "scanning for", "snooping for" };
+static const char* const BLE_NOUNS[]   = { "BLE packets", "BLE advertisements", "BLE data",
+                                           "BLE frames", "BLE beacons" };
+static const char* const WIFI_NOUNS[]  = { "WiFi frames", "WiFi packets", "WiFi data", "WiFi beacons", "WiFi probes", "WiFi advertisements" };
+static const char* const LOW_BATT_LINES[] = { "Helga is tired", "Helga is sleepy",
+                                              "Helga needs a nap", "Helga is dozing off",
+                                              "Helga ran out of zoomies", "zzz..." };
+static const char* const PARTY_WORDS[] = { "getting crunk", "getting turnt", "partying", "throwing it back", "getting wild", "blacking out" };
 
 static const char* _pick(const char* const* arr, size_t n) { return arr[esp_random() % n]; }
 #define PICK(a) _pick((a), sizeof(a) / sizeof((a)[0]))
@@ -232,7 +292,7 @@ static void _updateStatusText() {
             snprintf(buf, sizeof(buf), "Helga found something!");
             break;
         case ST_LOW_BATT:
-            snprintf(buf, sizeof(buf), "Helga is %s", PICK(TIRED_WORDS));
+            snprintf(buf, sizeof(buf), "%s", PICK(LOW_BATT_LINES));
             break;
         case ST_PARTY:
             snprintf(buf, sizeof(buf), "Helga is %s", PICK(PARTY_WORDS));
@@ -256,6 +316,7 @@ static void _enterOverview() {
     _qhead = _qlen = 0;
     _current = _active = _target = -1;
     _running = false;
+    _variant_oneshot = false;
     lv_animimg_set_completed_cb(objects.helga, _completedCb);
     _request((HelgaAnim)_desired);
 
@@ -287,6 +348,12 @@ static void _screenEventCb(lv_event_t* e) {
 // always reflects the latest event; _enterOverview replays it on the next load.
 // Off-screen we touch nothing but _desired — no animimg work, no rendering.
 static void _apply(HelgaAnim anim) {
+    // "Resting" resolves by battery: an idle request becomes sleep when the
+    // battery is low, so every path that settles Helga (scan stop, party end,
+    // screen load replay) picks the right resting state without knowing about
+    // battery. Charging/missing sentinels read as not-low, so plugging in wakes
+    // her on the next battery event.
+    if (anim == HELGA_IDLE && _isLowBatt()) anim = HELGA_SLEEP;
     _desired = anim;
     if (objects.helga && lv_screen_active() == objects.overview) _request(anim);
     // Party start/stop drives the sprite via play() directly (bypassing onEvent),
@@ -315,9 +382,9 @@ void OverviewScreen::begin(EventBus& bus) {
     bus.subscribe(CMD_SCAN_START,  this);
     bus.subscribe(CMD_SCAN_STOP,   this);
     bus.subscribe(EV_ALERT_RAISED, this);
-    // Finer-grained signals for the status line only (the sprite stays on the
-    // coarse CMD_SCAN_START/STOP above): per-radio scan state for BLE vs WiFi,
-    // and battery level for the low-battery line.
+    // Finer-grained signals: per-radio scan state for the status line's BLE vs
+    // WiFi wording, and battery level for the low-battery line plus flipping a
+    // resting Helga between idle and sleep.
     bus.subscribe(EV_SCAN_STATE_CHANGED, this);
     bus.subscribe(EV_BATTERY_UPDATED,    this);
 
@@ -381,6 +448,12 @@ void OverviewScreen::onEvent(const Event& e) {
         case CMD_SCAN_START:  play(HELGA_SNIFF); break;
         case CMD_SCAN_STOP:   play(HELGA_IDLE);  break;
         case EV_ALERT_RAISED: play(HELGA_ALERT); break;
+        case EV_BATTERY_UPDATED:
+            // Flip a resting Helga between idle and sleep as the battery
+            // crosses the low mark (_apply resolves which); a sniffing or
+            // alerting Helga is left alone until the scan window settles her.
+            if (_desired == HELGA_IDLE || _desired == HELGA_SLEEP) play(HELGA_IDLE);
+            break;
         default: break;
     }
 }

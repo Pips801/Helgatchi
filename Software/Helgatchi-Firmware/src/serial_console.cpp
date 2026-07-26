@@ -14,6 +14,7 @@
 #include "rules_service.h"
 #include "party_service.h"
 #include "admin_service.h"
+#include "overview_screen.h"
 #include "version.h"
 #include <Arduino.h>
 #include <FastLED.h>
@@ -204,6 +205,7 @@ void SerialConsole::_dispatch(char* line) {
     else if (strcmp(verb, "alert")    == 0) _cmdAlert(rest);
     else if (strcmp(verb, "led")      == 0) _cmdLed(rest);
     else if (strcmp(verb, "vibe")     == 0) _cmdVibe(rest);
+    else if (strcmp(verb, "helga")    == 0) _cmdHelga(rest);
     else if (strcmp(verb, "rule")     == 0) _cmdRule(rest);
     else if (strcmp(verb, "party")    == 0) _cmdParty(rest);
     else if (strcmp(verb, "admin")    == 0) _cmdAdmin(rest);
@@ -227,6 +229,7 @@ void SerialConsole::_cmdHelp() {
     Serial.println("  alert <subcmd>              active alert store        (list / raise / ack / clear)");
     Serial.println("  battery                     voltage / pct / charging state");
     Serial.println("  bus post <event_id>         post an event by numeric id");
+    Serial.println("  helga <subcmd>              overview animation        (list / play / auto)");
     Serial.println("  led <subcmd>                LED pattern control       (list / play / off / bright)");
     Serial.println("  party <subcmd>              party mode                (on [secs] / off)");
     Serial.println("  power <subcmd>              device power ops          (sleep / sleepscreen / reboot / shipping / wipe / off)");
@@ -548,6 +551,61 @@ void SerialConsole::_cmdVibe(char* args) {
     }
 
     Serial.printf("unknown subcommand 'vibe %s'  (try 'vibe')\n", sub ? sub : "");
+}
+
+// `helga <subcmd>` — overview animation test control. `play` holds the
+// animation (same mechanism party mode uses) so scan windows / alerts don't
+// stomp it seconds later; `auto` hands control back to bus events.
+void SerialConsole::_cmdHelga(char* args) {
+    if (!args) {
+        Serial.println("helga: overview animation control");
+        Serial.println("  helga list             list animation names + ids");
+        Serial.println("  helga play <name|id>   play one animation, held until 'helga auto'");
+        Serial.println("  helga auto             release: scan/alert/battery events drive again");
+        return;
+    }
+
+    char* sub  = strtok(args, " ");
+    char* rest = strtok(nullptr, "");
+
+    if (sub && strcasecmp(sub, "list") == 0) {
+        Serial.println(" id  name");
+        Serial.println("---  -----------");
+        for (uint8_t i = 0; i < HELGA__COUNT; i++) {
+            Serial.printf("%3u  %s\n", i, helgaAnimName((HelgaAnim)i));
+        }
+        return;
+    }
+
+    if (sub && strcasecmp(sub, "play") == 0) {
+        if (!rest) { Serial.println("usage: helga play <name|id>"); return; }
+        char* arg1 = strtok(rest, " ");
+        HelgaAnim anim = helgaAnimByName(arg1);
+        if (anim == HELGA__COUNT) {
+            char* end = nullptr;
+            long n = strtol(arg1, &end, 10);
+            if (end != arg1 && *end == '\0' && n >= 0 && n < HELGA__COUNT) {
+                anim = (HelgaAnim)n;
+            }
+        }
+        if (anim == HELGA__COUNT) {
+            Serial.printf("unknown animation '%s'  (try 'helga list')\n", arg1);
+            return;
+        }
+        g_overview_screen.hold(true);
+        g_overview_screen.play(anim);
+        Serial.printf("OK: %s (held until 'helga auto')\n", helgaAnimName(anim));
+        return;
+    }
+
+    if (sub && strcasecmp(sub, "auto") == 0) {
+        g_overview_screen.hold(false);
+        g_overview_screen.play(HELGA_IDLE);
+        Serial.println("OK: event-driven animation restored");
+        return;
+    }
+
+    Serial.printf("unknown subcommand 'helga %s'  (try 'helga')\n", sub ? sub : "");
 }
 
 // `party <subcmd>` — party mode (rainbow LEDs + haptics + dance anim + banner).

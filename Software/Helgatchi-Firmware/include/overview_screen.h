@@ -64,3 +64,10 @@ public:
 };
 
 extern OverviewScreen g_overview_screen;
+
+// Name registry for the serial console (`helga list` / `helga play`), mirroring
+// ledPatternByName / vibePatternByName. Names are the composite animations
+// above (each bundles its intro/loop/outro clips), not raw clip ranges.
+// helgaAnimByName returns HELGA__COUNT on an unknown name.
+const char* helgaAnimName(HelgaAnim id);
+HelgaAnim   helgaAnimByName(const char* name);

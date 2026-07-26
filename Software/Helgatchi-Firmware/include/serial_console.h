@@ -19,6 +19,7 @@ private:
     void _cmdAlert(char* args);     // list / raise / ack / clear
     void _cmdLed(char* args);       // list / play / off / bright
     void _cmdVibe(char* args);      // list / play / off
+    void _cmdHelga(char* args);     // list / play / auto
     void _cmdRule(char* args);      // list / show / create / add / rm / delete / enable / disable / reload / stats
     void _cmdParty(char* args);     // on [secs] / off
     void _cmdAdmin(char* args);     // unlock / lock / party / msg / led / beacon / stopall / menu

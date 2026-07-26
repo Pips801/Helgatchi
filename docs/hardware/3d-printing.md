@@ -8,7 +8,7 @@ All printable parts live in
 
 ### Spacer
 
-The frame between the front and back PCBs — it sets device thickness and holds
+The frame between the front and back PCBs - it sets device thickness and holds
 the battery. Pick your variant:
 
 | Choice | Options | Pick based on |
@@ -23,7 +23,7 @@ variants gang multiple spacers into one plate for batch printing
 
 ### Screen bumper
 
-A protective lip around the screen — print this; screens are the #1 casualty.
+A protective lip around the screen - print this; screens are the #1 casualty.
 Files: `screen bumper.step`, `screen bumper stacked.3mf` (pre-stacked plate).
 
 ## Print settings
@@ -33,8 +33,8 @@ Files: `screen bumper.step`, `screen bumper stacked.3mf` (pre-stacked plate).
 
 ## Remixing
 
-`Spacer.FCStd` is the FreeCAD source — modify it rather than the exported
-STEPs if you're changing dimensions (new battery size, different bulkhead…).
+`Spacer.FCStd` is the FreeCAD source - modify it rather than the exported
+STEPs if you're changing dimensions (new battery size, different bulkhead...).
 PRs with useful variants welcome.
 
 <!-- TODO: link Printables/Thingiverse mirrors if published -->

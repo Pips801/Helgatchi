@@ -14,7 +14,7 @@ pio run                  # build firmware
 pio run -t upload        # flash firmware (settings/NVS preserved)
 pio run -t buildfs       # build LittleFS image from data/
 pio run -t uploadfs      # flash LittleFS image (wipes user rulesets)
-pio run -t erase         # nuke the chip — full reset
+pio run -t erase         # nuke the chip - full reset
 ```
 
 **Admin-mode secrets:** the build **hard-fails** without
@@ -34,7 +34,7 @@ local development set `ALLOW_DEV_ADMIN_SECRET=1` instead.
 ## The UI
 
 The LVGL UI is generated from the EEZ Studio project in
-[`Software/UI/`](../Software/UI/). **Never hand-edit generated UI sources** —
+[`Software/UI/`](../Software/UI/). **Never hand-edit generated UI sources** -
 change the `.eez-project` and regenerate.
 
 ## The web flasher
@@ -46,7 +46,7 @@ touching the site.
 
 ## Releases
 
-<!-- TODO: release process — tagging, what release.yml builds, versioning
+<!-- TODO: release process - tagging, what release.yml builds, versioning
      scheme, manifest format the flasher consumes -->
 
 ## Contributing

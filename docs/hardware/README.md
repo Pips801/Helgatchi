@@ -9,8 +9,8 @@ with the PCBs themselves forming the enclosure.
 
 | Layer | Source | Notes |
 |---|---|---|
-| Front PCB | [`Hardware/Helgatchi front PCB/`](../../Hardware/Helgatchi%20front%20PCB/) (KiCad) | Screen, 6× side-firing SK68xx LEDs, buttons |
-| Spacer | [`Hardware/Helgatchi Spacer/`](../../Hardware/Helgatchi%20Spacer/) (FreeCAD / STEP / 3MF) | 3D-printed frame between the boards — see [3D printing](3d-printing.md) |
+| Front PCB | [`Hardware/Helgatchi front PCB/`](../../Hardware/Helgatchi%20front%20PCB/) (KiCad) | Screen, 6x side-firing SK68xx LEDs, buttons |
+| Spacer | [`Hardware/Helgatchi Spacer/`](../../Hardware/Helgatchi%20Spacer/) (FreeCAD / STEP / 3MF) | 3D-printed frame between the boards - see [3D printing](3d-printing.md) |
 | Back PCB | [`Hardware/Helgatchi back PCB/`](../../Hardware/Helgatchi%20back%20PCB/) (KiCad) | XIAO ESP32-S3 carrier, battery, RP-SMA, vibration motor |
 | Test jig | [`Hardware/Helgatchi test jig/`](../../Hardware/Helgatchi%20test%20jig/) | Production testing fixture |
 
@@ -23,11 +23,11 @@ Dimensional drawings (edge cuts, silkscreen) are in
      orientation version -->
 
 - **MCU**: Seeed XIAO ESP32-S3 (8 MB flash / 8 MB PSRAM variant)
-- **Display**: Waveshare 1.69" rounded IPS, 240×280, ST7789, SPI
-- **LEDs**: 6× SK68xx side-firing addressable RGB
+- **Display**: Waveshare 1.69" rounded IPS, 240x280, ST7789, SPI
+- **LEDs**: 6x SK68xx side-firing addressable RGB
 - **Haptics**: PWM-driven vibration motor
-- **Battery**: 3.7 V LiPo, 400–1200 mAh (size constrained by the spacer height — 7.6 mm and 8.6 mm variants exist)
-- **Antenna**: XIAO u.FL → back PCB → RP-SMA bulkhead → external 2.4 GHz antenna
+- **Battery**: 3.7 V LiPo, 400-1200 mAh (size constrained by the spacer height - 7.6 mm and 8.6 mm variants exist)
+- **Antenna**: XIAO u.FL -> back PCB -> RP-SMA bulkhead -> external 2.4 GHz antenna
 
 ## GPIO map
 
@@ -39,7 +39,7 @@ The authoritative pin assignment lives with the firmware:
 Fab outputs (gerbers/BOM/placement) are generated with the fabrication
 toolkit into each PCB's `production/` folder.
 
-<!-- TODO: exact ordering walkthrough — fab house used, layer count, thickness,
+<!-- TODO: exact ordering walkthrough - fab house used, layer count, thickness,
      finish, and any assembly notes (which side is hand-soldered) -->
 
 ## Building one

@@ -3,7 +3,7 @@
 ## Web flasher (recommended)
 
 The [web flasher](https://pips801.github.io/Helgatchi/) runs entirely in the
-browser via Web Serial — no toolchain, no drivers on most systems.
+browser via Web Serial - no toolchain, no drivers on most systems.
 
 Requirements: Chrome or Edge (Firefox/Safari don't support Web Serial), a
 data-capable USB-C cable.
@@ -35,5 +35,5 @@ If the device won't enumerate or a flash fails partway:
 
 Building and flashing with PlatformIO is covered in the
 [developer guide](developers.md). The nuclear option for a device in a weird
-state is `pio run -t erase` followed by a full firmware + filesystem flash —
+state is `pio run -t erase` followed by a full firmware + filesystem flash -
 this resets *everything*.

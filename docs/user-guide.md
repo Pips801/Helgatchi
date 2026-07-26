@@ -2,12 +2,12 @@
 
 Everything the device does, screen by screen.
 
-<!-- TODO: this page is the full manual. Each section below is a stub — expand
+<!-- TODO: this page is the full manual. Each section below is a stub - expand
      with a screenshot + the actual button behavior for that screen. -->
 
 ## Screens
 
-<!-- TODO: navigation model — how you move between screens (left/right?), what
+<!-- TODO: navigation model - how you move between screens (left/right?), what
      center does per screen -->
 
 ### Overview (Helga)
@@ -27,7 +27,7 @@ resolved from the on-device IEEE OUI / BT SIG table.
 
 ### Alerts
 
-Active alert cards — one per (ruleset, device) pair. Alerts persist across
+Active alert cards - one per (ruleset, device) pair. Alerts persist across
 sleep and only clear when acknowledged.
 
 <!-- TODO: acknowledging, what UPDATED vs new alerts look like, alert types -->
@@ -43,14 +43,14 @@ active scanning, Wi-Fi targets use a promiscuous sniffer.
 
 ### Settings
 
-<!-- TODO: walk each setting group — alert outputs (vibe/LED/screen wake),
+<!-- TODO: walk each setting group - alert outputs (vibe/LED/screen wake),
      scan timing (sleep duration / scan duration), display (brightness, dim,
      color scheme), rules enable/disable -->
 
 ## Alerts & rulesets
 
 Each factory ruleset controls its own alert: title, LED pattern, vibration
-pattern. Enable or disable rulesets per your threat model — see
+pattern. Enable or disable rulesets per your threat model - see
 [Detection rules](rules.md).
 
 ## Power & battery
@@ -64,4 +64,4 @@ pattern. Enable or disable rulesets per your threat model — see
 
 Plug into USB and open a serial terminal (or the console tab of the
 [web flasher](https://pips801.github.io/Helgatchi/)) for the full command
-interface — see [Serial console](serial-console.md).
+interface - see [Serial console](serial-console.md).

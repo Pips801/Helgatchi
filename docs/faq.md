@@ -4,7 +4,7 @@
 
 The Helgatchi is **passive**: it listens to broadcasts that devices send in
 the clear to everyone nearby. It does not transmit while scanning, does not
-deauth, does not jam, does not connect to anything. Laws vary — you're
+deauth, does not jam, does not connect to anything. Laws vary - you're
 responsible for knowing yours.
 
 ## Does it attack anything?
@@ -13,7 +13,7 @@ No. It's a receiver with opinions.
 
 ## What's the range?
 
-Whatever the target broadcasts at — typically tens of meters for BLE, more for
+Whatever the target broadcasts at - typically tens of meters for BLE, more for
 Wi-Fi APs, heavily dependent on the antenna and environment.
 
 <!-- TODO: real-world numbers with the stock antenna -->
@@ -36,7 +36,7 @@ cycle so it can live in your pocket all day. It's a tripwire, not a multitool.
 
 ## Can I add my own detections?
 
-Yes — that's the point. See [Detection rules](rules.md).
+Yes - that's the point. See [Detection rules](rules.md).
 
 ## Why "Helgatchi"?
 

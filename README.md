@@ -11,7 +11,7 @@
 [![Web Flasher](https://img.shields.io/badge/flash-web%20flasher-2ea043)](https://pips801.github.io/Helgatchi/)
 <!-- TODO: license badge once a license is chosen -->
 
-[Getting started](docs/getting-started.md) · [Documentation](docs/README.md) · [Flash firmware](https://pips801.github.io/Helgatchi/) · [Build your own](docs/hardware/assembly.md)
+[Getting started](docs/getting-started.md) | [Documentation](docs/README.md) | [Flash firmware](https://pips801.github.io/Helgatchi/) | [Build your own](docs/hardware/assembly.md)
 
 </div>
 
@@ -22,23 +22,23 @@
 Helgatchi is a handheld, rechargeable scanner built around the Seeed XIAO
 ESP32-S3. It passively listens to BLE advertisements and Wi-Fi management
 traffic, matches what it hears against a library of detection rulesets, and
-alerts you — LEDs, vibration, screen wake — when something interesting is in
+alerts you - LEDs, vibration, screen wake - when something interesting is in
 range. It lives in your pocket and runs a scan/sleep duty cycle to stretch
 battery life.
 
 It ships with **55+ factory rulesets** covering things like:
 
-- **Surveillance infrastructure** — Flock Safety ALPRs, ShotSpotter, Genetec, Neology readers
-- **Police tech** — Axon body cams, WatchGuard, Digital Ally, VieVu, Motorola Solutions
-- **Hidden cameras** — Wyze / Blink / Tuya covert cams, generic P2P camera modules
-- **Trackers & tags** — Tile, Chipolo, Samsung SmartTag, Moto Tag, Pebblebee, eufy
-- **Wearables** — Fitbit, Garmin, Whoop, Oura, Polar
+- **Surveillance infrastructure** - Flock Safety ALPRs, ShotSpotter, Genetec, Neology readers
+- **Police tech** - Axon body cams, WatchGuard, Digital Ally, VieVu, Motorola Solutions
+- **Hidden cameras** - Wyze / Blink / Tuya covert cams, generic P2P camera modules
+- **Trackers & tags** - Tile, Chipolo, Samsung SmartTag, Moto Tag, Pebblebee, eufy
+- **Wearables** - Fitbit, Garmin, Whoop, Oura, Polar
 
-Every detection is a JSON ruleset — nothing is hardcoded. You can [write your
+Every detection is a JSON ruleset - nothing is hardcoded. You can [write your
 own](docs/rules.md) to hunt any device by MAC/OUI, manufacturer, name/SSID,
 BLE service, or Wi-Fi probe fingerprint.
 
-<!-- TODO: photo strip — alert screen / devices list / foxhunting screen -->
+<!-- TODO: photo strip - alert screen / devices list / foxhunting screen -->
 
 ## How it works
 
@@ -51,20 +51,20 @@ BLE service, or Wi-Fi probe fingerprint.
 - **Alerts.** A match raises an alert card and fires the ruleset's configured
   LED pattern, vibration pattern, and screen wake. Alerts persist across sleep.
 - **Foxhunt mode.** Lock onto a single device and use live RSSI to walk it
-  down — continuous scanning with the power manager's duty cycle suspended.
+  down - continuous scanning with the power manager's duty cycle suspended.
 
 ## Quick start
 
-1. **Get a device** — [buy one or build one](#where-to-get-one).
-2. **Flash the latest firmware** — plug in USB-C and use the
+1. **Get a device** - [buy one or build one](#where-to-get-one).
+2. **Flash the latest firmware** - plug in USB-C and use the
    [web flasher](https://pips801.github.io/Helgatchi/) (Chrome/Edge). No
    toolchain needed.
-3. **Read [Getting started](docs/getting-started.md)** — first boot, buttons,
+3. **Read [Getting started](docs/getting-started.md)** - first boot, buttons,
    screens, and your first alert.
 
 ## Documentation
 
-| I want to… | Read this |
+| I want to... | Read this |
 |---|---|
 | Set up my new device | [Getting started](docs/getting-started.md) |
 | Learn the screens, buttons, and settings | [User guide](docs/user-guide.md) |
@@ -80,10 +80,10 @@ BLE service, or Wi-Fi probe fingerprint.
 
 ## Where to get one
 
-<!-- TODO: where devices/kits are sold — DC801 / 801 Labs, cons, kit availability, price -->
+<!-- TODO: where devices/kits are sold - DC801 / 801 Labs, cons, kit availability, price -->
 
 Helgatchi is open hardware. If you can't buy one, you can
-[build one](docs/hardware/assembly.md) — the KiCad sources, fab outputs, and
+[build one](docs/hardware/assembly.md) - the KiCad sources, fab outputs, and
 printable parts are all in this repo.
 
 ## Repository layout
@@ -101,25 +101,25 @@ printable parts are all in this repo.
 | Spec | Info |
 |---|---|
 | MCU | Seeed XIAO ESP32-S3 (8 MB flash, 8 MB PSRAM) |
-| Screen | Waveshare 1.69" rounded IPS, 240×280, ST7789 @ 80 MHz SPI |
+| Screen | Waveshare 1.69" rounded IPS, 240x280, ST7789 @ 80 MHz SPI |
 | Radios | 2.4 GHz BLE + Wi-Fi (time-multiplexed scanning) |
-| Antenna | XIAO u.FL → back PCB → RP-SMA → external 2.4 GHz antenna |
-| Alerts | 6× WS2812 RGB LEDs, vibration motor, screen wake |
+| Antenna | XIAO u.FL -> back PCB -> RP-SMA -> external 2.4 GHz antenna |
+| Alerts | 6x WS2812 RGB LEDs, vibration motor, screen wake |
 | Input | 3 buttons (left / center / right) |
-| Battery | 400–1200 mAh 3.7 V LiPo, USB-C charging, deep-sleep duty cycle |
-| Firmware | PlatformIO + Arduino-ESP32 · LVGL 9.5 + EEZ Studio · LovyanGFX · NimBLE · FastLED |
-| Size | 50 mm × 80 mm × TBD |
+| Battery | 400-1200 mAh 3.7 V LiPo, USB-C charging, deep-sleep duty cycle |
+| Firmware | PlatformIO + Arduino-ESP32 | LVGL 9.5 + EEZ Studio | LovyanGFX | NimBLE | FastLED |
+| Size | 50 mm x 80 mm x TBD |
 
 ## Community & contributing
 
-<!-- TODO: where to find the community — Discord/Matrix, DC801, issue tracker etiquette -->
+<!-- TODO: where to find the community - Discord/Matrix, DC801, issue tracker etiquette -->
 
 Bug reports and pull requests welcome. Firmware contributors should start with
 the [developer guide](docs/developers.md).
 
 ## License
 
-<!-- TODO: choose licenses — typically one for firmware/software (e.g. MIT/GPL)
+<!-- TODO: choose licenses - typically one for firmware/software (e.g. MIT/GPL)
      and one for hardware (e.g. CERN-OHL-S), then add LICENSE files and badges -->
 
 *License not yet chosen.*

@@ -4,7 +4,7 @@ From box to first alert in a few minutes.
 
 ## What's in the box
 
-<!-- TODO: photo + list — device, antenna, USB-C cable?, lanyard? -->
+<!-- TODO: photo + list - device, antenna, USB-C cable?, lanyard? -->
 
 - Helgatchi device
 - 2.4 GHz RP-SMA antenna
@@ -23,7 +23,7 @@ USB-C, any 5 V charger.
 
 ## 3. Power on
 
-<!-- TODO: exact button behavior — which button wakes/powers on, hold time,
+<!-- TODO: exact button behavior - which button wakes/powers on, hold time,
      what shipping mode is and how a fresh device leaves it -->
 
 The device may arrive in **shipping mode** (deep storage). Plugging in USB
@@ -39,8 +39,8 @@ wakes it.
 
 ## 5. Your first alert
 
-Out of the box, factory rulesets are already active. Walk around — when a
-matching device (a Tile tracker, a Ring doorbell, a Flock camera…) comes into
+Out of the box, factory rulesets are already active. Walk around - when a
+matching device (a Tile tracker, a Ring doorbell, a Flock camera...) comes into
 range the Helgatchi vibrates, lights up, and shows an alert card.
 
 <!-- TODO: screenshot of an alert card; how to acknowledge/dismiss an alert -->
@@ -54,11 +54,11 @@ To test indoors without waiting for the real thing:
 
 New devices may ship with old firmware. Open the
 [web flasher](https://pips801.github.io/Helgatchi/) in Chrome or Edge, plug in
-USB-C, and click **Connect** — it shows your version and offers the latest
+USB-C, and click **Connect** - it shows your version and offers the latest
 release. Settings survive firmware updates.
 
 ## Next steps
 
-- [User guide](user-guide.md) — every screen and setting
-- [Detection rules](rules.md) — tune what it alerts on
-- [Troubleshooting](troubleshooting.md) — if something's off
+- [User guide](user-guide.md) - every screen and setting
+- [Detection rules](rules.md) - tune what it alerts on
+- [Troubleshooting](troubleshooting.md) - if something's off

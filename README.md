@@ -129,7 +129,8 @@ the [developer guide](docs/developers.md).
 
 In short: this project is free for non-commercial use. You can build one for yourself, fork the code, modify the design/firmware, and learn from all of it. What you cannot not do is profit from this work: you may not sell any product running this firmware, and you may not sell hardware based on this design - whether built from the design files or reproduced from the board itself.
 
-Hardware license: PolyForm Noncommercial 1.0.0
-Software license: CC BY-NC-SA 4.0
+| **Component** 	| **Contained in** 	| **License**                  	| License URL                                              	|
+|---------------	|------------------	|------------------------------	|----------------------------------------------------------	|
+| Software      	| `/Software/`      	| PolyForm Noncommercial 1.0.0 	| https://polyformproject.org/licenses/noncommercial/1.0.0 	|
+| Hardware      	| `/Hardware/`      	| CC BY-NC-SA 4.0              	| https://creativecommons.org/licenses/by-nc-sa/4.0/       	|
 
-*License not yet chosen.*

@@ -3,7 +3,7 @@
 <!-- TODO: hero photo of the device in hand, ~700px wide -->
 <!-- <img src="docs/images/hero.jpg" width="600" alt="Helgatchi in hand"> -->
 
-# Helgatchi
+# Helgatchi V2 🐑
 
 **A pocket-sized BLE + Wi-Fi hunter that tells you when surveillance tech is nearby.**
 
@@ -28,15 +28,22 @@ battery life.
 
 It ships with **55+ factory rulesets** covering things like:
 
-- **Surveillance infrastructure** - Flock Safety ALPRs, ShotSpotter, Genetec, Neology readers
-- **Police tech** - Axon body cams, WatchGuard, Digital Ally, VieVu, Motorola Solutions
+- **Surveillance infrastructure** - Flock Safety ALPRs, ShotSpotter, Genetec, Neology readers, Motorolla solutions, and more
+- **Tactical equipment** - Axon equipment, WatchGuard, Digital Ally, VieVu, Motorola Solutions, and more
 - **Hidden cameras** - Wyze / Blink / Tuya covert cams, generic P2P camera modules
 - **Trackers & tags** - Tile, Chipolo, Samsung SmartTag, Moto Tag, Pebblebee, eufy
 - **Wearables** - Fitbit, Garmin, Whoop, Oura, Polar
 
-Every detection is a JSON ruleset - nothing is hardcoded. You can [write your
+Every detection is a JSON ruleset, and nothing is hardcoded. You can [write your
 own](docs/rules.md) to hunt any device by MAC/OUI, manufacturer, name/SSID,
 BLE service, or Wi-Fi probe fingerprint.
+
+## Detection and alerting capabilites
+
+|    🐑  	| MAC address 	| OUI (explicit) 	| OUI organization 	| MFG (explicit) 	| MFG organization 	| 802.11 SIG 	| Device name 	| SSID 	|
+|------	|-------------	|----------------	|------------------	|----------------	|------------------	|------------	|-------------	|------	|
+| WiFi 	|      ✅      	|        ✅       	|         ✅        	|        ❌       	|         ❌        	|      ✅     	|      ❌      	|   ✅  	|
+| BLE  	|      ✅      	|        ✅       	|         ✅        	|        ✅       	|         ✅        	|      ❌     	|      ✅      	|   ❌  	|
 
 <!-- TODO: photo strip - alert screen / devices list / foxhunting screen -->
 
@@ -66,6 +73,7 @@ BLE service, or Wi-Fi probe fingerprint.
 
 | I want to... | Read this |
 |---|---|
+| Frequently asked questions | [FAQ](docs/faq.md) |
 | Set up my new device | [Getting started](docs/getting-started.md) |
 | Learn the screens, buttons, and settings | [User guide](docs/user-guide.md) |
 | Update or recover firmware | [Flashing & updating](docs/flashing.md) |
@@ -76,7 +84,7 @@ BLE service, or Wi-Fi probe fingerprint.
 | Print a spacer or screen bumper | [3D printing](docs/hardware/3d-printing.md) |
 | Repair a broken screen / battery | [Repair guide](docs/hardware/repair.md) |
 | Hack on the firmware | [Developer guide](docs/developers.md) |
-| Everything else | [FAQ](docs/faq.md) |
+
 
 ## Where to get one
 
@@ -104,11 +112,11 @@ printable parts are all in this repo.
 | Screen | Waveshare 1.69" rounded IPS, 240x280, ST7789 @ 80 MHz SPI |
 | Radios | 2.4 GHz BLE + Wi-Fi (time-multiplexed scanning) |
 | Antenna | XIAO u.FL -> back PCB -> RP-SMA -> external 2.4 GHz antenna |
-| Alerts | 6x WS2812 RGB LEDs, vibration motor, screen wake |
-| Input | 3 buttons (left / center / right) |
-| Battery | 400-1200 mAh 3.7 V LiPo, USB-C charging, deep-sleep duty cycle |
+| Alerts | 6x RGB LEDs, vibration motor, screen wake |
+| Input | 3 reverse-mount buttons |
+| Battery | 400 mAh 3.7 V LiPo, USB-C charging, deep-sleep duty cycle |
 | Firmware | PlatformIO + Arduino-ESP32 | LVGL 9.5 + EEZ Studio | LovyanGFX | NimBLE | FastLED |
-| Size | 50 mm x 80 mm x TBD |
+| Size | 50 mm x 80 mm  |
 
 ## Community & contributing
 
@@ -119,7 +127,9 @@ the [developer guide](docs/developers.md).
 
 ## License
 
-<!-- TODO: choose licenses - typically one for firmware/software (e.g. MIT/GPL)
-     and one for hardware (e.g. CERN-OHL-S), then add LICENSE files and badges -->
+In short: this project is free for non-commercial use. You can build one for yourself, fork the code, modify the design/firmware, and learn from all of it. What you cannot not do is profit from this work: you may not sell any product running this firmware, and you may not sell hardware based on this design - whether built from the design files or reproduced from the board itself.
+
+Hardware license: PolyForm Noncommercial 1.0.0
+Software license: CC BY-NC-SA 4.0
 
 *License not yet chosen.*

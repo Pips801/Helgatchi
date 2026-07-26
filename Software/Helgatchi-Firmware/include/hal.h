@@ -28,6 +28,15 @@ static constexpr uint8_t  HAL_NUM_LEDS       =  6;
 static constexpr uint16_t HAL_LONG_PRESS_MS  =  600;
 static constexpr uint16_t HAL_HOLD_MS        = 2500;   // center-hold-to-sleep (wake holds live in power_manager)
 static constexpr uint8_t  HAL_DEBOUNCE_MS    =   20;
+
+// Left/Right hold-to-repeat (key auto-repeat). Holding a nav button past
+// HAL_REPEAT_DELAY_MS re-emits its EV_BTN_* at a steady HAL_REPEAT_INTERVAL_MS,
+// so long lists — the device list — scroll without 100+ discrete presses. Each
+// repeat is a verbatim press, so it navigates and ticks identically; at ~6/s the
+// tick is a discrete click, not a buzz. Slow it (raise the interval) or drop the
+// per-step tick in the consumers if it turns out to be too much.
+static constexpr uint16_t HAL_REPEAT_DELAY_MS    = 400;   // hold this long before auto-repeat starts
+static constexpr uint16_t HAL_REPEAT_INTERVAL_MS = 167;   // steady repeat interval (~6 steps/sec)
 static constexpr uint8_t  HAL_BTN_POLL_MS    =    5;   // fixed button sample rate (esp_timer), decoupled from loop cadence
 static constexpr uint8_t  HAL_BL_LEDC_CH     =  0;   // LEDC channel for backlight PWM
 static constexpr uint8_t  HAL_VIBE_LEDC_CH   =  1;   // LEDC channel for vibration motor PWM
@@ -122,6 +131,9 @@ private:
     uint32_t    _center_down_at    = 0;
     bool        _center_long_fired = false;
     bool        _center_hold_fired = false;
+
+    // Left/Right hold-to-repeat: next-due timestamp per button ([0]=Left, [1]=Right).
+    uint32_t    _lr_repeat_at[2]   = {0, 0};   // millis() the next auto-repeat is due; 0 = disarmed
     esp_timer_handle_t _btn_timer  = nullptr;   // periodic button-poll timer (HAL_BTN_POLL_MS)
 
     // True while the backlight is fully off (sleepDisplay). Sampled at each

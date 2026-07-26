@@ -601,6 +601,9 @@ static void _kickRefresh() {
 // Selection movement (button-driven)
 // ---------------------------------------------------------------------------
 
+// dir = ±1. Also driven by HAL hold-to-repeat (a held nav button re-posts
+// EV_BTN_*), which is a verbatim press: same glide, same per-step tick — at the
+// ~5/s repeat rate the tick reads as a discrete click, not a buzz.
 static void _moveSel(int32_t dir) {
     const int32_t next = _sel + dir;
     if (next < 0 || next >= (int32_t)_row_count) return;   // hard end — silent, like group nav

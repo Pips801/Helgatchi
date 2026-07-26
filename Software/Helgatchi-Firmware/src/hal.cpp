@@ -358,9 +358,10 @@ void HAL::_pollButtons() {
                 _bus->post(EV_BTN_WAKE);
             } else {
                 _bus->post(EV_UI_ACTIVITY);
-                if      (i == 0) _bus->post(EV_BTN_LEFT);
-                else if (i == 1) _bus->post(EV_BTN_RIGHT);
-                else {
+                if (i == 0 || i == 1) {
+                    _bus->post(i == 0 ? EV_BTN_LEFT : EV_BTN_RIGHT);
+                    _lr_repeat_at[i] = now + HAL_REPEAT_DELAY_MS;   // arm hold-to-repeat
+                } else {
                     _center_down_at    = now;
                     _center_long_fired = false;
                     _center_hold_fired = false;
@@ -368,12 +369,27 @@ void HAL::_pollButtons() {
             }
         } else if (was && !_btn[i].state) {
             // Rising edge (release)
+            if (i == 0 || i == 1) _lr_repeat_at[i] = 0;   // stop auto-repeat
             if (_btn[i].wake_swallow) {
                 _btn[i].wake_swallow = false;   // wake press ends here, silently
             } else if (i == 2 && !_center_long_fired) {
                 _bus->post(EV_BTN_CENTER_SHORT);
             }
         }
+    }
+
+    // Left/Right hold-to-repeat. A held nav button re-emits its EV_BTN_* every
+    // HAL_REPEAT_INTERVAL_MS once past the initial delay — a verbatim press, so it
+    // navigates and ticks identically (the press edge above fired the first step).
+    // Matrix exclusivity means only one of Left/Right is down at a time; a roll
+    // onto Center releases it (disarmed by the release edge above). A wake-
+    // swallowed press never armed a repeat.
+    for (int i = 0; i < 2; i++) {
+        if (_lr_repeat_at[i] == 0 || !_btn[i].state || _btn[i].wake_swallow) continue;
+        if ((int32_t)(now - _lr_repeat_at[i]) < 0) continue;         // next repeat not due yet
+        _bus->post(EV_UI_ACTIVITY);
+        _bus->post(i == 0 ? EV_BTN_LEFT : EV_BTN_RIGHT);
+        _lr_repeat_at[i] = now + HAL_REPEAT_INTERVAL_MS;
     }
 
     // Long-press detection for center button. Two thresholds:

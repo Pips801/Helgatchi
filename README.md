@@ -1,51 +1,125 @@
+<div align="center">
+
+<!-- TODO: hero photo of the device in hand, ~700px wide -->
+<!-- <img src="docs/images/hero.jpg" width="600" alt="Helgatchi in hand"> -->
+
 # Helgatchi
-Handheld BLE + WiFi Hunter
 
+**A pocket-sized BLE + Wi-Fi hunter that tells you when surveillance tech is nearby.**
 
+[![Latest release](https://img.shields.io/github/v/release/Pips801/Helgatchi)](https://github.com/Pips801/Helgatchi/releases/latest)
+[![Web Flasher](https://img.shields.io/badge/flash-web%20flasher-2ea043)](https://pips801.github.io/Helgatchi/)
+<!-- TODO: license badge once a license is chosen -->
+
+[Getting started](docs/getting-started.md) · [Documentation](docs/README.md) · [Flash firmware](https://pips801.github.io/Helgatchi/) · [Build your own](docs/hardware/assembly.md)
+
+</div>
+
+---
 
 ## What is it?
-A portable, hand-held BLE beacon and WiFi AP scanner/hunter, with built-in alerting, 1.69” full-color screen, and external SMA-RP antenna all powered by the XIAO ESP32-S3. 
 
-The Helgatchi will passively scan for BLE devices and WiFi SSIDs/APs, and alert when specific Manufacturers, naming schemes, or services are discovered. 
+Helgatchi is a handheld, rechargeable scanner built around the Seeed XIAO
+ESP32-S3. It passively listens to BLE advertisements and Wi-Fi management
+traffic, matches what it hears against a library of detection rulesets, and
+alerts you — LEDs, vibration, screen wake — when something interesting is in
+range. It lives in your pocket and runs a scan/sleep duty cycle to stretch
+battery life.
 
-It can be configured to alert anything you want, such as:
-- Flock technology
-- AXON technology
-- Wearable health devices
-- Any specific device
-- Hidden WiFi/Bluetooth cameras
+It ships with **55+ factory rulesets** covering things like:
 
-## Key Features
-- Enclosed, portable, battery powered handheld rechargeable BLE and WiFi scanner and hunter that can live in your pocket.
-- Passively scans for beacons in the background in-between sleeping, and actively scans when an alert is triggered.
-- Powered by the XIAO ESP32-S3
-- 6 RGB LEDs
-- 1.69" rounded screen
-- Vibration motor for alerts
-- You can change
-  - Color scheme
-  - Alert settings
-    - Vibrate
-    - LEDs
-    - Screen Wake
-  - Scan settings
-    - Sleep duration
-    - Scan duration
-  - Rules for alerts
-    - MAC address (BLE, WiFi)
-    - Manufacturer (BLE, WiFi OUI)
-    - Device name (BLE name, WiFi SSID)
-    - Service (BLE)
+- **Surveillance infrastructure** — Flock Safety ALPRs, ShotSpotter, Genetec, Neology readers
+- **Police tech** — Axon body cams, WatchGuard, Digital Ally, VieVu, Motorola Solutions
+- **Hidden cameras** — Wyze / Blink / Tuya covert cams, generic P2P camera modules
+- **Trackers & tags** — Tile, Chipolo, Samsung SmartTag, Moto Tag, Pebblebee, eufy
+- **Wearables** — Fitbit, Garmin, Whoop, Oura, Polar
+
+Every detection is a JSON ruleset — nothing is hardcoded. You can [write your
+own](docs/rules.md) to hunt any device by MAC/OUI, manufacturer, name/SSID,
+BLE service, or Wi-Fi probe fingerprint.
+
+<!-- TODO: photo strip — alert screen / devices list / foxhunting screen -->
+
+## How it works
+
+- **Passive scanning.** BLE and Wi-Fi are time-multiplexed; Wi-Fi discovery is
+  a promiscuous management-frame sniffer, so the device transmits nothing
+  while it hunts.
+- **Rules engine.** Scan results stream through user-editable JSON rulesets
+  with pattern/regex matching backed by a ~700 KB on-flash IEEE OUI + BT SIG
+  vendor table.
+- **Alerts.** A match raises an alert card and fires the ruleset's configured
+  LED pattern, vibration pattern, and screen wake. Alerts persist across sleep.
+- **Foxhunt mode.** Lock onto a single device and use live RSSI to walk it
+  down — continuous scanning with the power manager's duty cycle suspended.
+
+## Quick start
+
+1. **Get a device** — [buy one or build one](#where-to-get-one).
+2. **Flash the latest firmware** — plug in USB-C and use the
+   [web flasher](https://pips801.github.io/Helgatchi/) (Chrome/Edge). No
+   toolchain needed.
+3. **Read [Getting started](docs/getting-started.md)** — first boot, buttons,
+   screens, and your first alert.
+
+## Documentation
+
+| I want to… | Read this |
+|---|---|
+| Set up my new device | [Getting started](docs/getting-started.md) |
+| Learn the screens, buttons, and settings | [User guide](docs/user-guide.md) |
+| Update or recover firmware | [Flashing & updating](docs/flashing.md) |
+| Write my own detection rules | [Detection rules](docs/rules.md) |
+| Use the serial console | [Serial console](docs/serial-console.md) |
+| Fix a problem | [Troubleshooting](docs/troubleshooting.md) |
+| Build one from scratch | [Hardware guide](docs/hardware/README.md) |
+| Print a spacer or screen bumper | [3D printing](docs/hardware/3d-printing.md) |
+| Repair a broken screen / battery | [Repair guide](docs/hardware/repair.md) |
+| Hack on the firmware | [Developer guide](docs/developers.md) |
+| Everything else | [FAQ](docs/faq.md) |
+
+## Where to get one
+
+<!-- TODO: where devices/kits are sold — DC801 / 801 Labs, cons, kit availability, price -->
+
+Helgatchi is open hardware. If you can't buy one, you can
+[build one](docs/hardware/assembly.md) — the KiCad sources, fab outputs, and
+printable parts are all in this repo.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| [`Software/Helgatchi-Firmware/`](Software/Helgatchi-Firmware/) | PlatformIO firmware (ESP32-S3, LVGL 9.5, NimBLE) + internal dev docs |
+| [`Software/UI/`](Software/UI/) | EEZ Studio project that generates the UI sources |
+| [`Hardware/`](Hardware/) | KiCad PCBs (front, back, test jig), spacer & bumper CAD, drawings |
+| [`WebFlasher/`](WebFlasher/) | Web Serial flasher + console, deployed to GitHub Pages |
+| [`docs/`](docs/README.md) | User, builder, and repair documentation |
 
 ## Specifications
 
-| Spec      | Info                                             	|
-|----------	|---------------------------------------------------	|
-| MCU      	| XIAO ESP32-S3                                     	|
-| Flash    	| 8MB                                               	|
-| Battery  	| 400mAh - 1200mAh 3.7v LiPo                        	|
-| Screen   	| Waveshare 1.69” LCD - 240p × 280p                 	|
-| Firmware 	| platform.io + Arduino                             	|
-| Software 	| Graphics: LVGL BLE: NimBLE LEDs: FastLED          	|
-| Antenna  	| XIAO -> u.FL > back PCB > SMA-RP > 2.4Ghz antenna 	|
-| Size     	| Width: 50mm Length: 80mm Height: TBD              	|
+| Spec | Info |
+|---|---|
+| MCU | Seeed XIAO ESP32-S3 (8 MB flash, 8 MB PSRAM) |
+| Screen | Waveshare 1.69" rounded IPS, 240×280, ST7789 @ 80 MHz SPI |
+| Radios | 2.4 GHz BLE + Wi-Fi (time-multiplexed scanning) |
+| Antenna | XIAO u.FL → back PCB → RP-SMA → external 2.4 GHz antenna |
+| Alerts | 6× WS2812 RGB LEDs, vibration motor, screen wake |
+| Input | 3 buttons (left / center / right) |
+| Battery | 400–1200 mAh 3.7 V LiPo, USB-C charging, deep-sleep duty cycle |
+| Firmware | PlatformIO + Arduino-ESP32 · LVGL 9.5 + EEZ Studio · LovyanGFX · NimBLE · FastLED |
+| Size | 50 mm × 80 mm × TBD |
+
+## Community & contributing
+
+<!-- TODO: where to find the community — Discord/Matrix, DC801, issue tracker etiquette -->
+
+Bug reports and pull requests welcome. Firmware contributors should start with
+the [developer guide](docs/developers.md).
+
+## License
+
+<!-- TODO: choose licenses — typically one for firmware/software (e.g. MIT/GPL)
+     and one for hardware (e.g. CERN-OHL-S), then add LICENSE files and badges -->
+
+*License not yet chosen.*

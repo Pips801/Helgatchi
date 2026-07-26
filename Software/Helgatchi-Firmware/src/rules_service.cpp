@@ -161,8 +161,9 @@ static bool _parseMfgId(const char* s, uint16_t* out) {
 // Parses a service UUID — accepts short forms ("180F", "0x180F") promoted
 // via the BLE base UUID, or a full 128-bit form ("0000180F-0000-1000-8000-
 // 00805F9B34FB"). Output is stored in 16-byte little-endian wire order so
-// it byte-compares to scan_uuids directly.
-static bool _parseServiceUuid(const char* s, uint8_t out[16]) {
+// it byte-compares to scan_uuids directly. Exported (rules_service.h) so
+// `scan inject service=` builds test rows through the exact same parse.
+bool parseServiceUuid(const char* s, uint8_t out[16]) {
     if (!s) return false;
 
     // Short form: <=4 hex chars, optionally 0x-prefixed.
@@ -170,10 +171,11 @@ static bool _parseServiceUuid(const char* s, uint8_t out[16]) {
         char* end = nullptr;
         unsigned long v = strtoul(s, &end, 16);
         if (end == s || v > 0xFFFFFFFF) return false;
-        // BLE base UUID: 00000000-0000-1000-8000-00805F9B34FB
-        // Bytes 12..15 (little-endian) hold the short value (big-endian).
+        // BLE base UUID 00000000-0000-1000-8000-00805F9B34FB in wire order
+        // (LSB first) — same bytes NimBLE's to128() promotion uses. Bytes
+        // 12..15 hold the short value (little-endian).
         static const uint8_t base[16] = {
-            0xFB, 0x9B, 0x34, 0x5F, 0x80, 0x00, 0x00, 0x80,
+            0xFB, 0x34, 0x9B, 0x5F, 0x80, 0x00, 0x00, 0x80,
             0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         };
         memcpy(out, base, 16);
@@ -642,7 +644,7 @@ int RulesService::_addCriteriaToRule(Rule& r, const char* field, const char* val
             }
             case F_SERVICE: {
                 uint8_t u[16];
-                if (!_parseServiceUuid(tok, u)) { free(buf); return -1; }
+                if (!parseServiceUuid(tok, u)) { free(buf); return -1; }
                 c.kind = CRIT_SERVICE;
                 memcpy(c.v.uuid, u, 16);
                 if (_appendCriterion(r, c)) added++;

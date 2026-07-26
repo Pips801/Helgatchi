@@ -1199,6 +1199,7 @@ void SerialConsole::_cmdScan(char* args) {
         Serial.println("                                k=v: domain=bt|ble|wifi  mac=AA:BB:CC:11:22:33");
         Serial.println("                                     rssi=<int>  name=<string>  mfg=<0xNNNN>");
         Serial.println("                                     type=static|rotating|random");
+        Serial.println("                                     service=<uuid>[,<uuid>...]  (short or full form)");
         Serial.println("  scan clear                    wipe the seen-devices map");
         return;
     }
@@ -1258,7 +1259,8 @@ void SerialConsole::_cmdScan(char* args) {
         if (!rest) {
             Serial.println("usage: scan inject domain=bt|wifi mac=AA:BB:CC:11:22:33 "
                            "[rssi=-50] [name=foo] [mfg=0x004C] [type=random] "
-                           "[frame=probe|beacon] [ie_sig=2;12;221:506f9a...]");
+                           "[frame=probe|beacon] [ie_sig=2;12;221:506f9a...] "
+                           "[service=180F,FD5A,...]");
             return;
         }
 
@@ -1310,6 +1312,28 @@ void SerialConsole::_cmdScan(char* args) {
             } else if (strcasecmp(k, "ie_sig") == 0) {
                 strncpy(r.ie_sig, v, sizeof(r.ie_sig) - 1);
                 r.ie_sig[sizeof(r.ie_sig) - 1] = '\0';
+            } else if (strcasecmp(k, "service") == 0) {
+                // Comma-separated UUIDs, short or full form — same parser the
+                // rules engine uses, so injected rows match CRIT_SERVICE
+                // exactly like real advertisements. (strchr split, not strtok:
+                // the outer k=v loop owns the strtok state.)
+                char* p = eq + 1;
+                while (p && *p) {
+                    char* comma = strchr(p, ',');
+                    if (comma) *comma = '\0';
+                    if (r.service_count >= SCAN_MAX_SERVICE_UUIDS) {
+                        Serial.printf("too many service uuids (max %u)\n",
+                                      (unsigned)SCAN_MAX_SERVICE_UUIDS);
+                        return;
+                    }
+                    if (!parseServiceUuid(p, r.service_uuids[r.service_count])) {
+                        Serial.printf("bad service uuid '%s' (expected 180F, 0x180F, "
+                                      "or 0000180F-0000-1000-8000-00805F9B34FB)\n", p);
+                        return;
+                    }
+                    r.service_count++;
+                    p = comma ? comma + 1 : nullptr;
+                }
             } else {
                 Serial.printf("ignoring unknown key '%s'\n", k);
             }

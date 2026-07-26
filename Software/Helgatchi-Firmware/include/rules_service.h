@@ -244,3 +244,9 @@ private:
 };
 
 extern RulesService g_rules;
+
+// Parse a service UUID — short form ("180F", "0x180F", promoted via the BLE
+// base UUID) or full dashed 128-bit form — into 16-byte LSB-first wire order,
+// byte-comparable to ScanResult.service_uuids. Used by rule criteria and
+// `scan inject service=` so the two can't drift.
+bool parseServiceUuid(const char* s, uint8_t out[16]);

@@ -254,7 +254,8 @@ public:
                        ((uint16_t)((uint8_t)mfg[1]) << 8);
         }
 
-        // Service UUIDs — stash up to 4, normalized to 128-bit wire order.
+        // Service UUIDs — stash up to SCAN_MAX_SERVICE_UUIDS, normalized to
+        // 128-bit wire order.
         // NimBLEUUID::to128() mutates the UUID in place, so we need a
         // non-const copy. getValue() returns a raw byte pointer (16 bytes
         // after promotion).

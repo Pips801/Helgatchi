@@ -19,7 +19,7 @@ pio run -t erase         # nuke the chip - full reset
 
 **Admin-mode secrets:** the build **hard-fails** without
 `HELGATCHI_HMAC_SECRET` and `HELGATCHI_ADMIN_PASSWORD` in the environment. For
-local development set `ALLOW_DEV_ADMIN_SECRET=1` instead.
+local development set `ALLOW_DEV_ADMIN_SECRET=1` instead. You can also put `ALLOW_DEV_ADMIN_SECRET=1` in a `.env` file in the root of the `Software` directory.
 
 ## Read these next
 
@@ -46,13 +46,14 @@ touching the site.
 
 ## Releases
 
-<!-- TODO: release process - tagging, what release.yml builds, versioning
-     scheme, manifest format the flasher consumes -->
+Firmware version releases are github version tags. A Github actions job (`.github/workflows/release.yml`) will run when a new tag is pushed, building the firmware using stored secrets for `HELGATCHI_ADMIN_PASSWORD` and `HELGATCHI_HMAC_SECRET`, which gate Admin mode behind a password and signs admin commands. 
+
+Release major and minor versions are as follows:
+- Major changes (new features, new settings keys, performance fixes, new UI screens, revamps, etc) change the major version tag (eg. 2.X.0)
+- Minor changes (bug fixes, grammatical fixes, small filesystem changes, behavior tweaks, etc) are minor version tag bumps (eg. 2.0.X)
+- The overall version is not expected to change, aside from a major hardware and software revision or update.
 
 ## Contributing
-
-<!-- TODO: PR expectations, code style pointers (CLAUDE.md conventions),
-     where to discuss before large changes -->
 
 Good first contributions: new factory rulesets (see
 [Detection rules](rules.md)), documentation TODOs, and spacer/bumper variants.

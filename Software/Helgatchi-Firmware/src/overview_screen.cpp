@@ -244,16 +244,23 @@ static uint8_t _batt_pct      = 100;   // 0..100 real; BATT_PCT_* sentinels (>10
 static bool    _alert_latched = false;
 static int8_t  _status_state  = ST_INVALID;
 
+// (IDLE) Helga is
 static const char* const IDLE_WORDS[]  = { "bored", "chilling", "idle", "loafing",
                                            "vibing", "daydreaming", "lounging",
                                            "zoning out", "thinking about WiFi", "thinking about BLE", "thinking about snacks", "happy", "relaxing" };
+
+// (SCANNING) Helga is SNIFF_VERBS BLE_NOUNS / WIFI_NOUNS
 static const char* const SNIFF_VERBS[] = { "sniffing", "snorting", "hoovering up", "sucking up", "scanning for", "snooping for" };
 static const char* const BLE_NOUNS[]   = { "BLE packets", "BLE advertisements", "BLE data",
                                            "BLE frames", "BLE beacons" };
 static const char* const WIFI_NOUNS[]  = { "WiFi frames", "WiFi packets", "WiFi data", "WiFi beacons", "WiFi probes", "WiFi advertisements" };
+
+// (LOW BATTERY)
 static const char* const LOW_BATT_LINES[] = { "Helga is tired", "Helga is sleepy",
                                               "Helga needs a nap", "Helga is dozing off",
                                               "Helga ran out of zoomies", "zzz..." };
+
+// (PARTY) Helga is PARTY_WORDS
 static const char* const PARTY_WORDS[] = { "getting crunk", "getting turnt", "partying", "throwing it back", "getting wild", "blacking out" };
 
 static const char* _pick(const char* const* arr, size_t n) { return arr[esp_random() % n]; }

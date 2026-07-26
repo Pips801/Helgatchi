@@ -166,7 +166,7 @@ static void _setLongModeIfChanged(lv_obj_t* label, lv_label_long_mode_t mode) {
 // NOTE: this is the one place UI is created in code, by explicit request —
 // EEZ Studio can't build this popup. Opened by pressing center on a card;
 // closed by press-and-hold center (handled generically in UIController, which
-// closes any open msgbox backdrop). While open, the two footer buttons own
+// closes any open msgbox backdrop). While open, the footer button owns
 // the button events (see onEvent).
 // ---------------------------------------------------------------------------
 
@@ -186,40 +186,34 @@ static void _mbHighlight() {
     }
 }
 
-// Right/down: scroll the content until its bottom, then step onto the buttons.
+// Right/down: scroll the content until its bottom, then step onto the button.
 static void _mbNavRight() {
     if (_mb_focus < 0) {
         if (lv_obj_get_scroll_bottom(_mb_content) > 0)
             lv_obj_scroll_by(_mb_content, 0, -MB_SCROLL_STEP, LV_ANIM_ON);
         else { _mb_focus = 0; _mbHighlight(); }
-    } else if (_mb_focus == 0) {
-        _mb_focus = 1; _mbHighlight();
     }
-    // on the last button: stay
+    // on the button: stay
 }
 
-// Left/up: step back through the buttons, then scroll the content up.
+// Left/up: step off the button back to content, then scroll the content up.
 static void _mbNavLeft() {
-    if (_mb_focus == 1)      { _mb_focus = 0;  _mbHighlight(); }
-    else if (_mb_focus == 0) { _mb_focus = -1; _mbHighlight(); }
+    if (_mb_focus == 0) { _mb_focus = -1; _mbHighlight(); }
     else if (lv_obj_get_scroll_top(_mb_content) > 0) {
         lv_obj_scroll_by(_mb_content, 0, MB_SCROLL_STEP, LV_ANIM_ON);
     }
 }
 
-// Center: activate the focused button. Hunt hands the selected device to the
-// foxhunt controller (which closes this popup's world by navigating away); Scan
-// is not built yet.
+// Center: activate the focused button. Foxhunt hands the selected device to the
+// foxhunt controller, which closes this popup's world by navigating away.
 static void _mbEnter() {
-    if (_mb_focus == 0) {                       // Hunt
+    if (_mb_focus == 0) {                       // Foxhunt
         if (_sel < 0 || _sel >= (int32_t)_row_count) return;
         const uint8_t domain = _rows[_sel].domain;
         uint8_t mac[6];
         memcpy(mac, _rows[_sel].mac, 6);
         lv_msgbox_close(_msgbox);               // drop the modal before we leave the screen
         g_foxhunting_screen.startHunt(domain, mac);
-    } else if (_mb_focus == 1) {                // Scan
-        // TODO: scan option — not implemented yet.
     }
 }
 
@@ -304,11 +298,9 @@ static void _openMsgbox(uint8_t domain, const uint8_t mac[6]) {
         lv_msgbox_add_text(mb, line);
     }
 
-    // Footer actions: Hunt → foxhunt lock-on this device; Scan → TBD.
-    lv_obj_t* b_hunt = lv_msgbox_add_footer_button(mb, "Hunt");
-    lv_obj_t* b_scan = lv_msgbox_add_footer_button(mb, "Scan");
-    add_style_focused___button(b_hunt);
-    add_style_focused___button(b_scan);
+    // Footer action: Foxhunt → foxhunt lock-on this device.
+    lv_obj_t* b_foxhunt = lv_msgbox_add_footer_button(mb, "Foxhunt");
+    add_style_focused___button(b_foxhunt);
 
     // Custom keypad nav (see _mbNav*): left/right scrolls the content to the
     // bottom, then steps through the buttons. The nav group is already empty
@@ -316,8 +308,8 @@ static void _openMsgbox(uint8_t domain, const uint8_t mac[6]) {
     // change so UIController's key routing stays a no-op while it's up.
     lv_group_remove_all_objs(groups.UINavigation);
     _mb_content = content;
-    _mb_btn[0]  = b_hunt;
-    _mb_btn[1]  = b_scan;
+    _mb_btn[0]  = b_foxhunt;
+    _mb_btn[1]  = nullptr;
     _mb_focus   = -1;                       // start in content-scroll mode
     lv_obj_scroll_to_y(content, 0, LV_ANIM_OFF);
     _mbHighlight();

@@ -18,7 +18,7 @@
       line-height: 1.6; -webkit-font-smoothing: antialiased;
     }
     main { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; }
-    header { text-align: center; margin-bottom: 2rem; }
+    header { text-align: center; margin-bottom: 2rem; position: relative; }
     h1 { font-size: 2rem; margin: 0 0 .25rem; letter-spacing: -.02em; }
     header p { color: var(--muted); margin: 0; }
 
@@ -98,6 +98,13 @@
       border-radius: 8px; padding: .5rem .6rem; font-family: ui-monospace, monospace;
     }
     a { color: var(--accent-hover); }
+    .store-link {
+      position: absolute; top: 0; right: 0;
+      background: #21262d; border: 1px solid var(--border); color: var(--text);
+      text-decoration: none; border-radius: 999px; padding: .45rem 1.05rem; font-size: .9rem;
+      white-space: nowrap;
+    }
+    .store-link:hover { border-color: var(--accent); color: var(--accent-hover); }
     .unsupported { background: rgba(248,81,73,.1); border: 1px solid rgba(248,81,73,.4); color: var(--danger-hover); padding: .75rem 1rem; border-radius: 8px; }
     footer { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 2rem; }
   </style>
@@ -105,6 +112,7 @@
 <body>
   <main>
     <header>
+      <a class="store-link" href="https://dc801.store/products/helgatchi" target="_blank" rel="noopener">Buy a Helgatchi 🐑</a>
       <img src="DC801_white.png">
       <h1>Helgatchi</h1>
       <p>Connect over USB to update firmware or open a console.</p>
@@ -231,7 +239,8 @@
 
     <footer>
       <a href="https://github.com/Pips801/Helgatchi">Source</a> ·
-      <a href="https://github.com/Pips801/Helgatchi/releases">Releases</a>
+      <a href="https://github.com/Pips801/Helgatchi/releases">Releases</a> ·
+      <a href="https://dc801.store/products/helgatchi">Store</a>
     </footer>
   </main>
 

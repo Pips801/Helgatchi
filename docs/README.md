@@ -5,13 +5,14 @@ pages are the manual.
 
 ## For users
 
+- [FAQ](faq.md) - frequently asked questions
 - [Getting started](getting-started.md) - unbox, charge, first boot, first alert
 - [User guide](user-guide.md) - screens, buttons, alerts, settings, foxhunt mode
 - [Flashing & updating](flashing.md) - web flasher, what survives an update, recovery
 - [Detection rules](rules.md) - how rulesets work and how to write your own
 - [Serial console](serial-console.md) - the USB command interface
 - [Troubleshooting](troubleshooting.md) - boot, flash, battery, screen problems
-- [FAQ](faq.md)
+
 
 ## For builders
 

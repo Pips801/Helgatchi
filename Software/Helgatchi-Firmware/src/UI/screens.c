@@ -2391,7 +2391,7 @@ void create_screen_info() {
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                             lv_obj_set_style_align(obj, LV_ALIGN_RIGHT_MID, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_RIGHT, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_label_set_text_static(obj, "Pips801\nSamIAm\nTucker\nMKFactor\nkimb3r\nNetkisune\nWade & Cade\nPoly801\nn1ghtbl00d");
+                            lv_label_set_text_static(obj, "Pips801\nSamIAm\nTucker\nMKFactor\nkimb3r\nNetkisune\nWade\nPoly801\nn1ghtbl00d");
                         }
                     }
                 }

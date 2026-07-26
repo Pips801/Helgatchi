@@ -8847,7 +8847,7 @@
                       "type": "LVGLLabelWidget",
                       "left": 0,
                       "top": 0,
-                      "width": 97,
+                      "width": 82,
                       "height": 144,
                       "customInputs": [],
                       "customOutputs": [],
@@ -8889,7 +8889,7 @@
                       },
                       "group": "",
                       "groupIndex": 0,
-                      "text": "Pips801\nSamIAm\nTucker\nMKFactor\nkimb3r\nNetkisune\nWade & Cade\nPoly801\nn1ghtbl00d",
+                      "text": "Pips801\nSamIAm\nTucker\nMKFactor\nkimb3r\nNetkisune\nWade\nPoly801\nn1ghtbl00d",
                       "textType": "literal",
                       "longMode": "WRAP",
                       "recolor": false

@@ -369,7 +369,7 @@
       }
     }
 
-    // ---- Flash / restart / shipping (UI wrappers over the Flasher) ---------
+    // ---- Flash / restart (UI wrappers over the Flasher) --------------------
     async function doFlash({ erase }) {
       const tag = F.entries[$("versionSel").value]?.tag;
       if (!tag) { flashErr("No firmware version selected."); return; }
@@ -422,30 +422,6 @@
         toStale();          // device info stays on screen
       }
       setFlashUI(false);
-    }
-
-    // Factory shipping mode — sends `power shipping`, which acks "OK" then
-    // factory-wipes (settings/rules/alerts) and deep-sleeps. The link drops on
-    // its own; treat it as intentional so we don't auto-reconnect (the device
-    // only wakes on a long CENTER hold).
-    async function doShipping() {
-      if (F.flashing) return;
-      if (!F.port || !F.linkLive) { flashErr("Not connected — click Connect first."); return; }
-      if (!confirm("Factory shipping mode wipes ALL settings, rules, and alerts, then deep-sleeps the device for shipping. Wake it later with a long-press of CENTER. Continue?")) return;
-      setFlashUI(true);
-      F.userDisconnected = true;    // device won't come back on its own — don't auto-reconnect
-      try {
-        flashStatus("Sending shipping command…");
-        await F.doPower("shipping");
-        F.linkLive = false;
-        await F.stopReadLoop();
-        await F.closePort();
-        flashStatus("Device wiped and in shipping mode — long-press CENTER to wake.");
-        consoleNote("Device entered shipping mode (wiped + deep sleep).");
-        toStale();          // device info stays on screen; rules/console hide
-      } finally {
-        setFlashUI(false);
-      }
     }
 
     // ---- Rules editor ------------------------------------------------------
@@ -709,7 +685,6 @@
     function flashErr(m) { const e = $("flashStatus"); e.textContent = m; e.classList.add("error"); }
     function setFlashUI(busy) {
       $("flashBtn").disabled = busy; $("wipeBtn").disabled = busy; $("restartBtn").disabled = busy;
-      $("shippingBtn").disabled = busy;
       $("optFw").disabled = busy; $("optFs").disabled = busy; $("versionSel").disabled = busy;
       $("connectBtn").disabled = busy; $("disconnectBtn").disabled = busy;
       if (!busy) $("flashProgress").classList.add("hidden");
@@ -840,7 +815,6 @@
       if (confirm("Full wipe erases ALL settings and rules, then flashes everything. Continue?")) doFlash({ erase: true });
     });
     $("restartBtn").addEventListener("click", doRestart);
-    $("shippingBtn").addEventListener("click", doShipping);
 
     $("rulesNew").addEventListener("click", () => openEditor(null));
     $("ruleSave").addEventListener("click", saveRule);

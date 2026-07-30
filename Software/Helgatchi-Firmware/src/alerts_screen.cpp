@@ -1,6 +1,7 @@
 #include "alerts_screen.h"
 #include "alerts_service.h"
 #include "devices_screen.h"
+#include "toast_service.h"
 #include "display_service.h"
 #include "settings_service.h"
 #include "settings_keys.h"
@@ -60,12 +61,14 @@ static void _formatTimeAgo(char* buf, size_t buf_sz, uint32_t age_ms) {
     else               snprintf(buf, buf_sz, "%uh %um ago",  (unsigned)(s / 3600), (unsigned)((s / 60) % 60));
 }
 
-// Fade exec callback. lv_anim_exec_xcb_t is void(*)(void*, int32_t), but
-// lv_obj_set_style_opa takes a third `selector` argument — casting the function
-// pointer to the anim signature (as this did) leaves that argument as whatever
-// happens to be in the register, so the opacity lands on an arbitrary
-// part/state combination and the fade is invisible. It only ever appeared to
-// work when the junk value happened to be 0. Pass the selector explicitly.
+// Dismiss-fade exec callback.
+//
+// lv_anim_exec_xcb_t is void(*)(void*, int32_t), but lv_obj_set_style_opa takes a
+// third `selector` argument — casting the function pointer to the anim signature
+// (as this did) leaves that argument as whatever happens to be in the register,
+// so the opacity lands on an arbitrary part/state combination and the fade is
+// invisible. It only ever appeared to work when the junk value happened to be 0.
+// Pass the selector explicitly.
 static void _setCardOpa(void* card, int32_t opa) {
     lv_obj_set_style_opa((lv_obj_t*)card, (lv_opa_t)opa, LV_PART_MAIN | LV_STATE_DEFAULT);
 }
@@ -84,8 +87,8 @@ static void _on_dismiss_anim_done(lv_anim_t* a) {
 //
 // Nothing to show for an alert with no originating sighting (battery, system,
 // serial test alerts) or for a device that has since aged out of the scan
-// service's seen map. The press stays visually silent in both cases —
-// UIController already played the ENTER tick — so log why.
+// service's seen map. Both dead ends raise a self-dismissing toast so the press
+// reads as "nothing to show" rather than a broken selection.
 static void _on_card_click(lv_event_t* e) {
     auto* card = (lv_obj_t*)lv_event_get_user_data(e);
     // Act only on the card's own press, never a bubbled child's — dismissing an
@@ -97,12 +100,14 @@ static void _on_card_click(lv_event_t* e) {
     if (!rec) return;
     if (!rec->has_device) {
         Serial.printf("[alerts] alert %u has no device to show\n", (unsigned)alert_id);
+        g_toast.show("No device for this alert");
         return;
     }
     if (!g_devices_screen.openDeviceDetail(rec->domain, rec->mac, rec->title)) {
         Serial.printf("[alerts] %02X:%02X:%02X:%02X:%02X:%02X no longer in the seen map\n",
                       rec->mac[0], rec->mac[1], rec->mac[2],
                       rec->mac[3], rec->mac[4], rec->mac[5]);
+        g_toast.show("Device no longer seen");
     }
 }
 

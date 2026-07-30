@@ -61,6 +61,7 @@ Service catalog (`src/main.cpp` shows current init order):
 | `g_vibe`            | Haptic step-machine, pattern name registry                            |
 | `g_ui`              | LVGL `lv_timer_handler` wrapper, render gating when screen off        |
 | `g_display`         | Top-bar icon strings (battery / USB / BT / WiFi / bell)               |
+| `g_toast`           | Transient self-dismissing messages on the LVGL top layer. No `begin()` — call `g_toast.show("…")` from any UI code |
 | `g_settings_screen` | Settings widget wiring (EEZ-generated UI)                             |
 | `g_alerts_screen`   | Alert card UI (lives in its own file mirroring settings_service split)|
 

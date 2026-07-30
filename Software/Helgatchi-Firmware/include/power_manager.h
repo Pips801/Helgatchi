@@ -197,6 +197,11 @@ public:
     // (SKEY_SCAN_MODE == 0). Mirrors the between-window timing in tick().
     uint16_t secondsUntilNextScan() const;
 
+    // External power present (R4: ADC-sensed 5V rail; else USB data attached).
+    // Exposed because PERF_ALWAYS_ON only takes effect while charging, so the UI
+    // has to be able to say whether the mode is actually doing anything.
+    bool charging() const { return _is_charging; }
+
     // Per-radio scan duration (resolved: 0→default fallback applied, tracks any
     // future PERF_DYNAMIC adjustment). ScanEngine reads this so its intra-window
     // BLE→WiFi phase boundary derives from the same value as our total window.

@@ -28,7 +28,7 @@
 
 class ToastService {
 public:
-    static constexpr uint32_t DEFAULT_DWELL_MS = 1800;   // readable pause before the fade starts
+    static constexpr uint32_t DEFAULT_DWELL_MS = 1900;   // readable pause before the fade starts
     static constexpr uint32_t FADE_MS          = 180;
 
     // Show `text`, replacing any toast already on screen rather than stacking or

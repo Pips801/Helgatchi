@@ -12,6 +12,7 @@
 #include "scan_service.h"
 #include "vendor_lookup.h"
 #include "rules_service.h"
+#include "rules_screen.h"   // toastRuleRadioWarning
 #include "party_service.h"
 #include "admin_service.h"
 #include "overview_screen.h"
@@ -1769,7 +1770,10 @@ void SerialConsole::_cmdRule(char* args) {
         const bool en = (strcasecmp(sub, "enable") == 0);
         if (g_rules.setEnabled(rest, en)) {
             Serial.println("OK");
-            _toast("%s %s", rest, en ? "enabled" : "disabled");
+            // The radio warning supersedes the plain confirmation when it fires —
+            // it's the more useful of the two, and only one toast shows at a time.
+            if (!en)                            _toast("%s disabled", rest);
+            else if (!toastRuleRadioWarning(rest)) _toast("%s enabled", rest);
         } else {
             Serial.println("no such rule");
         }

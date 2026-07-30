@@ -2,6 +2,8 @@
 #include "settings_service.h"
 #include "settings_keys.h"
 #include "power_menu_screen.h"
+#include "power_manager.h"    // charging() — always-on needs external power
+#include "toast_service.h"
 #include "event_ids.h"
 #include "event_payload.h"
 #include "UI/screens.h"
@@ -118,8 +120,17 @@ static void _on_led_brightness(lv_event_t* /*e*/) {
 }
 
 static void _on_perf_mode(lv_event_t* /*e*/) {
-    uint16_t idx = lv_dropdown_get_selected(objects.scan_mode_dropdown);
-    _postSetting(SKEY_PERF_MODE, idx < 4 ? kIdxToPerf[idx] : PERF_BALANCED);
+    uint16_t idx  = lv_dropdown_get_selected(objects.scan_mode_dropdown);
+    uint8_t  perf = idx < 4 ? kIdxToPerf[idx] : PERF_BALANCED;
+    _postSetting(SKEY_PERF_MODE, perf);
+
+    // Always-on is conditional on external power — on battery the dropdown reads
+    // as selected while nothing about the scan cadence changes. State the
+    // requirement here, and confirm instead when it takes effect immediately.
+    if (perf == PERF_ALWAYS_ON) {
+        g_toast.show(g_power.charging() ? "Always-on scanning active"
+                                        : "Always-on needs\nexternal power");
+    }
 }
 
 static void _on_debug_level(lv_event_t* /*e*/) {

@@ -468,6 +468,47 @@ bool RulesService::setRuleField(const char* name, const char* field, const char*
     return false;
 }
 
+// Radios a single criterion can ever match against. Mirrors the domain gates in
+// _criterionMatches — keep the two in step if a criterion kind is added.
+static uint8_t _critRadioMask(CriterionKind k) {
+    switch (k) {
+        case CRIT_SSID_MATCH:            // explicitly gated to s.domain == SCAN_WIFI
+        case CRIT_IE_SIG:                //   ""
+            return 1u << SCAN_WIFI;
+        case CRIT_MFG:                   // s.mfg_id — always 0 on a WiFi frame
+        case CRIT_MFG_ORG:               // resolved from s.mfg_id
+        case CRIT_SERVICE:               // BLE advertisement service UUIDs
+            return 1u << SCAN_BLE;
+        default:                         // oui / mac / name / oui_org — either radio
+            return 0;
+    }
+}
+
+static uint8_t _ruleRadioMask(const Rule& r) {
+    uint8_t mask = 0;
+    for (uint16_t k = 0; k < r.criterion_count; k++) {
+        mask |= _critRadioMask(r.criteria[k].kind);
+    }
+    return mask;
+}
+
+uint8_t RulesService::ruleRadioMask(const char* name) const {
+    const int idx = _findRuleIdx(name);
+    if (idx < 0) return 0;
+    return _ruleRadioMask(_rules[idx]);
+}
+
+uint8_t RulesService::tagRadioMask(const char* tag) const {
+    if (!tag || !*tag) return 0;
+    // Union across every rule carrying the tag: enabling a tag turns all of them
+    // on at once, so the tag needs a radio if any one of its rules does.
+    uint8_t mask = 0;
+    for (uint16_t i = 0; i < _count; i++) {
+        if (hasTag(_rules[i], tag)) mask |= _ruleRadioMask(_rules[i]);
+    }
+    return mask;
+}
+
 bool RulesService::setEnabled(const char* name, bool enabled) {
     int idx = _findRuleIdx(name);
     if (idx < 0) return false;

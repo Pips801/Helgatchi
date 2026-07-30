@@ -3,6 +3,7 @@
 #include "hal.h"
 #include "vibe_service.h"
 #include "ui_controller.h"
+#include "toast_service.h"   // always-on state changes on a plug/unplug edge
 #include "log_service.h"
 #include "scan_service.h"
 #include "scan_engine.h"
@@ -635,6 +636,16 @@ void PowerManager::_sampleBattery() {
 void PowerManager::_flipChargeState(bool charging_now) {
     if (charging_now == _is_charging) return;
     _is_charging = charging_now;
+
+    // PERF_ALWAYS_ON is conditional on external power (see secondsUntilNextScan
+    // and _isInhibited), so plugging or unplugging silently turns continuous
+    // scanning on or off. Say so — otherwise the mode reads as broken on battery.
+    // Only reached on a real edge: _sampleBattery sets _is_charging directly at
+    // boot, so a unit powered up already plugged in doesn't announce anything.
+    if (_always_on) {
+        g_toast.show(charging_now ? "Always-on scanning active"
+                                  : "Always-on paused\nNeeds external power");
+    }
 
     if (charging_now) {
         // Arm rail learning for the settled sample — valid only when the

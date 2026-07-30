@@ -19,7 +19,7 @@ ToastService g_toast;
 // Horizontally centered, sitting this many pixels above the bottom of the screen
 // (bottom edge to screen edge) — the Android convention. Keeps it out of the dead
 // center, where it would cover whatever the operator was just looking at.
-static constexpr int32_t TOAST_BOTTOM_GAP_PX = 60;
+static constexpr int32_t TOAST_BOTTOM_GAP_PX = 30;
 
 static lv_obj_t*   _toast       = nullptr;
 static lv_timer_t* _toast_timer = nullptr;
@@ -66,6 +66,10 @@ static void _clear() {
 
 void ToastService::show(const char* text, uint32_t dwell_ms) {
     if (!text || !text[0]) return;
+    // Callers now include services that begin() before g_ui does (PowerManager),
+    // and lv_layer_top() on an uninitialized LVGL would fault. Cheap insurance —
+    // a missed toast during setup is nothing, a boot crash is a dead-looking unit.
+    if (!lv_display_get_default()) return;
     _clear();
 
     lv_obj_t* toast = lv_obj_create(lv_layer_top());
@@ -82,6 +86,10 @@ void ToastService::show(const char* text, uint32_t dwell_ms) {
     lv_obj_t* label = lv_label_create(toast);
     lv_obj_set_style_text_font(label, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_align(label, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+    // Centers each LINE within the label, which is what the two-line '\n' messages
+    // need — style_align above only centers the label object inside the panel and
+    // leaves the lines themselves ragged-left.
+    lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_label_set_text(label, text);   // copies; caller's buffer needn't outlive this
 
     _toast       = toast;

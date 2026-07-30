@@ -1,9 +1,14 @@
 #include "rules_screen.h"
 #include "rules_service.h"
+#include "toast_service.h"
+#include "settings_service.h"   // SKEY_SCAN_MODE — toastRuleRadioWarning
+#include "settings_keys.h"
+#include "scan_types.h"         // SCAN_BLE / SCAN_WIFI bit positions
 #include "event_ids.h"
 #include "UI/screens.h"
 #include <Arduino.h>
 #include <lvgl.h>
+#include <stdio.h>
 #include <string.h>
 #include <strings.h>
 
@@ -47,6 +52,55 @@ static void _setSwitch(lv_obj_t* sw, bool on) {
     else    lv_obj_remove_state(sw, LV_STATE_CHECKED);
 }
 
+// Shared by the rule and tag variants below. `needs` is a radio mask in
+// SKEY_SCAN_MODE's bit layout; `what` completes "Enable <radio> scanning for
+// <what>" and so reads as the requirement, not a prediction.
+//
+// Radios are named "BLE" and "WiFi" to match the Settings switch labels exactly
+// ("BLE Scanning" / "WiFi Scanning") — the toast should name the thing the
+// operator is about to go looking for.
+static bool _radioWarning(uint8_t needs, const char* what) {
+    // Same bit layout on both sides (bit 0 = BLE, bit 1 = WiFi), so this is plain
+    // mask subtraction: what's keyed on, minus what's switched on.
+    const uint8_t enabled = (uint8_t)(g_settings.get(SKEY_SCAN_MODE) & 0x3u);
+
+    // Radio-agnostic criteria only (oui / mac / name / oui_org) — no PARTICULAR
+    // radio is required, just one of them, so this is only a problem when nothing
+    // at all is running. "or" rather than "and": either switch fixes it.
+    if (needs == 0) {
+        if (enabled) return false;
+        g_toast.show("Enable BLE or WiFi scanning\nin Settings");
+        return true;
+    }
+
+    const uint8_t missing = (uint8_t)(needs & ~enabled);
+    if (!missing) return false;   // every radio that's keyed on is running
+
+    // Name the actual set. Both bits are reachable: a single rule can key on both
+    // (Flock matches a WiFi ie_sig AND BLE mfg data) and a tag's union routinely
+    // does, so with no radio enabled at all the honest answer is "BLE and WiFi".
+    const bool ble  = missing & (1u << SCAN_BLE);
+    const bool wifi = missing & (1u << SCAN_WIFI);
+    const char* radios = (ble && wifi) ? "BLE and WiFi" : (wifi ? "WiFi" : "BLE");
+
+    // Break after "scanning" so the longest first line ("Enable BLE and WiFi
+    // scanning", 28 chars) still fits the content-sized panel.
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Enable %s scanning\nfor %s", radios, what);
+    g_toast.show(buf);
+    return true;
+}
+
+bool toastRuleRadioWarning(const char* rule_name) {
+    if (!rule_name || !rule_name[0]) return false;
+    return _radioWarning(g_rules.ruleRadioMask(rule_name), "this rule to work");   // "...for this rule to work"
+}
+
+bool toastTagRadioWarning(const char* tag) {
+    if (!tag || !tag[0]) return false;
+    return _radioWarning(g_rules.tagRadioMask(tag), "all rules in this tag");
+}
+
 // Switch VALUE_CHANGED → RulesService. The resulting EV_RULES_CHANGED echo
 // re-syncs us on the next dispatch (idempotent under _inhibit).
 static void _onSwitchChanged(lv_event_t* e) {
@@ -57,7 +111,12 @@ static void _onSwitchChanged(lv_event_t* e) {
         _inhibit = true;
         _setSwitch(card->sw, !checked);
         _inhibit = false;
+        return;
     }
+    // Turning a rule ON is worthless if the radio it keys on is switched off —
+    // say so at the moment of the decision. Only on enable: disabling needs no
+    // caveat, and the switch itself is the confirmation either way.
+    if (checked) toastRuleRadioWarning(card->name);
 }
 
 static void _onTagSwitchChanged(lv_event_t* e) {
@@ -65,6 +124,10 @@ static void _onTagSwitchChanged(lv_event_t* e) {
     auto* card = (TagCard*)lv_event_get_user_data(e);
     const bool checked = lv_obj_has_state(card->sw, LV_STATE_CHECKED);
     g_rules.setTagEnabled(card->tag, checked);
+    // One toast for the whole tag, not one per rule it just enabled — the union of
+    // the tag's radio requirements answers the same question without strobing the
+    // screen through a dozen cards.
+    if (checked) toastTagRadioWarning(card->tag);
 }
 
 static void _buildCard(lv_obj_t* parent, RuleCard* out) {

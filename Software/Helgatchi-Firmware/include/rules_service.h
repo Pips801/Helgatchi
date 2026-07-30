@@ -162,10 +162,29 @@ public:
     // "nothing enabled" until the user opts in.
     bool setEnabled(const char* name, bool enabled);
 
+    // Which radios a rule's criteria actually depend on, as a mask of
+    // (1 << SCAN_BLE) | (1 << SCAN_WIFI) — the same bit layout as SKEY_SCAN_MODE
+    // (bit 0 = BLE, bit 1 = WiFi), so the two can be AND'ed directly.
+    //
+    // Counts only DOMAIN-SPECIFIC criteria: `ssid`/`ie_sig` are gated to WiFi at
+    // match time, and `mfg`/`mfg_org`/`service` can only ever match a BLE
+    // advertisement (mfg_id is 0 and there are no service UUIDs on a WiFi frame).
+    // `oui`/`mac`/`name`/`oui_org` match either radio and contribute nothing.
+    //
+    // Returns 0 for a rule that is entirely radio-agnostic, or an unknown name.
+    // Lets the UI warn that enabling a rule won't achieve much while the radio it
+    // keys on is switched off.
+    uint8_t ruleRadioMask(const char* name) const;
+
     // --- Tag API ---
     bool hasTag(const Rule& r, const char* tag) const;
     bool isTagEnabled(const char* tag) const;
     bool setTagEnabled(const char* tag, bool enabled);
+
+    // ruleRadioMask, unioned across every rule carrying `tag` — enabling a tag
+    // turns all of them on at once, so the tag depends on a radio if any one of
+    // its rules does. 0 for an unknown tag or an entirely radio-agnostic set.
+    uint8_t tagRadioMask(const char* tag) const;
     uint16_t getUniqueTags(char out_tags[][24], uint16_t max_tags) const;
 
     // --- Machine-readable I/O for the web companion ---

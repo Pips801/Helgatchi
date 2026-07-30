@@ -371,6 +371,7 @@ void AlertsScreen::begin(EventBus& bus) {
     bus.subscribe(EV_ALERT_RAISED,  this);
     bus.subscribe(EV_ALERT_UPDATED, this);
     bus.subscribe(EV_ALERT_CLEARED, this);
+    bus.subscribe(EV_ALERT_DROPPED, this);
 
     // Initial UI sync: empty-state label, status-bar bell, time-refresh timer.
     _refreshNoAlertsLabel();
@@ -442,6 +443,13 @@ void AlertsScreen::onEvent(const Event& e) {
         case EV_ALERT_UPDATED:
             _onAlertUpdated(e.data.alert.alert_id);
             // Count didn't change → no need to refresh empty-state or bell.
+            break;
+
+        case EV_ALERT_DROPPED:
+            // The store is full, so a detection was thrown away. Say so — otherwise
+            // the device looks like it simply stopped finding things. Shown wherever
+            // the operator happens to be; AlertsService rate-limits the event.
+            g_toast.show("Alerts full — dismiss some");
             break;
 
         case EV_ALERT_CLEARED:

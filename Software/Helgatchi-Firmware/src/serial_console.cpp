@@ -15,8 +15,10 @@
 #include "party_service.h"
 #include "admin_service.h"
 #include "overview_screen.h"
+#include "toast_service.h"
 #include "version.h"
 #include <Arduino.h>
+#include <stdarg.h>
 #include <FastLED.h>
 #include <lvgl.h>
 #include <stdlib.h>
@@ -26,6 +28,33 @@ static int _resolveLedId(const char* s);                       // defined lower;
 static bool _parseScanDomain(const char* s, ScanDomain* out);  // defined with `scan`; used by _cmdAlert
 static bool _parseMac(const char* s, uint8_t out[6]);          //   ""
 static const char* _scanDomainName(ScanDomain d);              //   ""
+
+// ---------------------------------------------------------------------------
+// Mirror a console-initiated action onto the device screen.
+//
+// When someone drives the device over the cable their eyes are on the hardware,
+// not the terminal — a haptic fires, a setting flips, a device gets injected, and
+// the screen says nothing about any of it. This puts a transient line on the panel
+// alongside the usual serial output.
+//
+// Console-only on purpose: the same service calls reached through the UI already
+// carry their own feedback (the switch moves, the card appears, the screen
+// transitions), so toasting there would double up.
+//
+// Call ONLY on successful mutations — never on usage/error paths (they already
+// print, and a toast for a mistyped command is noise), never on read-only
+// commands, and never on the machine-facing ones (`rule dump` / `rule save` are
+// the web companion's bulk-sync path; per-rule toasts would strobe the screen
+// through a whole ruleset push, with no human watching).
+// ---------------------------------------------------------------------------
+static void _toast(const char* fmt, ...) {
+    char buf[64];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    g_toast.show(buf);   // copies into the label; buf needn't outlive the call
+}
 
 // Trim leading/trailing ASCII whitespace in place (internal whitespace kept).
 // Matches the password normalization in scripts/build_admin_secret.py so the
@@ -288,18 +317,21 @@ void SerialConsole::_cmdSetting(char* args) {
         p.settings_set.value = val;
         _bus->post(CMD_SETTINGS_SET, p);
         Serial.printf("OK: [%u] %s = %lu\n", key, s_key_name[key], (unsigned long)val);
+        _toast("%s = %lu", s_key_name[key], (unsigned long)val);
         return;
     }
 
     if (sub && strcasecmp(sub, "save") == 0) {
         _bus->post(CMD_SETTINGS_SAVE);
         Serial.println("OK: settings saved to NVS");
+        _toast("Settings saved");
         return;
     }
 
     if (sub && strcasecmp(sub, "reset") == 0) {
         _bus->post(CMD_SETTINGS_RESET_DEFAULTS);
         Serial.println("OK: settings reset to factory defaults");
+        _toast("Settings reset to defaults");
         return;
     }
 
@@ -482,12 +514,14 @@ void SerialConsole::_cmdLed(char* args) {
         g_leds.playAlertPattern(pat, duration_ms);
         if (duration_ms > 0) Serial.printf("OK: %s for %lu ms\n", ledPatternName(pat), (unsigned long)duration_ms);
         else                 Serial.printf("OK: %s (until preempted or 'led off')\n", ledPatternName(pat));
+        _toast("LED: %s", ledPatternName(pat));
         return;
     }
 
     if (sub && strcasecmp(sub, "off") == 0) {
         g_leds.playAlertPattern(LED_PATTERN_OFF, 0);
         Serial.println("OK: alert layer cleared");
+        _toast("LED off");
         return;
     }
 
@@ -498,6 +532,7 @@ void SerialConsole::_cmdLed(char* args) {
         if (n > 255) n = 255;
         FastLED.setBrightness((uint8_t)n);
         FastLED.show();
+        _toast("LED brightness %d", n);
         Serial.printf("OK: FastLED brightness = %d (reverts on settings change / reboot)\n", n);
         return;
     }
@@ -544,12 +579,14 @@ void SerialConsole::_cmdVibe(char* args) {
         }
         g_vibe.play(pat);
         Serial.printf("OK: %s\n", vibePatternName(pat));
+        _toast("Vibe: %s", vibePatternName(pat));
         return;
     }
 
     if (sub && strcasecmp(sub, "off") == 0) {
         g_vibe.play(HAPTIC_OFF);
         Serial.println("OK: motor off");
+        _toast("Vibe off");
         return;
     }
 
@@ -598,6 +635,7 @@ void SerialConsole::_cmdHelga(char* args) {
         g_overview_screen.hold(true);
         g_overview_screen.play(anim);
         Serial.printf("OK: %s (held until 'helga auto')\n", helgaAnimName(anim));
+        _toast("Helga: %s", helgaAnimName(anim));
         return;
     }
 
@@ -605,6 +643,7 @@ void SerialConsole::_cmdHelga(char* args) {
         g_overview_screen.hold(false);
         g_overview_screen.play(HELGA_IDLE);
         Serial.println("OK: event-driven animation restored");
+        _toast("Helga: auto");
         return;
     }
 
@@ -672,13 +711,14 @@ void SerialConsole::_cmdAdmin(char* args) {
     if (sub && strcasecmp(sub, "unlock") == 0) {
         char* pw = _trimWs(rest);
         if (!pw || !*pw) { Serial.println("usage: admin unlock <password>"); return; }
-        if (g_admin.unlock(pw)) Serial.println("OK: admin unlocked");
+        if (g_admin.unlock(pw)) { Serial.println("OK: admin unlocked"); _toast("Admin unlocked"); }
         else                    Serial.println("ERR: wrong password");
         return;
     }
     if (sub && strcasecmp(sub, "lock") == 0) {
         g_admin.lock();
         Serial.println("OK: admin locked");
+        _toast("Admin locked");
         return;
     }
 
@@ -1188,6 +1228,7 @@ void SerialConsole::_cmdAlert(char* args) {
     if (sub && strcasecmp(sub, "clear") == 0) {
         const uint8_t n_before = g_alerts.count();
         g_alerts.clearAll();
+        if (n_before) _toast("Cleared %u alert%s", (unsigned)n_before, n_before == 1 ? "" : "s");
         Serial.printf("OK: cleared %u alert%s\n",
                       (unsigned)n_before, n_before == 1 ? "" : "s");
         return;
@@ -1314,6 +1355,7 @@ void SerialConsole::_cmdScan(char* args) {
     if (sub && strcasecmp(sub, "clear") == 0) {
         g_scan_service.clear();
         Serial.println("OK: seen-devices map cleared");
+        _toast("Seen map cleared");
         return;
     }
 
@@ -1411,6 +1453,8 @@ void SerialConsole::_cmdScan(char* args) {
                       _scanDomainName((ScanDomain)r.domain),
                       r.mac[0], r.mac[1], r.mac[2], r.mac[3], r.mac[4], r.mac[5],
                       (unsigned)g_scan_service.seenCount());
+        _toast("Injected %02X:%02X:%02X:%02X:%02X:%02X",
+               r.mac[0], r.mac[1], r.mac[2], r.mac[3], r.mac[4], r.mac[5]);
         return;
     }
 
@@ -1723,7 +1767,12 @@ void SerialConsole::_cmdRule(char* args) {
     if (sub && (strcasecmp(sub, "enable") == 0 || strcasecmp(sub, "disable") == 0)) {
         if (!rest) { Serial.printf("usage: rule %s <name>\n", sub); return; }
         const bool en = (strcasecmp(sub, "enable") == 0);
-        Serial.println(g_rules.setEnabled(rest, en) ? "OK" : "no such rule");
+        if (g_rules.setEnabled(rest, en)) {
+            Serial.println("OK");
+            _toast("%s %s", rest, en ? "enabled" : "disabled");
+        } else {
+            Serial.println("no such rule");
+        }
         return;
     }
 
@@ -1766,6 +1815,7 @@ void SerialConsole::_cmdRule(char* args) {
         Serial.printf("OK: reloaded %u ruleset%s with %lu rule%s\n",
                       (unsigned)n, n == 1 ? "" : "s",
                       (unsigned long)nr, nr == 1 ? "" : "s");
+        _toast("Rules reloaded - %u loaded", (unsigned)n);
         return;
     }
 
@@ -1800,6 +1850,7 @@ void SerialConsole::_cmdRule(char* args) {
             }
         }
         Serial.printf("OK: rule '%s' created\n", name);
+        _toast("Rule %s created", name);
         return;
     }
 
@@ -1843,7 +1894,12 @@ void SerialConsole::_cmdRule(char* args) {
 
     if (sub && strcasecmp(sub, "delete") == 0) {
         if (!rest) { Serial.println("usage: rule delete <name>"); return; }
-        Serial.println(g_rules.deleteRule(rest) ? "OK" : "no such rule");
+        if (g_rules.deleteRule(rest)) {
+            Serial.println("OK");
+            _toast("Rule %s deleted", rest);
+        } else {
+            Serial.println("no such rule");
+        }
         return;
     }
 

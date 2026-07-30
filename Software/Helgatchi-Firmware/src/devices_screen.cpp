@@ -5,6 +5,7 @@
 #include "vendor_lookup.h"
 #include "vibe_service.h"
 #include "ui_controller.h"
+#include "power_manager.h"      // secondsUntilNextScan — drives the empty-state text
 #include "event_ids.h"
 #include "UI/screens.h"
 #include "UI/styles.h"
@@ -590,6 +591,38 @@ static void _setupTitle() {
     lv_label_set_text(_title_label, "Devices");
 }
 
+// Empty-state text on objects.no_devices_label (created and styled in EEZ Studio;
+// only the wording is ours). Hidden whenever there's anything to list.
+//
+// An empty list has two very different causes and the operator can't tell them
+// apart: no radio is enabled, so nothing will EVER appear, versus we're simply
+// between scan windows. PowerManager::secondsUntilNextScan already distinguishes
+// them — 0xFFFF when SKEY_SCAN_MODE has no radio bits, 0 while a window is open
+// (or always-on while charging), else the seconds remaining.
+//
+// Keeps the design's leading newline so it sits where no_alerts_label does.
+static void _refreshEmptyState() {
+    lv_obj_t* label = objects.no_devices_label;
+    if (!label) return;
+
+    if (_row_count > 0) {
+        lv_obj_add_flag(label, LV_OBJ_FLAG_HIDDEN);
+        return;
+    }
+    lv_obj_remove_flag(label, LV_OBJ_FLAG_HIDDEN);
+
+    const uint16_t next = g_power.secondsUntilNextScan();
+    char buf[64];
+    if (next == 0xFFFFu) {
+        snprintf(buf, sizeof(buf), "\nYou must enable at least\none scanner in Settings");
+    } else if (next == 0) {
+        snprintf(buf, sizeof(buf), "\nNo devices seen\nScanning...");
+    } else {
+        snprintf(buf, sizeof(buf), "\nNo devices seen\nScanning in %us", (unsigned)next);
+    }
+    _setLabelIfChanged(label, buf);
+}
+
 static void _updateTitle() {
     if (!_title_label) return;
     char buf[24];
@@ -609,6 +642,7 @@ static bool _tryRefresh() {
     _rebuildRows();
     _applyWindow();
     _updateTitle();              // "<N> Devices" — count follows the age-filtered list
+    _refreshEmptyState();        // show/hide the "no devices" label for the new count
     _scrollToSel(LV_ANIM_OFF);   // hold the selected device in place through reorders
     _dirty = false;
     return true;
@@ -670,6 +704,9 @@ bool DevicesScreen::openDeviceDetail(uint8_t domain, const uint8_t mac[6],
 
 void DevicesScreen::begin(EventBus& bus) {
     bus.subscribe(EV_SCAN_COMPLETE, this);
+    // 1 Hz tick for the empty-state countdown only. The 5 s _age_timer is too
+    // coarse for it, and PowerManager already posts this, so no new timer.
+    bus.subscribe(EV_TICK_1S,       this);
     // Buttons drive selection directly (and the detail popup's nav while it's
     // open) — the nav group stays empty on this screen, so UIController's
     // keypad routing doesn't compete.
@@ -690,7 +727,8 @@ void DevicesScreen::begin(EventBus& bus) {
             if (!_pool_built) _buildPool();
             _setupTitle();                             // idempotent; ensures title even if begin() ran early
             if (_dirty) _kickRefresh();                // stale — rebuild for this view
-            else        _scrollToSel(LV_ANIM_OFF);     // re-assert viewport on re-entry
+            else      { _scrollToSel(LV_ANIM_OFF);     // re-assert viewport on re-entry
+                        _refreshEmptyState(); }        // ...and the countdown, which ticked while away
         }, LV_EVENT_SCREEN_LOAD_START, nullptr);
     }
 }
@@ -702,6 +740,15 @@ void DevicesScreen::onEvent(const Event& e) {
             // Off-screen we stay dirty and the next screen load rebuilds.
             _dirty = true;
             if (lv_screen_active() == objects.devices) _kickRefresh();
+            break;
+
+        case EV_TICK_1S:
+            // Advance the "Scanning in Ns" countdown. Only while the list is both
+            // visible and empty — with rows on screen the label is hidden and there
+            // is nothing to tick.
+            if (_row_count == 0 && lv_screen_active() == objects.devices) {
+                _refreshEmptyState();
+            }
             break;
 
         case EV_BTN_LEFT:

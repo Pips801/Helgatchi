@@ -2202,7 +2202,7 @@
           "left": 1425,
           "top": 421,
           "width": 310,
-          "height": 53,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -2228,7 +2228,7 @@
           "left": 1004,
           "top": 344,
           "width": 353,
-          "height": 53,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -2254,7 +2254,7 @@
           "left": 1580,
           "top": 344,
           "width": 286,
-          "height": 53,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -2280,7 +2280,7 @@
           "left": 748,
           "top": 421,
           "width": 298,
-          "height": 53,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -2306,7 +2306,7 @@
           "left": 428,
           "top": 317,
           "width": 304,
-          "height": 53,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -2332,7 +2332,7 @@
           "left": 463,
           "top": 19,
           "width": 206,
-          "height": 53,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -2352,7 +2352,7 @@
           "left": 256,
           "top": 394,
           "width": 310,
-          "height": 53,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -2377,8 +2377,8 @@
           "type": "LVGLActionComponent",
           "left": 1955,
           "top": 453,
-          "width": 323,
-          "height": 54,
+          "width": 322,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -2403,8 +2403,8 @@
           "type": "LVGLActionComponent",
           "left": 2277,
           "top": 380,
-          "width": 323,
-          "height": 54,
+          "width": 322,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -2429,8 +2429,8 @@
           "type": "LVGLActionComponent",
           "left": 826,
           "top": 249,
-          "width": 293,
-          "height": 54,
+          "width": 292,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -2899,8 +2899,8 @@
           "type": "LVGLActionComponent",
           "left": 332,
           "top": 150,
-          "width": 317,
-          "height": 53,
+          "width": 316,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -7853,8 +7853,8 @@
           "type": "LVGLActionComponent",
           "left": 330,
           "top": 271,
-          "width": 397,
-          "height": 53,
+          "width": 396,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -7879,8 +7879,8 @@
           "type": "LVGLActionComponent",
           "left": 695,
           "top": 39,
-          "width": 336,
-          "height": 53,
+          "width": 335,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -7900,7 +7900,7 @@
           "left": 330,
           "top": 146,
           "width": 329,
-          "height": 53,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -7919,8 +7919,8 @@
           "type": "LVGLActionComponent",
           "left": 336,
           "top": 39,
-          "width": 323,
-          "height": 53,
+          "width": 322,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -7939,8 +7939,8 @@
           "type": "LVGLActionComponent",
           "left": 336,
           "top": 210,
-          "width": 323,
-          "height": 53,
+          "width": 322,
+          "height": 52,
           "customInputs": [],
           "customOutputs": [],
           "actions": [
@@ -9539,7 +9539,60 @@
               "topUnit": "px",
               "widthUnit": "%",
               "heightUnit": "%",
-              "children": [],
+              "children": [
+                {
+                  "objID": "7cb3fe00-6e0e-4acb-a070-976ee51388b1",
+                  "type": "LVGLLabelWidget",
+                  "left": 0,
+                  "top": 0,
+                  "width": 117,
+                  "height": 32,
+                  "customInputs": [],
+                  "customOutputs": [],
+                  "style": {
+                    "objID": "e61b9831-174b-4da4-d359-dea3c4c46ed0",
+                    "useStyle": "default",
+                    "conditionalStyles": [],
+                    "childStyles": []
+                  },
+                  "timeline": [],
+                  "eventHandlers": [],
+                  "identifier": "No devices label",
+                  "leftUnit": "px",
+                  "topUnit": "px",
+                  "widthUnit": "content",
+                  "heightUnit": "content",
+                  "children": [],
+                  "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+                  "hiddenFlagType": "literal",
+                  "clickableFlagType": "literal",
+                  "flagScrollbarMode": "",
+                  "flagScrollDirection": "",
+                  "scrollSnapX": "",
+                  "scrollSnapY": "",
+                  "checkedStateType": "literal",
+                  "disabledStateType": "literal",
+                  "states": "",
+                  "localStyles": {
+                    "objID": "b60bb4bc-9630-42ce-d986-5c165745e954",
+                    "definition": {
+                      "MAIN": {
+                        "DEFAULT": {
+                          "text_color": "Subtext",
+                          "text_font": "MONTSERRAT_14",
+                          "text_decor": "NONE"
+                        }
+                      }
+                    }
+                  },
+                  "group": "",
+                  "groupIndex": 0,
+                  "text": "\nNo devices seen",
+                  "textType": "literal",
+                  "longMode": "WRAP",
+                  "recolor": false
+                }
+              ],
               "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE|SCROLL_ON_FOCUS|SCROLL_ONE",
               "hiddenFlagType": "literal",
               "clickableFlag": true,

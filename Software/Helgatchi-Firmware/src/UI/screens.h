@@ -193,6 +193,7 @@ typedef struct _objects_t {
     lv_obj_t *alert_container;
     lv_obj_t *no_alerts_label;
     lv_obj_t *devices_container;
+    lv_obj_t *no_devices_label;
     lv_obj_t *obj42;
     lv_obj_t *system___health_container;
     lv_obj_t *power_container;

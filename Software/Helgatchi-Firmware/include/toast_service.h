@@ -4,10 +4,12 @@
 // ---------------------------------------------------------------------------
 // Toast notifications
 //
-// One transient message at a time, centered on the LVGL top layer: it dwells
-// long enough to read, fades out, and deletes itself. For feedback that doesn't
-// deserve a screen or a modal — a press that can't go anywhere, an action that
-// otherwise succeeds silently, a value that got clamped.
+// One transient message at a time on the LVGL top layer, horizontally centered in
+// the lower half of the screen (Android-style, so it doesn't cover whatever the
+// operator was just looking at): it dwells long enough to read, fades out, and
+// deletes itself. For feedback that doesn't deserve a screen or a modal — a press
+// that can't go anywhere, an action that otherwise succeeds silently, a value that
+// got clamped.
 //
 // Deliberately NOT an lv_msgbox. A msgbox builds a modal backdrop that dims the
 // screen, swallows input, and is exactly what UIController's long-press "close
@@ -26,8 +28,8 @@
 
 class ToastService {
 public:
-    static constexpr uint32_t DEFAULT_DWELL_MS = 1500;   // readable pause before the fade starts
-    static constexpr uint32_t FADE_MS          = 150;
+    static constexpr uint32_t DEFAULT_DWELL_MS = 1800;   // readable pause before the fade starts
+    static constexpr uint32_t FADE_MS          = 180;
 
     // Show `text`, replacing any toast already on screen rather than stacking or
     // queueing. The string is copied into the label, so a stack buffer is fine.

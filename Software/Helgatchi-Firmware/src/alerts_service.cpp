@@ -101,7 +101,19 @@ uint16_t AlertsService::raise(const char* title,
     }
 
     // New alert. Drop if capacity is full — preserve unacked history.
-    if (_count >= MAX_ALERTS) return INVALID_ALERT;
+    if (_count >= MAX_ALERTS) {
+        // Announce the loss: from the outside the device just stops alerting, which
+        // looks identical to nothing being there. Rate-limited here rather than at
+        // the call site because a present device re-fires its rule several times a
+        // second and every one of them lands on this path — an unthrottled emit
+        // would fill the bus queue and start dropping unrelated events.
+        const uint32_t now = millis();
+        if (now - _last_drop_emit_ms >= DROP_EMIT_INTERVAL_MS) {
+            _last_drop_emit_ms = now;
+            _emit(EV_ALERT_DROPPED, INVALID_ALERT);   // no record exists to reference
+        }
+        return INVALID_ALERT;
+    }
 
     AlertRecord& r = _records[_count++];
     r.id = _next_id++;

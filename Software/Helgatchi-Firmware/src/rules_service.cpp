@@ -802,7 +802,9 @@ void RulesService::_fire(Rule& r, const ScanResult& s) {
     if (id == AlertsService::INVALID_ALERT) {
         // Store full (16 active) and this device has no existing record —
         // the alert is lost. Throttled: a present device re-fires several
-        // times a second.
+        // times a second. The on-screen half of this is AlertsService emitting
+        // EV_ALERT_DROPPED (throttled separately); this log stays because it
+        // names the rule, which the event can't carry.
         static uint32_t s_last_warn_ms = 0;
         const uint32_t now = millis();
         if (now - s_last_warn_ms >= 5000) {

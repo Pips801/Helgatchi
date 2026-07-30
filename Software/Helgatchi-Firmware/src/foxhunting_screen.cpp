@@ -5,6 +5,7 @@
 #include "vendor_lookup.h"
 #include "led_service.h"        // hunt proximity meter (LED pulse + synced vibe tick)
 #include "display_service.h"    // hunt status-bar icons (GPS + hunted radio)
+#include "toast_service.h"      // feedback when the target aged out before the press
 #include "event_payload.h"
 #include "UI/screens.h"
 #include "UI/eez-flow.h"
@@ -79,7 +80,14 @@ void FoxhuntingScreen::onEvent(const Event& /*e*/) {}   // no subscriptions
 
 void FoxhuntingScreen::startHunt(uint8_t domain, const uint8_t mac[6]) {
     const ScanResult* r = g_scan_service.findSeen(domain, mac);
-    if (!r) return;   // aged out between selection and press — nothing to hunt
+    if (!r) {
+        // Aged out of the seen map between selection and press — nothing to hunt.
+        // The caller (_mbEnter) already closed the detail popup, so without this the
+        // operator watches the modal vanish and lands back on the list with no hunt
+        // and no reason. Same wording as the alerts card's dead end: same condition.
+        g_toast.show("Device no longer seen");
+        return;
+    }
 
     _domain = domain;
     memcpy(_mac, mac, 6);

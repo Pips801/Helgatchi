@@ -103,6 +103,11 @@ public:
     void onEvent(const Event& e) override;
 
 private:
+    // Minimum gap between EV_ALERT_DROPPED emissions. Every advertisement from a
+    // present device retries the full store, so this is a bus-protection gate, not
+    // a cosmetic one.
+    static constexpr uint32_t DROP_EMIT_INTERVAL_MS = 5000;
+
     int _findIndexById(uint16_t alert_id) const;
     int _findIndexByDedup(AlertType type, const char* identifier) const;
     void _emit(EventId id, uint16_t alert_id);
@@ -112,6 +117,7 @@ private:
     uint8_t     _count               = 0;
     uint16_t    _next_id             = 1;   // 0 reserved as INVALID_ALERT
     EventBus*   _bus                 = nullptr;
+    uint32_t    _last_drop_emit_ms   = 0;   // EV_ALERT_DROPPED throttle
 };
 
 extern AlertsService g_alerts;

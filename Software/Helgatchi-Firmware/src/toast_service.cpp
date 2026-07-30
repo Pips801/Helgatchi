@@ -16,6 +16,11 @@ ToastService g_toast;
 // consistent state and can't dangle.
 // ---------------------------------------------------------------------------
 
+// Horizontally centered, sitting this many pixels above the bottom of the screen
+// (bottom edge to screen edge) — the Android convention. Keeps it out of the dead
+// center, where it would cover whatever the operator was just looking at.
+static constexpr int32_t TOAST_BOTTOM_GAP_PX = 60;
+
 static lv_obj_t*   _toast       = nullptr;
 static lv_timer_t* _toast_timer = nullptr;
 
@@ -66,7 +71,7 @@ void ToastService::show(const char* text, uint32_t dwell_ms) {
     lv_obj_t* toast = lv_obj_create(lv_layer_top());
     add_style_alert_card(toast);   // theme-tracked panel, same as the alert cards
     lv_obj_set_size(toast, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-    lv_obj_align(toast, LV_ALIGN_CENTER, 0, 0);
+    lv_obj_align(toast, LV_ALIGN_BOTTOM_MID, 0, -TOAST_BOTTOM_GAP_PX);
     // Never interactive, never focusable: it must not eat a press, and it must
     // not land in groups.UINavigation, which screens rebuild underneath it.
     lv_obj_remove_flag(toast, (lv_obj_flag_t)(LV_OBJ_FLAG_CLICKABLE |

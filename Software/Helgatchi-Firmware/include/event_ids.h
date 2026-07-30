@@ -49,6 +49,11 @@ enum EventId : uint16_t {
     EV_ALERT_UPDATED,
     EV_ALERT_CLEARED,
     EV_ALERT_SNOOZED,
+    EV_ALERT_DROPPED,          // raise() refused: store full and no dedup match, so the
+                               // detection is lost. Rate-limited by AlertsService — a
+                               // present device re-fires its rule several times a second.
+                               // AlertsScreen surfaces it as a toast; without it the
+                               // device just appears to stop alerting.
 
     EV_POWER_STATE_CHANGED,
     EV_BATTERY_UPDATED,

@@ -54,7 +54,7 @@ Service catalog (`src/main.cpp` shows current init order):
 | `g_logger`          | LVGL perf overlay gating, serial debug-level filtering                |
 | `g_console`         | Serial command parser                                                 |
 | `g_power`           | Scan/sleep cycle, battery sampling, shipping mode                     |
-| `g_alerts`          | Active alert store (RTC slow memory persistence across deep sleep)    |
+| `g_alerts`          | Active alert store (RTC slow memory persistence across deep sleep). Caps at 16 unacked — past that new detections are DROPPED, announced via `EV_ALERT_DROPPED` (throttled) so the UI can say so |
 | `g_scan_service`            | Scan-result ring buffer (256) + seen-devices map (128). Both in PSRAM |
 | `g_rules`           | Rules engine — loads `/rules/{factory,user}/*.json`, drains `g_scan_service`  |
 | `g_leds`            | LED pattern renderer (~30 fps), pattern name registry                 |

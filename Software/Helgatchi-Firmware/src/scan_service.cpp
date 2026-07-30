@@ -56,7 +56,12 @@ void ScanService::publish(const ScanResult& r) {
     _ring[_write_pos % RING_CAPACITY] = r;
     _write_pos++;
 
-    _updateSeen(r);
+    _updateSeen(r, /*bypass_noise_filter=*/false);
+}
+
+void ScanService::retain(const ScanResult& r) {
+    if (!_seen) return;
+    _updateSeen(r, /*bypass_noise_filter=*/true);
 }
 
 // ---------------------------------------------------------------------------
@@ -113,7 +118,14 @@ void ScanService::clear() {
 // Seen-devices map
 // ---------------------------------------------------------------------------
 
-void ScanService::_updateSeen(const ScanResult& r) {
+bool ScanService::noiseSuppressed(const ScanResult& r) {
+    return r.domain == SCAN_BLE
+        && macTypeIsRandom(r.mac_type)
+        && r.name[0] == '\0'
+        && g_settings.getBool(SKEY_IGNORE_RANDOMIZED_MACS);
+}
+
+void ScanService::_updateSeen(const ScanResult& r, bool bypass_noise_filter) {
     // Existing entry by MAC → update in place. Domain is part of the key
     // because BLE and WiFi MAC namespaces overlap (random/synthetic MACs).
     for (size_t i = 0; i < _seen_count; i++) {
@@ -126,13 +138,13 @@ void ScanService::_updateSeen(const ScanResult& r) {
         }
     }
 
-    // New device. Optionally drop nameless randomized BLE addresses before they
-    // ever enter the seen map: keeps the map small, stops RPA/NRPA churn from
-    // evicting real named devices, and keeps them off the device list. The ring
-    // write in publish() already happened before this call, so rules/alerts
-    // still fire on them — this only suppresses the browsable list entry.
-    if (r.domain == SCAN_BLE && macTypeIsRandom(r.mac_type) && r.name[0] == '\0' &&
-        g_settings.getBool(SKEY_IGNORE_RANDOMIZED_MACS)) {
+    // New device. Optionally keep nameless randomized BLE addresses out of the
+    // map: RPA/NRPA churn would otherwise evict real named devices from the 256
+    // slots. The ring write in publish() already happened before this call, so
+    // rules/alerts still fire on them — and one that DOES fire a rule comes back
+    // in through retain(), which bypasses this. The device list applies the same
+    // predicate at render time so retained entries stay unbrowsable.
+    if (!bypass_noise_filter && noiseSuppressed(r)) {
         _noise_filtered++;
         return;
     }

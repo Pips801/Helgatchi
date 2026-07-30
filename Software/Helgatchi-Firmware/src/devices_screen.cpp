@@ -4,6 +4,7 @@
 #include "scan_types.h"
 #include "vendor_lookup.h"
 #include "vibe_service.h"
+#include "ui_controller.h"
 #include "event_ids.h"
 #include "UI/screens.h"
 #include "UI/styles.h"
@@ -164,16 +165,24 @@ static void _setLongModeIfChanged(lv_obj_t* label, lv_label_long_mode_t mode) {
 // Device detail popup (lv_msgbox modal on the top layer)
 //
 // NOTE: this is the one place UI is created in code, by explicit request —
-// EEZ Studio can't build this popup. Opened by pressing center on a card;
-// closed by press-and-hold center (handled generically in UIController, which
-// closes any open msgbox backdrop). While open, the footer button owns
-// the button events (see onEvent).
+// EEZ Studio can't build this popup. Opened by pressing center on a card, or by
+// AlertsScreen via openDeviceDetail() for the device behind an alert; closed by
+// press-and-hold center (handled generically in UIController, which closes any
+// open msgbox backdrop). While open, the footer button owns the button events
+// (see onEvent) and UIController parks LVGL keypad routing (captureKeypad), so
+// the overlay can sit over any screen — including one whose nav group is
+// populated — without focus moving behind it.
 // ---------------------------------------------------------------------------
 
 static lv_obj_t* _msgbox     = nullptr;
 static int8_t    _mb_focus   = -1;   // -1 = scrolling content; 0/1 = footer button index
 static lv_obj_t* _mb_content = nullptr;
 static lv_obj_t* _mb_btn[2]  = {nullptr, nullptr};
+// Device the open popup describes. Held here, not read back from the selection,
+// so the footer actions work identically when the popup was opened from an
+// alert card (where there is no list selection to read).
+static uint8_t   _mb_domain  = 0;
+static uint8_t   _mb_mac[6]  = {0};
 static constexpr int MB_SCROLL_STEP = 30;   // px scrolled per left/right in content
 
 // Highlight the focused footer button (none while scrolling content). The
@@ -204,26 +213,28 @@ static void _mbNavLeft() {
     }
 }
 
-// Center: activate the focused button. Foxhunt hands the selected device to the
+// Center: activate the focused button. Foxhunt hands the popup's device to the
 // foxhunt controller, which closes this popup's world by navigating away.
 static void _mbEnter() {
     if (_mb_focus == 0) {                       // Foxhunt
-        if (_sel < 0 || _sel >= (int32_t)_row_count) return;
-        const uint8_t domain = _rows[_sel].domain;
+        const uint8_t domain = _mb_domain;
         uint8_t mac[6];
-        memcpy(mac, _rows[_sel].mac, 6);
+        memcpy(mac, _mb_mac, 6);
         lv_msgbox_close(_msgbox);               // drop the modal before we leave the screen
         g_foxhunting_screen.startHunt(domain, mac);
     }
 }
 
 static void _msgboxDeleteCb(lv_event_t* /*e*/) {
-    // Nothing to restore: the card list doesn't use the nav group, and the
-    // pooled cards were untouched under the modal.
+    // Hand the keypad back to whatever screen is underneath. Its nav group was
+    // never modified, so routing alone restores navigation — including focus.
+    g_ui.releaseKeypad();
     _msgbox     = nullptr;
     _mb_content = nullptr;
     _mb_btn[0]  = _mb_btn[1] = nullptr;
     _mb_focus   = -1;
+    _mb_domain  = 0;
+    memset(_mb_mac, 0, sizeof(_mb_mac));
 }
 
 static void _appendUuid(char* buf, size_t sz, const uint8_t uuid[16]) {
@@ -249,10 +260,10 @@ static int _uuid16(const uint8_t uuid[16]) {
     return uuid[12] | (uuid[13] << 8);
 }
 
-static void _openMsgbox(uint8_t domain, const uint8_t mac[6]) {
-    if (_msgbox) return;
+static bool _openMsgbox(uint8_t domain, const uint8_t mac[6], const char* context) {
+    if (_msgbox) return false;
     const ScanResult* r = g_scan_service.findSeen(domain, mac);
-    if (!r) return;
+    if (!r) return false;
 
     lv_obj_t* mb = lv_msgbox_create(nullptr);   // NULL parent → modal on top layer
     lv_obj_set_size(mb, LV_PCT(85), LV_PCT(85));
@@ -267,6 +278,14 @@ static void _openMsgbox(uint8_t domain, const uint8_t mac[6]) {
     // Content labels (compact font so the summary fits the 85% box).
     lv_obj_t* content = lv_msgbox_get_content(mb);
     lv_obj_set_style_text_font(content, &lv_font_montserrat_12, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+    // Leading context line — says why we're looking at this device when the
+    // popup wasn't reached from the list (an alert card names its alert).
+    if (context && context[0]) {
+        char ctx[64];
+        snprintf(ctx, sizeof(ctx), "Alert: %s\n", context);
+        lv_msgbox_add_text(mb, ctx);
+    }
 
     const uint32_t now = millis();
     char first_ago[24], last_ago[24];
@@ -303,19 +322,22 @@ static void _openMsgbox(uint8_t domain, const uint8_t mac[6]) {
     add_style_focused___button(b_foxhunt);
 
     // Custom keypad nav (see _mbNav*): left/right scrolls the content to the
-    // bottom, then steps through the buttons. The nav group is already empty
-    // on this screen; clear defensively in case the popup outlives a screen
-    // change so UIController's key routing stays a no-op while it's up.
-    lv_group_remove_all_objs(groups.UINavigation);
+    // bottom, then steps through the buttons. Park LVGL keypad routing for the
+    // duration so the screen behind — which may well have a populated nav group,
+    // e.g. the alerts list — can't also consume the same presses.
+    g_ui.captureKeypad();
     _mb_content = content;
     _mb_btn[0]  = b_foxhunt;
     _mb_btn[1]  = nullptr;
     _mb_focus   = -1;                       // start in content-scroll mode
+    _mb_domain  = domain;
+    memcpy(_mb_mac, mac, sizeof(_mb_mac));
     lv_obj_scroll_to_y(content, 0, LV_ANIM_OFF);
     _mbHighlight();
 
     lv_obj_add_event_cb(mb, _msgboxDeleteCb, LV_EVENT_DELETE, nullptr);
     _msgbox = mb;
+    return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -491,8 +513,8 @@ static void _sortByRssi(uint16_t* order, uint16_t n) {
     }
 }
 
-// Snapshot the seen-map into _rows (age-filtered, strongest-first) and
-// re-locate the selection. Data only — no LVGL work here.
+// Snapshot the seen-map into _rows (age- and noise-filtered, strongest-first)
+// and re-locate the selection. Data only — no LVGL work here.
 static void _rebuildRows() {
     const uint16_t n   = (uint16_t)g_scan_service.seenCount();
     const uint32_t now = millis();
@@ -500,7 +522,14 @@ static void _rebuildRows() {
     static uint16_t order[ScanService::SEEN_CAPACITY];
     uint16_t m = 0;
     for (uint16_t i = 0; i < n; i++) {
-        if (now - g_scan_service.seenAt(i).timestamp_ms <= DEVICE_LIST_AGE_MS) order[m++] = i;
+        const ScanResult& s = g_scan_service.seenAt(i);
+        if (now - s.timestamp_ms > DEVICE_LIST_AGE_MS) continue;
+        // The display half of the randomized-MAC noise filter. These are only in
+        // the map because they fired a rule and ScanService::retain() put them
+        // there for the alert card's detail overlay — SKEY_IGNORE_RANDOMIZED_MACS
+        // still keeps them off this list.
+        if (ScanService::noiseSuppressed(s)) continue;
+        order[m++] = i;
     }
     _sortByRssi(order, m);
 
@@ -634,6 +663,11 @@ static void _ageTimerCb(lv_timer_t* /*t*/) {
 
 uint16_t DevicesScreen::cardCount() const { return _row_count; }
 
+bool DevicesScreen::openDeviceDetail(uint8_t domain, const uint8_t mac[6],
+                                     const char* context) {
+    return _openMsgbox(domain, mac, context);
+}
+
 void DevicesScreen::begin(EventBus& bus) {
     bus.subscribe(EV_SCAN_COMPLETE, this);
     // Buttons drive selection directly (and the detail popup's nav while it's
@@ -684,7 +718,7 @@ void DevicesScreen::onEvent(const Event& e) {
             if      (_msgbox)                               _mbEnter();
             else if (lv_screen_active() == objects.devices && _row_count > 0) {
                 g_vibe.play(HAPTIC_TICK);   // the "clickable ENTER" bump group nav gave
-                _openMsgbox(_rows[_sel].domain, _rows[_sel].mac);
+                _openMsgbox(_rows[_sel].domain, _rows[_sel].mac, nullptr);
             }
             break;
 

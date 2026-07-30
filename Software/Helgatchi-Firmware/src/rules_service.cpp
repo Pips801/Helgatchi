@@ -786,7 +786,19 @@ void RulesService::_fire(Rule& r, const ScanResult& s) {
     HapticPatternId vibe = (r.vibe == HAPTIC_PATTERN_COUNT) ? HAPTIC_DOUBLE_TAP        : r.vibe;
     LedPatternId    led  = (r.led  == LED_PATTERN_COUNT)    ? LED_PATTERN_ALERT_DEFAULT : r.led;
 
-    const uint16_t id = g_alerts.raise(r.title, type, vibe, led, ident, s.rssi);
+    // A device that matched a rule is not noise: force it into the seen map even
+    // if SKEY_IGNORE_RANDOMIZED_MACS kept it out (nameless RPA/NRPA still reach
+    // the ring, so they still get here). Without this the alert card has a MAC
+    // that findSeen() can't resolve and the device-detail overlay won't open.
+    // Re-fires keep the entry's last-seen fresh, so it survives eviction for as
+    // long as the device is actually present.
+    g_scan_service.retain(s);
+
+    // The MAC/domain ride along as fields, not just inside `ident` — the alerts
+    // screen reopens the device-detail overlay from them, and the alert's own
+    // type can be overridden by the rule so it isn't a reliable domain proxy.
+    const uint16_t id = g_alerts.raise(r.title, type, vibe, led, ident, s.rssi,
+                                       s.mac, s.domain);
     if (id == AlertsService::INVALID_ALERT) {
         // Store full (16 active) and this device has no existing record —
         // the alert is lost. Throttled: a present device re-fires several

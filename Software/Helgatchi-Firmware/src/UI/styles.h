@@ -38,6 +38,7 @@ void remove_style_default_main_content__panel_(lv_obj_t *obj);
 
 // Style: Alert Card
 lv_style_t *get_style_alert_card_MAIN_DEFAULT();
+lv_style_t *get_style_alert_card_MAIN_FOCUS_KEY();
 void add_style_alert_card(lv_obj_t *obj);
 void remove_style_alert_card(lv_obj_t *obj);
 

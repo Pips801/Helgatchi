@@ -39,9 +39,17 @@ struct AlertRecord {
     HapticPatternId vibe;               // pattern to play on first raise
     LedPatternId    led;
     int8_t          rssi;               // INT8_MIN = unknown / not applicable
+    uint8_t         domain;             // ScanDomain of the sighting — valid only when has_device
+    bool            has_device;         // false when no sighting produced this alert (battery,
+                                        // serial test, generic system notifications)
     uint32_t        first_seen_ms;      // millis() at first raise
     uint32_t        last_seen_ms;       // millis() at most recent re-raise
     uint16_t        seen_count;         // 1 = single occurrence; >1 = deduped
+    uint8_t         mac[6];             // originating device — the back-reference that lets an
+                                        // alert card reopen the device-detail overlay. The
+                                        // dedup identifier carries the same MAC as text; this
+                                        // is the machine-readable copy. Valid only when
+                                        // has_device.
     char            title[32];          // truncated if longer (always null-terminated)
     char            identifier[72];     // dedup key — must fit RulesService's
                                         // "<name[56]>:<12 hex MAC>" (69 chars);
@@ -64,12 +72,17 @@ public:
     // title       — required; truncated to fit AlertRecord::title.
     // identifier  — used for dedup with `type`. Empty/null = no dedup.
     // rssi        — INT8_MIN if unknown.
+    // mac/domain  — the sighting that triggered this alert, if any. Null mac
+    //               leaves has_device false (battery / system / serial alerts).
+    //               Recorded so the UI can walk an alert back to its device.
     uint16_t raise(const char* title,
                    AlertType        type,
                    HapticPatternId  vibe,
                    LedPatternId     led,
                    const char*      identifier = nullptr,
-                   int8_t           rssi       = INT8_MIN);
+                   int8_t           rssi       = INT8_MIN,
+                   const uint8_t*   mac        = nullptr,
+                   uint8_t          domain     = 0);
 
     // Read-only access for UI / subscribers. Indices are NOT stable — they
     // can shift when alerts are ack'd. Use find() with alert_id for stable

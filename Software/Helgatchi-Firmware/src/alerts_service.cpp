@@ -22,7 +22,7 @@ AlertsService g_alerts;
 
 // Bump the last digit whenever AlertRecord's layout changes — stale RTC
 // bytes from an older layout must not be reinterpreted as records.
-static constexpr uint32_t RTC_MAGIC = 0xA1E47ED2;  // "ALERTED2"
+static constexpr uint32_t RTC_MAGIC = 0xA1E47ED3;  // "ALERTED3"
 
 RTC_DATA_ATTR static uint32_t    _rtc_magic;
 RTC_DATA_ATTR static AlertRecord _rtc_records[AlertsService::MAX_ALERTS];
@@ -66,7 +66,9 @@ uint16_t AlertsService::raise(const char* title,
                               HapticPatternId  vibe,
                               LedPatternId     led,
                               const char*      identifier,
-                              int8_t           rssi) {
+                              int8_t           rssi,
+                              const uint8_t*   mac,
+                              uint8_t          domain) {
     if (!title || !title[0]) return INVALID_ALERT;
 
     const char* ident = identifier ? identifier : "";
@@ -87,6 +89,11 @@ uint16_t AlertsService::raise(const char* title,
             r.last_seen_ms = now;
             if (r.seen_count < UINT16_MAX) r.seen_count++;
             if (rssi != INT8_MIN) r.rssi = rssi;
+            if (mac) {                       // same dedup key, so same device — refresh anyway
+                memcpy(r.mac, mac, sizeof(r.mac));
+                r.domain     = domain;
+                r.has_device = true;
+            }
             _syncToRTC();
             if (emit) _emit(EV_ALERT_UPDATED, r.id);
             return r.id;
@@ -106,6 +113,10 @@ uint16_t AlertsService::raise(const char* title,
     r.first_seen_ms  = millis();
     r.last_seen_ms   = r.first_seen_ms;
     r.seen_count     = 1;
+    r.has_device     = (mac != nullptr);
+    r.domain         = r.has_device ? domain : 0;
+    if (r.has_device) memcpy(r.mac, mac, sizeof(r.mac));
+    else              memset(r.mac, 0, sizeof(r.mac));
     strncpy(r.title,      title, sizeof(r.title) - 1);
     r.title[sizeof(r.title) - 1] = '\0';
     strncpy(r.identifier, ident, sizeof(r.identifier) - 1);

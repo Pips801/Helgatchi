@@ -145,6 +145,10 @@ static bool               _key_pressed  = false;
 static uint32_t           _current_key  = 0;
 static lv_indev_t*        _indev_kbd    = nullptr;
 
+// Empty parking group for captureKeypad() — see ui_controller.h. Created on
+// first use; never populated.
+static lv_group_t*        _modal_group  = nullptr;
+
 static void _enqueueKey(uint32_t key) {
     uint8_t next = (_key_tail + 1) % KEY_QUEUE_SIZE;
     if (next == _key_head) return;          // queue full — drop
@@ -325,6 +329,17 @@ void UIController::showUpdatingScreen() {
     // retains this framebuffer through the flash until the new firmware boots.
     lv_screen_load(objects.device_updating);
     lv_refr_now(nullptr);
+}
+
+void UIController::captureKeypad() {
+    if (!_indev_kbd) return;
+    if (!_modal_group) _modal_group = lv_group_create();
+    lv_indev_set_group(_indev_kbd, _modal_group);
+}
+
+void UIController::releaseKeypad() {
+    if (!_indev_kbd) return;
+    lv_indev_set_group(_indev_kbd, groups.UINavigation);
 }
 
 // ---------------------------------------------------------------------------

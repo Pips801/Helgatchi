@@ -3847,7 +3847,8 @@ void create_user_widget_alert(lv_obj_t *parent_obj, void *flowState, int startWi
                     lv_obj_t *obj = lv_label_create(parent_obj);
                     ((lv_obj_t **)&objects)[startWidgetIndex + 2] = obj;
                     lv_obj_set_pos(obj, 0, 0);
-                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    lv_obj_set_size(obj, 156, 18);
+                    lv_label_set_long_mode(obj, LV_LABEL_LONG_DOT);
                     lv_obj_set_style_align(obj, LV_ALIGN_TOP_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_obj_set_style_text_font(obj, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_label_set_text(obj, "");
@@ -4214,6 +4215,7 @@ void change_color_theme(uint32_t theme_index) {
     lv_style_set_border_color(get_style_focused___switch_MAIN_FOCUS_KEY(), lv_color_hex(theme_colors[theme_index][0]));
     lv_style_set_bg_color(get_style_focused___switch_INDICATOR_CHECKED(), lv_color_hex(theme_colors[theme_index][1]));
     lv_style_set_border_color(get_style_default_main_menu_panel_MAIN_FOCUS_KEY(), lv_color_hex(theme_colors[theme_index][0]));
+    lv_style_set_border_color(get_style_alert_card_MAIN_FOCUS_KEY(), lv_color_hex(theme_colors[theme_index][0]));
     lv_style_set_border_color(get_style_focused___button_MAIN_FOCUS_KEY(), lv_color_hex(theme_colors[theme_index][0]));
     lv_style_set_border_color(get_style_device_card_MAIN_FOCUS_KEY(), lv_color_hex(theme_colors[theme_index][0]));
     lv_obj_invalidate(objects.main_menu);

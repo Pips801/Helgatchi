@@ -28,6 +28,18 @@ public:
     // Number of devices currently listed (data rows, not pooled widgets) —
     // surfaced for perf telemetry (DEBUG_PERF).
     uint16_t cardCount() const;
+
+    // Open the device-detail overlay for an explicit device instead of the
+    // list's own selection — how AlertsScreen walks an alert card back to the
+    // device that fired it. The overlay lives on the LVGL top layer and owns
+    // the buttons until it closes, so it works over any screen.
+    //
+    // `context` (may be null) is rendered as a leading line naming what pointed
+    // here (the alert title, for an alert card). Returns false when the device
+    // has aged out of the scan service's seen map — there's nothing to show
+    // then — or when the overlay is already open.
+    bool openDeviceDetail(uint8_t domain, const uint8_t mac[6],
+                          const char* context = nullptr);
 };
 
 extern DevicesScreen g_devices_screen;

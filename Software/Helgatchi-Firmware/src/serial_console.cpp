@@ -22,7 +22,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int _resolveLedId(const char* s);   // defined lower; used by _cmdAdmin
+static int _resolveLedId(const char* s);                       // defined lower; used by _cmdAdmin
+static bool _parseScanDomain(const char* s, ScanDomain* out);  // defined with `scan`; used by _cmdAlert
+static bool _parseMac(const char* s, uint8_t out[6]);          //   ""
+static const char* _scanDomainName(ScanDomain d);              //   ""
 
 // Trim leading/trailing ASCII whitespace in place (internal whitespace kept).
 // Matches the password normalization in scripts/build_admin_secret.py so the
@@ -926,9 +929,16 @@ void SerialConsole::_cmdBattery() {
 // Subcommands:
 //   alert                          → list active alerts
 //   alert list                     → list active alerts (explicit)
-//   alert raise <title> [k=v]      → fire test alert. Keys: type, vibe, led, rssi, id
+//   alert raise <title> [k=v]      → fire test alert. Keys: type, vibe, led, rssi,
+//                                    id, mac, domain
 //   alert ack <id>                 → dismiss specific alert
 //   alert clear                    → dismiss all alerts
+//
+// `mac=` is the back-reference to a device in the seen map: it's what lets the
+// alerts screen open the device-detail overlay from the alert's card, the same
+// thing RulesService records when a rule fires. `domain=` is optional — an
+// omitted domain is resolved by looking the MAC up in the seen map, so
+// `alert raise Test mac=<a mac from 'scan list'>` is all it takes.
 //
 // Title may contain spaces only if quoted in caller-land; the parser here
 // treats the first whitespace-delimited token as the title. For multi-word
@@ -1043,6 +1053,10 @@ void SerialConsole::_cmdAlert(char* args) {
         Serial.println("  alert raise <title...> [k=v]  fire an alert");
         Serial.println("                                k=v: type=ble|wifi|sys|batt  vibe=<name>");
         Serial.println("                                     led=<name>  rssi=<int>  id=<string>");
+        Serial.println("                                     mac=AA:BB:CC:11:22:33  domain=bt|ble|wifi");
+        Serial.println("                                     (mac= links the alert card to that");
+        Serial.println("                                      device's detail overlay; domain is");
+        Serial.println("                                      resolved from the seen map if omitted)");
         Serial.println("  alert ack <id>                dismiss one alert by id");
         Serial.println("  alert clear                   dismiss all alerts");
         return;
@@ -1072,6 +1086,14 @@ void SerialConsole::_cmdAlert(char* args) {
                           rssi_buf,
                           r->title);
             if (r->identifier[0]) Serial.printf("  [%s]", r->identifier);
+            // The device back-reference the alerts screen opens its detail
+            // overlay from — shown so it's verifiable without the UI.
+            if (r->has_device) {
+                Serial.printf("  <%s %02X:%02X:%02X:%02X:%02X:%02X>",
+                              _scanDomainName((ScanDomain)r->domain),
+                              r->mac[0], r->mac[1], r->mac[2],
+                              r->mac[3], r->mac[4], r->mac[5]);
+            }
             Serial.println();
         }
         return;
@@ -1081,7 +1103,8 @@ void SerialConsole::_cmdAlert(char* args) {
         char* title = nullptr;
         char* kvs   = nullptr;
         if (!_splitTitleAndKvs(rest, &title, &kvs) || !title || !title[0]) {
-            Serial.println("usage: alert raise <title...> [type=...] [vibe=...] [led=...] [rssi=N] [id=...]");
+            Serial.println("usage: alert raise <title...> [type=...] [vibe=...] [led=...] [rssi=N]");
+            Serial.println("                             [id=...] [mac=AA:BB:CC:11:22:33] [domain=bt|wifi]");
             return;
         }
         AlertType       type  = ALERT_SYSTEM;
@@ -1089,6 +1112,10 @@ void SerialConsole::_cmdAlert(char* args) {
         LedPatternId    led   = LED_PATTERN_ALERT_DEFAULT;
         int8_t          rssi  = INT8_MIN;
         const char*     ident = nullptr;
+        uint8_t         mac[6];
+        bool            has_mac    = false;
+        ScanDomain      domain     = SCAN_BLE;
+        bool            has_domain = false;
         for (char* tok = strtok(kvs, " "); tok; tok = strtok(nullptr, " ")) {
             char* eq = strchr(tok, '=');
             if (!eq) { Serial.printf("ignoring '%s' (expected k=v)\n", tok); continue; }
@@ -1108,9 +1135,44 @@ void SerialConsole::_cmdAlert(char* args) {
             }
             else if (strcasecmp(k, "rssi") == 0) rssi = (int8_t)atoi(v);
             else if (strcasecmp(k, "id")   == 0) ident = v;
+            else if (strcasecmp(k, "mac")  == 0) {
+                if (!_parseMac(v, mac)) {
+                    Serial.printf("bad mac '%s' (want AA:BB:CC:11:22:33)\n", v);
+                    return;
+                }
+                has_mac = true;
+            }
+            else if (strcasecmp(k, "domain") == 0) {
+                if (!_parseScanDomain(v, &domain)) {
+                    Serial.printf("bad domain '%s' (want bt|ble|wifi)\n", v);
+                    return;
+                }
+                has_domain = true;
+            }
             else Serial.printf("ignoring unknown key '%s'\n", k);
         }
-        uint16_t aid = g_alerts.raise(title, type, vibe, led, ident, rssi);
+
+        // Resolve the device back-reference against the seen map. Without an
+        // explicit domain, whichever domain holds the MAC wins — that's the
+        // whole point of pasting a MAC out of `scan list`. A miss isn't fatal
+        // (the alert still records the MAC) but it's worth saying out loud:
+        // the alert card's overlay has nothing to open until that device is
+        // seen again.
+        if (has_mac) {
+            if (!has_domain) {
+                if      (g_scan_service.findSeen(SCAN_BLE,  mac)) domain = SCAN_BLE;
+                else if (g_scan_service.findSeen(SCAN_WIFI, mac)) domain = SCAN_WIFI;
+            }
+            if (!g_scan_service.findSeen(domain, mac)) {
+                Serial.printf("note: %02X:%02X:%02X:%02X:%02X:%02X not in the %s seen map — "
+                              "the alert card won't open a detail overlay\n",
+                              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+                              _scanDomainName(domain));
+            }
+        }
+
+        uint16_t aid = g_alerts.raise(title, type, vibe, led, ident, rssi,
+                                      has_mac ? mac : nullptr, (uint8_t)domain);
         if (aid == AlertsService::INVALID_ALERT) Serial.println("ERR: alert capacity full (ack some first)");
         else                                     Serial.printf("OK: alert id=%u\n", (unsigned)aid);
         return;

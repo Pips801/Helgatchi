@@ -37,6 +37,22 @@ public:
     // flushed. (Will load a dedicated EEZ screen once that's added.)
     void showUpdatingScreen();
 
+    // Park / restore keypad routing while a modal owns the buttons.
+    //
+    // A modal (the device-detail overlay) drives its own navigation from
+    // EV_BTN_* directly, so LVGL must not also step focus through the screen
+    // behind it. captureKeypad points the indev at a private empty group —
+    // lv_indev's keypad path drops keys when the focused object is null — and
+    // releaseKeypad points it back at groups.UINavigation. The screen's own
+    // group and its focused widget are never touched, so nothing has to be
+    // rebuilt or re-focused on close.
+    //
+    // Idempotent in both directions, and NOT nesting-aware: there is one modal
+    // in the UI and it's a singleton. A second concurrent modal would need a
+    // depth count here.
+    void captureKeypad();
+    void releaseKeypad();
+
 private:
     EventBus* _bus = nullptr;
     bool      _render_enabled = true;

@@ -69,14 +69,35 @@ public:
     // scans, independent of shifting seen-map indices.
     const ScanResult* findSeen(uint8_t domain, const uint8_t mac[6]) const;
 
+    // Force a sighting into the seen map even when the randomized-MAC noise
+    // filter would have dropped it. RulesService calls this when a rule fires:
+    // a device that matched a rule is not noise, and the alerts screen needs
+    // findSeen() to resolve for the alert card's device-detail overlay. Called
+    // again on every re-fire, which keeps the entry's last-seen fresh so it
+    // can't become the eviction victim while the device is still present.
+    //
+    // Retained entries stay OUT of the browsable device list — that half of the
+    // filter moved to the list itself (see noiseSuppressed), so
+    // SKEY_IGNORE_RANDOMIZED_MACS still means exactly what it says.
+    void retain(const ScanResult& r);
+
+    // True when the randomized-MAC noise filter suppresses this sighting: a
+    // nameless BLE RPA/NRPA while SKEY_IGNORE_RANDOMIZED_MACS is on.
+    //
+    // Applied at two layers for two different reasons, and shared so the two
+    // can't drift: _updateSeen won't INSERT these (protects the map's slots
+    // from RPA churn evicting real devices), and the device list won't RENDER
+    // the ones retain() forced in anyway.
+    static bool noiseSuppressed(const ScanResult& r);
+
     // Debug / test — wipe ring and seen map. Does NOT reset the monotonic
     // write counter, so live consumers won't see a backwards jump.
     void clear();
 
-    // Count of new devices dropped from the seen map by the randomized-MAC
-    // noise filter since boot (nameless RPA/NRPA BLE). They still hit the ring
-    // (rules/alerts see them) — this only tracks list-suppression, for perf
-    // telemetry. Not reset by clear().
+    // Count of new devices kept out of the seen map by the randomized-MAC noise
+    // filter since boot (nameless RPA/NRPA BLE). They still hit the ring, so
+    // rules/alerts see them, and one that fires a rule is added back by
+    // retain(). Perf telemetry only. Not reset by clear().
     uint32_t noiseFiltered() const { return _noise_filtered; }
 
 private:
@@ -91,7 +112,8 @@ private:
 
     // Upsert by MAC into the seen map. New MAC appends (or evicts oldest
     // last-seen entry when full); existing MAC updates in place.
-    void _updateSeen(const ScanResult& r);
+    // `bypass_noise_filter` is retain()'s path — see noiseSuppressed.
+    void _updateSeen(const ScanResult& r, bool bypass_noise_filter);
 };
 
 extern ScanService g_scan_service;

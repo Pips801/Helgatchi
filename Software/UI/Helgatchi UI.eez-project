@@ -9415,7 +9415,7 @@
           "left": 448,
           "top": 18,
           "width": 163,
-          "height": 57,
+          "height": 56,
           "customInputs": [
             {
               "objID": "0349c15e-1612-4a23-d3fd-92dcb0207b3a",
@@ -14116,7 +14116,7 @@
               "type": "LVGLLabelWidget",
               "left": 0,
               "top": 0,
-              "width": 86,
+              "width": 156,
               "height": 18,
               "customInputs": [],
               "customOutputs": [],
@@ -14131,8 +14131,8 @@
               "eventHandlers": [],
               "leftUnit": "px",
               "topUnit": "px",
-              "widthUnit": "content",
-              "heightUnit": "content",
+              "widthUnit": "px",
+              "heightUnit": "px",
               "children": [],
               "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
               "hiddenFlagType": "literal",
@@ -14159,7 +14159,7 @@
               "groupIndex": 0,
               "text": "Symbol +  \" \" + AlertTitle",
               "textType": "expression",
-              "longMode": "WRAP",
+              "longMode": "DOT",
               "recolor": false,
               "previewValue": "{AlertTitle}"
             },
@@ -14318,13 +14318,14 @@
           "scrollSnapX": "",
           "scrollSnapY": "",
           "checkedStateType": "literal",
+          "disabledState": false,
           "disabledStateType": "literal",
           "states": "",
           "useStyle": "Alert Card",
           "localStyles": {
             "objID": "026400f1-d938-485c-b63b-315624a029f8"
           },
-          "group": "",
+          "group": "UINavigation",
           "groupIndex": 0
         }
       ],
@@ -14982,6 +14983,9 @@
             "MAIN": {
               "DEFAULT": {
                 "radius": 44
+              },
+              "FOCUS_KEY": {
+                "border_color": "Focus Border"
               }
             }
           }

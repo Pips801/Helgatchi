@@ -30,7 +30,8 @@ static constexpr uint32_t s_key_mask[SKEY_COUNT] = {
     SMASK_POWER,                // SKEY_SLEEP_DURATION_S
     SMASK_POWER,                // SKEY_SCAN_DURATION_S — PowerManager owns the scan window; ScanEngine never reads it
     0,                          // SKEY_TUTORIAL_SHOWN — no subsystem reacts
-    SMASK_SCAN,                 // SKEY_IGNORE_RANDOMIZED_MACS — ScanService reads it in _updateSeen
+    SMASK_SCAN,                 // SKEY_IGNORE_RANDOMIZED_MACS — read by ScanService::noiseSuppressed
+                                //   (seen-map insert + device-list render)
     0,                          // SKEY_HUNT_VIBRATION — LedService reads it on demand each hunt frame
     SMASK_DEBUG,                // SKEY_DEBUG_ENABLED — non-zero so EV_SETTINGS_CHANGED fires and the settings screen re-applies row visibility
 };

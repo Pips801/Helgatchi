@@ -161,9 +161,9 @@ struct PerfPreset {
 // screen dims as a "going to sleep" warning (handled in PowerManager::tick).
 static constexpr PerfPreset PERF_PRESETS[PERF_MODE_COUNT] = {
     // PERFORMANCE   scan  sleep  iact
-    {                  7,    15,   20 },
+    {                  6,    15,   20 },
     // BALANCED
-    {                  5,    30,   20 },
+    {                  4,    30,   20 },
     // BATTERY_SAVER
     {                  3,    45,   15 },
     // DYNAMIC — managed at runtime, no fixed preset
@@ -171,7 +171,7 @@ static constexpr PerfPreset PERF_PRESETS[PERF_MODE_COUNT] = {
     // ALWAYS_ON — while charging PowerManager overrides these to never-sleep,
     // screen-on, and a ~0 gap between windows (continuous scan). These values
     // are the on-battery fallback duty cycle (this mode targets external power).
-    {                 15,    30,   20 },
+    {                 5,    20,   30 },
 };
 
 // ---------------------------------------------------------------------------
@@ -192,7 +192,7 @@ static constexpr uint8_t  DEFAULT_DEBUG_LEVEL            = DEBUG_INFORMATIONAL;
 static constexpr uint8_t  DEFAULT_SLEEP_WITH_SERIAL      = 0;
 static constexpr uint8_t  DEFAULT_SLEEP_WHILE_USB        = 0;   // 0 = inhibit sleep while a USB data host is attached
 static constexpr uint8_t  DEFAULT_SLEEP_WHILE_CHARGING   = 0;  // 0 = inhibit sleep while charging
-static constexpr uint8_t  DEFAULT_VSENSE_5V_DIVIDER      = 1;   // 0 = R4 cut (VSENSE = VBATT/2, current default)
+static constexpr uint8_t  DEFAULT_VSENSE_5V_DIVIDER      = 1;   // 0 = R4 cut 
 static constexpr uint8_t  DEFAULT_TUTORIAL_SHOWN         = 0;   // 0 = show on first boot
 static constexpr uint8_t  DEFAULT_IGNORE_RANDOMIZED_MACS = 1;   // 1 = hide nameless randomized BLE devices from the list
 static constexpr uint8_t  DEFAULT_HUNT_VIBRATION         = 0;   // 0 = foxhunt haptics off (experimental; opt in)

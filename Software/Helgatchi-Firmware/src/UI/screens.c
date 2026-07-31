@@ -25,7 +25,7 @@ static void event_handler_cb_main_menu_main_menu(lv_event_t *e) {
     lv_event_code_t event = lv_event_get_code(e);
     void *flowState = lv_event_get_user_data(e);
     (void)flowState;
-
+    
     if (event == LV_EVENT_SCREEN_LOAD_START) {
         // group: UINavigation
         lv_group_remove_all_objs(groups.UINavigation);
@@ -51,7 +51,7 @@ static void event_handler_cb_main_menu_overview_panel(lv_event_t *e) {
     lv_event_code_t event = lv_event_get_code(e);
     void *flowState = lv_event_get_user_data(e);
     (void)flowState;
-
+    
     if (event == LV_EVENT_CLICKED) {
         e->user_data = (void *)0;
         flowPropagateValueLVGLEvent(flowState, 3, 0, e);
@@ -62,7 +62,7 @@ static void event_handler_cb_main_menu_helga_panel(lv_event_t *e) {
     lv_event_code_t event = lv_event_get_code(e);
     void *flowState = lv_event_get_user_data(e);
     (void)flowState;
-
+    
     if (event == LV_EVENT_CLICKED) {
         e->user_data = (void *)0;
         flowPropagateValueLVGLEvent(flowState, 7, 0, e);
@@ -161,7 +161,7 @@ static void event_handler_cb_main_menu_power_panel(lv_event_t *e) {
     lv_event_code_t event = lv_event_get_code(e);
     void *flowState = lv_event_get_user_data(e);
     (void)flowState;
-
+    
     if (event == LV_EVENT_CLICKED) {
         e->user_data = (void *)0;
         flowPropagateValueLVGLEvent(flowState, 43, 0, e);
@@ -464,7 +464,7 @@ static void event_handler_cb_led_modes_menu_led_modes_menu(lv_event_t *e) {
     lv_event_code_t event = lv_event_get_code(e);
     void *flowState = lv_event_get_user_data(e);
     (void)flowState;
-
+    
     if (event == LV_EVENT_SCREEN_LOAD_START) {
         // group: UINavigation
         lv_group_remove_all_objs(groups.UINavigation);
@@ -616,7 +616,7 @@ void create_screen_main_menu() {
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                             lv_obj_set_style_text_font(obj, &lv_font_montserrat_44, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_color(obj, lv_color_hex(0xfafafa), LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_label_set_text_static(obj, "\n");
+                            lv_label_set_text_static(obj, "");
                         }
                         {
                             lv_obj_t *obj = lv_label_create(parent_obj);
@@ -4029,7 +4029,7 @@ void create_screen_led_modes_menu() {
                             lv_obj_set_pos(obj, 0, 0);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                             lv_obj_set_style_align(obj, LV_ALIGN_LEFT_MID, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_label_set_text_static(obj, "LED Mode\n");
+                            lv_label_set_text_static(obj, "LED Mode");
                         }
                         {
                             // LED Mode Dropdown
@@ -4037,7 +4037,7 @@ void create_screen_led_modes_menu() {
                             objects.led_mode_dropdown = obj;
                             lv_obj_set_pos(obj, 0, 0);
                             lv_obj_set_size(obj, LV_PCT(45), LV_SIZE_CONTENT);
-                            lv_dropdown_set_options_static(obj, "Automatic\n");
+                            lv_dropdown_set_options_static(obj, "Automatic");
                             lv_dropdown_set_selected(obj, 0);
                             lv_obj_add_flag(obj, LV_OBJ_FLAG_OVERFLOW_VISIBLE);
                             lv_obj_add_state(obj, LV_STATE_FOCUS_KEY);
@@ -4048,7 +4048,7 @@ void create_screen_led_modes_menu() {
             }
         }
     }
-
+    
     tick_screen_led_modes_menu();
 }
 

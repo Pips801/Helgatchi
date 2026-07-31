@@ -1,5 +1,6 @@
 #include <unity.h>
 #include <string.h>
+#include "led_manual_state.h"
 #include "led_pattern.h"
 
 extern "C" void setUp() {}
@@ -86,11 +87,62 @@ void test_led_catalog_rejects_invalid_values() {
     TEST_ASSERT_EQUAL_INT(LED_PATTERN_COUNT, ledPatternByName("missing"));
 }
 
+void test_manual_state_starts_restarts_replaces_and_clears() {
+    LedManualState state;
+    TEST_ASSERT_FALSE(state.active());
+    TEST_ASSERT_EQUAL_INT(LED_PATTERN_OFF, state.pattern());
+    TEST_ASSERT_EQUAL_UINT32(0, state.phaseElapsed(123));
+
+    TEST_ASSERT_TRUE(state.set(LED_PATTERN_RAINBOW_SLOW, 100));
+    TEST_ASSERT_TRUE(state.active());
+    TEST_ASSERT_EQUAL_INT(LED_PATTERN_RAINBOW_SLOW, state.pattern());
+    TEST_ASSERT_EQUAL_UINT32(60, state.phaseElapsed(160));
+
+    TEST_ASSERT_TRUE(state.set(LED_PATTERN_RAINBOW_SLOW, 200));
+    TEST_ASSERT_EQUAL_UINT32(0, state.phaseElapsed(200));
+
+    TEST_ASSERT_FALSE(state.set(LED_PATTERN_COUNT, 300));
+    TEST_ASSERT_EQUAL_INT(LED_PATTERN_RAINBOW_SLOW, state.pattern());
+    TEST_ASSERT_EQUAL_UINT32(100, state.phaseElapsed(300));
+
+    TEST_ASSERT_TRUE(state.set(LED_PATTERN_OFF, 400));
+    TEST_ASSERT_TRUE(state.active());
+    TEST_ASSERT_EQUAL_INT(LED_PATTERN_OFF, state.pattern());
+
+    TEST_ASSERT_TRUE(state.clear());
+    TEST_ASSERT_FALSE(state.active());
+    TEST_ASSERT_FALSE(state.clear());
+}
+
+void test_manual_state_selects_layer_precedence() {
+    LedManualState state;
+    TEST_ASSERT_EQUAL_INT(LED_RENDER_AMBIENT,
+                          state.renderSource(false, false, false));
+    TEST_ASSERT_EQUAL_INT(LED_RENDER_ALERT,
+                          state.renderSource(false, false, true));
+    TEST_ASSERT_EQUAL_INT(LED_RENDER_HUNT,
+                          state.renderSource(false, true, true));
+    TEST_ASSERT_EQUAL_INT(LED_RENDER_BROADCAST,
+                          state.renderSource(true, true, true));
+
+    TEST_ASSERT_TRUE(state.set(LED_PATTERN_WHITE_CHASER, 10));
+    TEST_ASSERT_EQUAL_INT(LED_RENDER_MANUAL,
+                          state.renderSource(false, false, false));
+    TEST_ASSERT_EQUAL_INT(LED_RENDER_ALERT,
+                          state.renderSource(false, false, true));
+    TEST_ASSERT_EQUAL_INT(LED_RENDER_HUNT,
+                          state.renderSource(false, true, true));
+    TEST_ASSERT_EQUAL_INT(LED_RENDER_BROADCAST,
+                          state.renderSource(true, true, true));
+}
+
 }  // namespace
 
 int main(int, char**) {
     UNITY_BEGIN();
     RUN_TEST(test_led_catalog_order_names_lookup_and_iteration);
     RUN_TEST(test_led_catalog_rejects_invalid_values);
+    RUN_TEST(test_manual_state_starts_restarts_replaces_and_clears);
+    RUN_TEST(test_manual_state_selects_layer_precedence);
     return UNITY_END();
 }

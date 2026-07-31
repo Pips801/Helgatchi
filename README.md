@@ -1,5 +1,6 @@
 this is an awesome project by 801labs.  calling it "by-sysaaron" was kind of stupid, sorry; i've been hacking around on it with ai.  at this time, i've added:
 - a menu that lets you display any of Helga's animations
+- a menu that lets you change the LED mode
 
 # Helgatchi
 Handheld BLE + WiFi Hunter

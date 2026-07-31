@@ -14,6 +14,7 @@
 #include "rules_screen.h"
 #include "overview_screen.h"
 #include "helga_menu_screen.h"
+#include "led_menu_screen.h"
 #include "power_menu_screen.h"
 #include "party_service.h"
 #include "admin_service.h"
@@ -102,6 +103,7 @@ void setup() {
     g_rules_screen.begin(g_bus);    // rule cards UI — must follow g_ui + g_rules
     g_overview_screen.begin(g_bus); // Helga character animation — must follow g_ui
     g_helga_menu_screen.begin();    // Helga dropdown — must follow g_ui + g_overview_screen
+    g_led_menu_screen.begin();      // LED dropdown — must follow g_ui + g_leds
     g_party.begin(g_bus);           // party mode — must follow g_ui + g_overview_screen (references objects.*)
     g_admin.begin(g_bus);           // admin mode — must follow g_scan_engine (BLE init + admin queue) + g_ui (objects.*)
     g_power_menu_screen.begin(g_bus); // power menu buttons + sleep countdown — must follow g_ui

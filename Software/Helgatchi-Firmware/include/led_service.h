@@ -1,4 +1,6 @@
 #pragma once
+#include "led_pattern.h"
+#include "led_manual_state.h"
 #include "event_bus.h"
 #include <stdint.h>
 
@@ -6,7 +8,7 @@
 // LED pattern catalog
 //
 // Patterns are referenced by enum value (1 byte). Adding a new look:
-//   1. Add an enum entry below
+//   1. Add an enum entry in led_pattern.h
 //   2. Add a renderer function in led_service.cpp
 //   3. Add a case in the dispatch switch
 //
@@ -14,50 +16,6 @@
 // active. When an alert ends (timeout or EV_ALERT_CLEARED), we fade-out over
 // 500 ms and the underlying ambient resumes.
 // ---------------------------------------------------------------------------
-
-enum LedPatternId : uint8_t {
-    LED_PATTERN_OFF = 0,
-
-    // --- Ambient (device-state driven) ---
-    LED_PATTERN_CHARGING,         // slow green pulse
-    LED_PATTERN_FULLY_CHARGED,    // steady dim green
-    LED_PATTERN_SERIAL,           // cyan comet rotation
-    LED_PATTERN_LOW_BATTERY,      // slow red pulse
-
-    // --- Alert effects (rule-driven, neutral names) ---
-    LED_PATTERN_ALERT_DEFAULT,    // red strobe (fallback when rule has none)
-    LED_PATTERN_RED_BLUE_CHASER,  // 3+3 split, alternating red/blue strobe
-    LED_PATTERN_RAINBOW_FAST,     // rainbow rotation, ~1.5s/lap
-    LED_PATTERN_RAINBOW_SLOW,     // rainbow rotation, ~5s/lap
-    LED_PATTERN_WHITE_CHASER,     // single white LED chasing the ring with fast fade
-
-    // --- Status indicators (service-driven, not user-selectable ambient) ---
-    LED_PATTERN_ADMIN_BROADCAST,  // yellow power-up: outer pair inward while a controller transmits
-
-    LED_PATTERN_COUNT,
-};
-
-// ---------------------------------------------------------------------------
-// Name registry — string identifiers for use in rule files, serial console,
-// and anything that needs a stable text form. Keep in sync with the enum;
-// led_service.cpp has a static_assert that catches drift at compile time.
-// ---------------------------------------------------------------------------
-
-// Returns the registered name for `id` or "?" if out of range.
-const char* ledPatternName(LedPatternId id);
-
-// Case-insensitive name -> id. Returns LED_PATTERN_COUNT (sentinel) if no
-// pattern carries that name. Callers (RulesService) substitute their own
-// default when the lookup misses; the registry stays neutral about what
-// "default" means.
-LedPatternId ledPatternByName(const char* name);
-
-// Visit every registered pattern in enum order (id == visit index). The single
-// source for anything that enumerates the catalog — the serial `led list` /
-// `dump`, the admin send-menu dropdown — so none re-roll the LED_PATTERN_COUNT
-// sweep. `user` is passed through untouched (use a captureless lambda + ctx).
-typedef void (*LedPatternVisitor)(LedPatternId id, const char* name, void* user);
-void ledPatternForEach(LedPatternVisitor fn, void* user);
 
 class LedService : public IEventHandler {
 public:
@@ -71,9 +29,18 @@ public:
     // explicit programmatic triggers always fire.
     void playAlertPattern(LedPatternId pattern, uint32_t duration_ms);
 
+    // Runtime-only ambient override used by the LED Modes screen. The selected
+    // pattern is never persisted; functional broadcast/hunt/alert layers retain
+    // priority and reveal this pattern again when they end.
+    bool setManualPattern(LedPatternId pattern);
+    void clearManualPattern();
+    bool manualPatternActive() const { return _manual.active(); }
+    LedPatternId manualPattern() const { return _manual.pattern(); }
+
     // Top-priority broadcast indicator. AdminService toggles this while a
     // controller is transmitting a command; it preempts both the alert and
-    // ambient layers and restores them untouched when cleared. Enabling it
+    // ambient layers and restores them untouched when cleared. It is
+    // service-driven and also available for manual selection. Enabling it
     // resets the animation phase so the wave always starts from the bottom.
     void setBroadcast(bool on);
 
@@ -91,6 +58,7 @@ private:
     // Layer state
     LedPatternId _ambient   = LED_PATTERN_OFF;
     LedPatternId _alert     = LED_PATTERN_OFF;
+    LedManualState _manual;
     bool         _broadcast = false;   // controller transmitting → top-priority indicator
     uint32_t     _broadcast_start_ms = 0;  // millis() at broadcast start → phase-relative render
     uint32_t     _alert_until_ms      = 0;  // millis() when alert expires (0 = no expiry)

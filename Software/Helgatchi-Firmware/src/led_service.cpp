@@ -1,4 +1,6 @@
 #include "led_service.h"
+
+#ifndef LED_CATALOG_ONLY
 #include "hal.h"
 #include "settings_service.h"
 #include "power_manager.h"
@@ -6,53 +8,112 @@
 #include "event_payload.h"
 #include <Arduino.h>
 #include <FastLED.h>
-#include <strings.h>   // strcasecmp
-
-LedService g_leds;
+#endif
 
 // ---------------------------------------------------------------------------
 // Name registry — string identifiers for each LedPatternId. Used by the
 // serial console for `led <name>` and by RulesService at rule load time to
 // resolve `led=red_blue_chaser` style criteria.
 //
-// Order must match the LedPatternId enum exactly. The static_assert below
-// fails the build if entries drift out of sync.
+// Order must match the LedPatternId enum exactly. The static_asserts below
+// fail the build if the catalog length or any slot drifts out of sync.
 // ---------------------------------------------------------------------------
 
-static const char* const s_led_name[] = {
-    "off",                  // LED_PATTERN_OFF
-    "charging",             // LED_PATTERN_CHARGING
-    "fully_charged",        // LED_PATTERN_FULLY_CHARGED
-    "serial",               // LED_PATTERN_SERIAL
-    "low_battery",          // LED_PATTERN_LOW_BATTERY
-    "alert",                // LED_PATTERN_ALERT_DEFAULT
-    "red_blue",             // LED_PATTERN_RED_BLUE_CHASER
-    "rainbow_fast",         // LED_PATTERN_RAINBOW_FAST
-    "rainbow_slow",         // LED_PATTERN_RAINBOW_SLOW
-    "white_chaser",         // LED_PATTERN_WHITE_CHASER
-    "admin_broadcast",      // LED_PATTERN_ADMIN_BROADCAST
-};
-static_assert(sizeof(s_led_name) / sizeof(s_led_name[0]) == LED_PATTERN_COUNT,
-              "s_led_name out of sync with LedPatternId");
+namespace {
 
-const char* ledPatternName(LedPatternId id) {
-    if (id >= LED_PATTERN_COUNT) return "?";
-    return s_led_name[id];
+constexpr LedPatternInfo LED_PATTERNS[] = {
+    { LED_PATTERN_OFF,             "off",             "Off" },
+    { LED_PATTERN_CHARGING,        "charging",        "Charging" },
+    { LED_PATTERN_FULLY_CHARGED,   "fully_charged",   "Fully Charged" },
+    { LED_PATTERN_SERIAL,          "serial",          "Serial" },
+    { LED_PATTERN_LOW_BATTERY,     "low_battery",     "Low Battery" },
+    { LED_PATTERN_ALERT_DEFAULT,   "alert",           "Alert" },
+    { LED_PATTERN_RED_BLUE_CHASER, "red_blue",        "Red/Blue" },
+    { LED_PATTERN_RAINBOW_FAST,    "rainbow_fast",    "Rainbow Fast" },
+    { LED_PATTERN_RAINBOW_SLOW,    "rainbow_slow",    "Rainbow Slow" },
+    { LED_PATTERN_WHITE_CHASER,    "white_chaser",    "White Chaser" },
+    { LED_PATTERN_ADMIN_BROADCAST, "admin_broadcast", "Admin Broadcast" },
+};
+
+static_assert(sizeof(LED_PATTERNS) / sizeof(LED_PATTERNS[0]) ==
+                  LED_PATTERN_CATALOG_COUNT,
+              "LED pattern catalog out of sync with LedPatternId");
+
+#define ASSERT_LED_PATTERN_SLOT(slot, id) \
+    static_assert(LED_PATTERNS[slot].pattern == id, \
+                  "LED pattern catalog order out of sync with LedPatternId")
+
+ASSERT_LED_PATTERN_SLOT(0,  LED_PATTERN_OFF);
+ASSERT_LED_PATTERN_SLOT(1,  LED_PATTERN_CHARGING);
+ASSERT_LED_PATTERN_SLOT(2,  LED_PATTERN_FULLY_CHARGED);
+ASSERT_LED_PATTERN_SLOT(3,  LED_PATTERN_SERIAL);
+ASSERT_LED_PATTERN_SLOT(4,  LED_PATTERN_LOW_BATTERY);
+ASSERT_LED_PATTERN_SLOT(5,  LED_PATTERN_ALERT_DEFAULT);
+ASSERT_LED_PATTERN_SLOT(6,  LED_PATTERN_RED_BLUE_CHASER);
+ASSERT_LED_PATTERN_SLOT(7,  LED_PATTERN_RAINBOW_FAST);
+ASSERT_LED_PATTERN_SLOT(8,  LED_PATTERN_RAINBOW_SLOW);
+ASSERT_LED_PATTERN_SLOT(9,  LED_PATTERN_WHITE_CHASER);
+ASSERT_LED_PATTERN_SLOT(10, LED_PATTERN_ADMIN_BROADCAST);
+
+#undef ASSERT_LED_PATTERN_SLOT
+
+char foldAscii(char value) {
+    return value >= 'A' && value <= 'Z'
+        ? static_cast<char>(value + ('a' - 'A'))
+        : value;
+}
+
+bool equalsIgnoreCase(const char* lhs, const char* rhs) {
+    if (!lhs || !rhs) return false;
+    while (*lhs && *rhs) {
+        if (foldAscii(*lhs) != foldAscii(*rhs)) return false;
+        ++lhs;
+        ++rhs;
+    }
+    return *lhs == '\0' && *rhs == '\0';
+}
+
+}  // namespace
+
+const LedPatternInfo* ledPatternAt(size_t index) {
+    return index < LED_PATTERN_CATALOG_COUNT ? &LED_PATTERNS[index] : nullptr;
+}
+
+const LedPatternInfo* ledPatternInfo(LedPatternId pattern) {
+    const size_t index = static_cast<size_t>(pattern);
+    return index < LED_PATTERN_CATALOG_COUNT ? &LED_PATTERNS[index] : nullptr;
+}
+
+const char* ledPatternName(LedPatternId pattern) {
+    const LedPatternInfo* info = ledPatternInfo(pattern);
+    return info ? info->command_name : "?";
+}
+
+const char* ledPatternDisplayName(LedPatternId pattern) {
+    const LedPatternInfo* info = ledPatternInfo(pattern);
+    return info ? info->display_name : "?";
 }
 
 LedPatternId ledPatternByName(const char* name) {
     if (!name || !*name) return LED_PATTERN_COUNT;
-    for (uint8_t i = 0; i < LED_PATTERN_COUNT; i++) {
-        if (strcasecmp(name, s_led_name[i]) == 0) return (LedPatternId)i;
+    for (size_t i = 0; i < LED_PATTERN_CATALOG_COUNT; ++i) {
+        if (equalsIgnoreCase(name, LED_PATTERNS[i].command_name)) {
+            return LED_PATTERNS[i].pattern;
+        }
     }
     return LED_PATTERN_COUNT;
 }
 
 void ledPatternForEach(LedPatternVisitor fn, void* user) {
     if (!fn) return;
-    for (uint8_t i = 0; i < LED_PATTERN_COUNT; i++)
-        fn((LedPatternId)i, s_led_name[i], user);
+    for (size_t i = 0; i < LED_PATTERN_CATALOG_COUNT; ++i) {
+        fn(LED_PATTERNS[i].pattern, LED_PATTERNS[i].command_name, user);
+    }
 }
+
+#ifndef LED_CATALOG_ONLY
+
+LedService g_leds;
 
 static constexpr uint32_t FRAME_PERIOD_MS = 33;     // ~30 FPS render cap
 static constexpr uint32_t ALERT_DEFAULT_MS = 3000;  // default alert duration when raised via the bus
@@ -304,32 +365,34 @@ void LedService::tick() {
     _last_render_ms = now;
 
     // ---- Layer composition ----
-    // Alert preempts ambient. When an alert's duration expires (or someone
+    // Alert preempts manual and ambient. When an alert's duration expires (or someone
     // clears it via EV_ALERT_CLEARED), we fade-out over ALERT_FADE_MS by
     // scaling the alert frame's brightness, then drop the alert layer entirely
-    // so the ambient pattern resumes on the next frame.
-    LedPatternId effective = _ambient;
-    uint8_t      alpha     = 255;
+    // so the underlying manual or ambient pattern resumes on the next frame.
+    bool alert_visible = false;
+    uint8_t alert_alpha = 255;
 
     if (_alert != LED_PATTERN_OFF) {
-        // Trigger fade if the alert's duration has elapsed.
-        if (_alert_until_ms != 0 && now >= _alert_until_ms && _alert_fade_start_ms == 0) {
+        if (_alert_until_ms != 0 &&
+            now >= _alert_until_ms &&
+            _alert_fade_start_ms == 0) {
             _alert_fade_start_ms = now;
         }
 
         if (_alert_fade_start_ms != 0) {
-            uint32_t elapsed = now - _alert_fade_start_ms;
+            const uint32_t elapsed = now - _alert_fade_start_ms;
             if (elapsed >= ALERT_FADE_MS) {
-                // Fade complete — drop the layer.
-                _alert               = LED_PATTERN_OFF;
-                _alert_until_ms      = 0;
+                _alert = LED_PATTERN_OFF;
+                _alert_until_ms = 0;
                 _alert_fade_start_ms = 0;
             } else {
-                effective = _alert;
-                alpha     = (uint8_t)(255u - (elapsed * 255u / ALERT_FADE_MS));
+                alert_visible = true;
+                alert_alpha = static_cast<uint8_t>(
+                    255u - (elapsed * 255u / ALERT_FADE_MS)
+                );
             }
         } else {
-            effective = _alert;
+            alert_visible = true;
         }
     }
 
@@ -338,10 +401,18 @@ void LedService::tick() {
     // alert fade alpha. Broadcast renders phase-relative to its start so its wave
     // always begins at the bottom.
     // ---- Render and push ----
+    const LedRenderSource source =
+        _manual.renderSource(_broadcast, _hunt, alert_visible);
+
     CRGB frame[6];
-    if (_broadcast) {
-        _renderPattern(LED_PATTERN_ADMIN_BROADCAST, now - _broadcast_start_ms, frame);
-    } else if (_hunt) {
+    switch (source) {
+    case LED_RENDER_BROADCAST:
+        _renderPattern(LED_PATTERN_ADMIN_BROADCAST,
+                       now - _broadcast_start_ms,
+                       frame);
+        break;
+
+    case LED_RENDER_HUNT: {
         // Rescale quality so the "on top of it" point (HUNT_SOLID_Q) maps to a
         // fully solid LED + motor, and the pulse ramp spans everything below it.
         const uint8_t qs = (_hunt_q >= HUNT_SOLID_Q)
@@ -359,9 +430,22 @@ void LedService::tick() {
         // regardless.
         const uint8_t motor = _renderHunt(frame, (uint8_t)(_hunt_phase >> 8), qs);
         g_hal.setVibrate(g_settings.getBool(SKEY_HUNT_VIBRATION) ? motor : 0);
-    } else {
-        _renderPattern(effective, now, frame);
-        _scaleFrame(frame, alpha);
+        break;
+    }
+
+    case LED_RENDER_ALERT:
+        _renderPattern(_alert, now, frame);
+        _scaleFrame(frame, alert_alpha);
+        break;
+
+    case LED_RENDER_MANUAL:
+        _renderPattern(_manual.pattern(), _manual.phaseElapsed(now), frame);
+        break;
+
+    case LED_RENDER_AMBIENT:
+    default:
+        _renderPattern(_ambient, now, frame);
+        break;
     }
     g_hal.writeLEDFrame(frame);
 }
@@ -435,6 +519,14 @@ void LedService::playAlertPattern(LedPatternId pattern, uint32_t duration_ms) {
     _alert_fade_start_ms = 0;
 }
 
+bool LedService::setManualPattern(LedPatternId pattern) {
+    return _manual.set(pattern, millis());
+}
+
+void LedService::clearManualPattern() {
+    _manual.clear();
+}
+
 void LedService::_recomputeAmbient() {
     // Priority order: serial > charging > charged > low-battery > off.
     //
@@ -449,3 +541,5 @@ void LedService::_recomputeAmbient() {
     else if (_is_low_batt) next = LED_PATTERN_LOW_BATTERY;
     _ambient = next;
 }
+
+#endif  // LED_CATALOG_ONLY

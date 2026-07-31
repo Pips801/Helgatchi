@@ -23,7 +23,7 @@ called `ui_init()` and created the generated screens.
 
 ## Current generated screen inventory
 
-`src/UI/screens.h` currently defines these 17 EEZ pages and screen IDs:
+`src/UI/screens.h` currently defines these 18 EEZ pages and screen IDs:
 
 | # | EEZ page | Generated screen ID |
 |---:|---|---|
@@ -44,6 +44,7 @@ called `ui_init()` and created the generated screens.
 | 15 | Foxhunting Menu | `SCREEN_ID_FOXHUNTING_MENU` |
 | 16 | Rules | `SCREEN_ID_RULES` |
 | 17 | Helga Menu | `SCREEN_ID_HELGA_MENU` |
+| 18 | LED Modes Menu | `SCREEN_ID_LED_MODES_MENU` |
 
 These are generated screens, not a list of future placeholders. Runtime
 modules populate and control dynamic content on pages such as Alerts, Devices,
@@ -94,14 +95,15 @@ The horizontal scroll-snap carousel is
 
 1. `overview_panel`
 2. `helga_panel`
-3. `devices_panel`
-4. `alerts_panel`
-5. `rules_panel`
-6. `games_panel`
-7. `settings_panel`
-8. `info_panel`
-9. `admin_panel`
-10. `power_panel`
+3. `led_modes_panel`
+4. `devices_panel`
+5. `alerts_panel`
+6. `rules_panel`
+7. `games_panel`
+8. `settings_panel`
+9. `info_panel`
+10. `admin_panel`
+11. `power_panel`
 
 The `helga_panel` card is always present; admin lock state affects the admin
 entry, not Helga.
@@ -153,6 +155,22 @@ selection is retained and the dropdown has focus.
 Display dimming, display-off, and deep sleep are inhibited only while manual
 playback is active. After manual playback exits, normal power behavior resumes;
 ordinary Overview entry again shows the latest automatic animation and status.
+
+## LED Modes menu
+
+The always-visible `led_modes_panel` card opens `led_modes_menu` with stack
+navigation. The screen contains only `led_mode_dropdown`. Firmware populates
+Automatic followed by the 11 `LedPatternInfo::display_name` values.
+
+Center opens/commits the dropdown and left/right change the highlighted option.
+A commit applies immediately without screen navigation; recommitting a manual
+option restarts its phase. Normal long-center back navigation preserves the
+selection for the current boot.
+
+Automatic clears the RAM-only manual layer. Off is a valid black manual layer.
+Broadcast, foxhunt, and alert/party layers temporarily preempt manual output.
+Manual mode inhibits automatic dim/sleep; explicit screen-off remains available.
+Every reboot begins in Automatic.
 
 ## Settings
 

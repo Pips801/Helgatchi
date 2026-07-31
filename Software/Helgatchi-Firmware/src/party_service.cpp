@@ -29,13 +29,20 @@ static const char* const         BANNER_TEXT      = "Party!";
 
 // -----------------------------------------------------------------------------
 
+static PartyScreen _currentPartyScreen() {
+    lv_obj_t* active = lv_screen_active();
+    if (active == objects.overview) return PartyScreen::OVERVIEW;
+    if (active == objects.helga_menu) return PartyScreen::HELGA_MENU;
+    return PartyScreen::OTHER;
+}
+
 void PartyService::begin(EventBus& bus) {
     _bus = &bus;
     // No bus subscriptions: the long-press exit is handled in UIController (it
     // checks g_party.active() and calls stop(), staying on the status page)
     // rather than by party swallowing the button here — that avoids a race on
     // the active flag between two handlers in one dispatch. tick() only ends the
-    // party if the screen leaves the overview by some other route (safety net).
+    // party for a settled departure to any screen except Helga Menu.
 }
 
 void PartyService::onEvent(const Event&) {}   // unused; kept for IEventHandler
@@ -89,7 +96,7 @@ void PartyService::start(uint32_t duration_ms, bool from_rule) {
 
     if (_active) return;   // already running — just extended the timer above
     _active  = true;
-    _settled = false;
+    _navigation.reset();
     _last_vibe_ms = _last_text_ms = _last_awake_ms = now;
 
     // Always bring up the status page. A rule can fire party during a headless
@@ -143,13 +150,13 @@ void PartyService::tick() {
     if (!_active) return;
     uint32_t now = millis();
 
-    const bool on_overview = (lv_screen_active() == objects.overview);
-    if (on_overview) _settled = true;
-
     // Screen changed away from the overview by some other route — treat as a
-    // manual dismiss: end and arm cooldown. (Long-press exits are intercepted in
-    // UIController and keep us on the overview, so this is a safety net.)
-    if (_settled && !on_overview) { _end(true); return; }
+    // manual dismiss, except for the expected Helga Menu return from manual
+    // playback. That screen backgrounds party mode without arming cooldown.
+    if (_navigation.shouldDismiss(_currentPartyScreen())) {
+        _end(true);
+        return;
+    }
 
     // Duration elapsed — the beacon is gone (a present one refreshes the timer),
     // so end without cooldown. Stays on the status page.

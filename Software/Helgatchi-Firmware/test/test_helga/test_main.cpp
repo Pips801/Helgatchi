@@ -2,6 +2,7 @@
 #include "helga_animation.h"
 #include "helga_menu_model.h"
 #include "helga_playback_state.h"
+#include "party_navigation_state.h"
 
 extern "C" void setUp() {}
 extern "C" void tearDown() {}
@@ -138,6 +139,29 @@ void test_menu_selection_persists_and_same_option_recommits() {
     TEST_ASSERT_EQUAL_UINT32(5, model.selectedIndex());
 }
 
+void test_party_backgrounds_on_helga_menu_and_resumes_overview() {
+    PartyNavigationState navigation;
+
+    TEST_ASSERT_FALSE(navigation.shouldDismiss(PartyScreen::OVERVIEW));
+    TEST_ASSERT_TRUE(navigation.overviewSettled());
+
+    TEST_ASSERT_FALSE(navigation.shouldDismiss(PartyScreen::HELGA_MENU));
+    TEST_ASSERT_TRUE(navigation.overviewSettled());
+
+    TEST_ASSERT_FALSE(navigation.shouldDismiss(PartyScreen::OVERVIEW));
+    TEST_ASSERT_TRUE(navigation.overviewSettled());
+}
+
+void test_party_dismisses_on_other_screen_only_after_overview_settles() {
+    PartyNavigationState navigation;
+
+    TEST_ASSERT_FALSE(navigation.shouldDismiss(PartyScreen::OTHER));
+    TEST_ASSERT_FALSE(navigation.overviewSettled());
+
+    TEST_ASSERT_FALSE(navigation.shouldDismiss(PartyScreen::OVERVIEW));
+    TEST_ASSERT_TRUE(navigation.shouldDismiss(PartyScreen::OTHER));
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -148,5 +172,7 @@ int main(int, char**) {
     RUN_TEST(test_manual_playback_rejects_invalid_animations);
     RUN_TEST(test_each_physical_button_consumes_manual_playback_once);
     RUN_TEST(test_menu_selection_persists_and_same_option_recommits);
+    RUN_TEST(test_party_backgrounds_on_helga_menu_and_resumes_overview);
+    RUN_TEST(test_party_dismisses_on_other_screen_only_after_overview_settles);
     return UNITY_END();
 }

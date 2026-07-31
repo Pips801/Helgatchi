@@ -27,6 +27,21 @@ static constexpr const char* DIR_USER          = "/rules/user";
 static constexpr const char* NVS_NAMESPACE     = "rules";
 static constexpr const char* NVS_KEY_ENABLED   = "enabled";
 
+// Load timing, filled by _loadDir and reported once by begin(). Every wake —
+// including a silent TIMER-wake scan cycle — reruns this from a cold boot, so
+// it's fixed per-cycle overhead and worth being able to read off the boot log.
+// The slowest single file separates "JSON/LittleFS is uniformly slow" from
+// "one pathological rule dominates", which need different fixes.
+static uint32_t _ld_files       = 0;
+static uint32_t _ld_slowest_ms  = 0;
+static char     _ld_slowest[32] = {0};
+
+static void _ldReset() {
+    _ld_files      = 0;
+    _ld_slowest_ms = 0;
+    _ld_slowest[0] = '\0';
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -211,17 +226,45 @@ void RulesService::begin(EventBus& bus) {
     _ring_read_pos = g_scan_service.writePos();
 
     // LittleFS must already be mounted by main.cpp.
+    const uint32_t t_start = millis();
     _ensureUserDir();
+    const uint32_t t_mkdir = millis();
+
     _loading = true;   // don't let loading a rule persist it back to disk
+    _ldReset();
     _loadDir(DIR_FACTORY, true);
+    const uint32_t t_factory   = millis();
+    const uint32_t n_factory   = _ld_files;
     _loadDir(DIR_USER,    false);
+    const uint32_t t_user      = millis();
     _loading = false;
+
     _applyEnabledOverlay();
+    const uint32_t t_overlay = millis();
 
     const uint32_t nrules = totalRules();
     Serial.printf("[rules] loaded %u ruleset%s with %lu rule%s\n",
                   (unsigned)_count, _count == 1 ? "" : "s",
                   (unsigned long)nrules, nrules == 1 ? "" : "s");
+
+    // This runs on EVERY wake, silent scan cycles included (deep sleep resets
+    // the chip), so it is fixed per-cycle overhead — print the breakdown so the
+    // cost is visible without attaching a profiler.
+    Serial.printf("[rules] load %lu ms total: mkdir %lu, factory %lu files/%lu ms, "
+                  "user %lu files/%lu ms, nvs overlay %lu ms",
+                  (unsigned long)(t_overlay  - t_start),
+                  (unsigned long)(t_mkdir    - t_start),
+                  (unsigned long)n_factory,
+                  (unsigned long)(t_factory  - t_mkdir),
+                  (unsigned long)(_ld_files  - n_factory),
+                  (unsigned long)(t_user     - t_factory),
+                  (unsigned long)(t_overlay  - t_user));
+    if (_ld_files > 0) {
+        Serial.printf("  (avg %lu ms/file, slowest %s %lu ms)",
+                      (unsigned long)((t_user - t_mkdir) / _ld_files),
+                      _ld_slowest, (unsigned long)_ld_slowest_ms);
+    }
+    Serial.println();
 }
 
 uint16_t RulesService::reloadFromFs() {
@@ -231,11 +274,31 @@ uint16_t RulesService::reloadFromFs() {
         _count--;
     }
     _ensureUserDir();
+    const uint32_t t0 = millis();
     _loading = true;
+    _ldReset();
     _loadDir(DIR_FACTORY, true);
     _loadDir(DIR_USER,    false);
     _loading = false;
+    const uint32_t t_load = millis();
     _applyEnabledOverlay();
+    const uint32_t t_done = millis();
+
+    // Same breakdown as begin(), so `rules reload` re-times the boot cost
+    // without a power cycle. Note the FS page cache is warm here — a cold-boot
+    // load off deep sleep will be slower than what this reports.
+    Serial.printf("[rules] reload %lu ms: %lu files/%lu ms, nvs overlay %lu ms",
+                  (unsigned long)(t_done  - t0),
+                  (unsigned long)_ld_files,
+                  (unsigned long)(t_load  - t0),
+                  (unsigned long)(t_done  - t_load));
+    if (_ld_files > 0) {
+        Serial.printf("  (avg %lu ms/file, slowest %s %lu ms)",
+                      (unsigned long)((t_load - t0) / _ld_files),
+                      _ld_slowest, (unsigned long)_ld_slowest_ms);
+    }
+    Serial.println();
+
     _notifyChanged();
     return _count;
 }
@@ -882,7 +945,15 @@ void RulesService::_loadDir(const char* dir_path, bool is_factory) {
             && strstr(fname, ".json") != nullptr) {
             char path[64];
             snprintf(path, sizeof(path), "%s/%s", dir_path, fname);
+            const uint32_t t0 = millis();
             _loadRuleFromFile(path, is_factory);
+            const uint32_t dt = millis() - t0;
+            _ld_files++;
+            if (dt > _ld_slowest_ms) {
+                _ld_slowest_ms = dt;
+                strncpy(_ld_slowest, fname, sizeof(_ld_slowest) - 1);
+                _ld_slowest[sizeof(_ld_slowest) - 1] = '\0';
+            }
         }
         entry = dir.openNextFile();
     }

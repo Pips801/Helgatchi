@@ -23,7 +23,7 @@ called `ui_init()` and created the generated screens.
 
 ## Current generated screen inventory
 
-`src/UI/screens.h` currently defines these 17 EEZ pages and screen IDs:
+`src/UI/screens.h` currently defines these 18 EEZ pages and screen IDs:
 
 | # | EEZ page | Generated screen ID |
 |---:|---|---|
@@ -44,6 +44,7 @@ called `ui_init()` and created the generated screens.
 | 15 | Foxhunting Menu | `SCREEN_ID_FOXHUNTING_MENU` |
 | 16 | Rules | `SCREEN_ID_RULES` |
 | 17 | Helga Menu | `SCREEN_ID_HELGA_MENU` |
+| 18 | LED Modes Menu | `SCREEN_ID_LED_MODES_MENU` |
 
 These are generated screens, not a list of future placeholders. Runtime
 modules populate and control dynamic content on pages such as Alerts, Devices,

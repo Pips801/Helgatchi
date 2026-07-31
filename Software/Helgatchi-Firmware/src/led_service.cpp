@@ -15,13 +15,13 @@
 // serial console for `led <name>` and by RulesService at rule load time to
 // resolve `led=red_blue_chaser` style criteria.
 //
-// Order must match the LedPatternId enum exactly. The static_assert below
-// fails the build if entries drift out of sync.
+// Order must match the LedPatternId enum exactly. The static_asserts below
+// fail the build if the catalog length or any slot drifts out of sync.
 // ---------------------------------------------------------------------------
 
 namespace {
 
-const LedPatternInfo LED_PATTERNS[] = {
+constexpr LedPatternInfo LED_PATTERNS[] = {
     { LED_PATTERN_OFF,             "off",             "Off" },
     { LED_PATTERN_CHARGING,        "charging",        "Charging" },
     { LED_PATTERN_FULLY_CHARGED,   "fully_charged",   "Fully Charged" },
@@ -38,6 +38,24 @@ const LedPatternInfo LED_PATTERNS[] = {
 static_assert(sizeof(LED_PATTERNS) / sizeof(LED_PATTERNS[0]) ==
                   LED_PATTERN_CATALOG_COUNT,
               "LED pattern catalog out of sync with LedPatternId");
+
+#define ASSERT_LED_PATTERN_SLOT(slot, id) \
+    static_assert(LED_PATTERNS[slot].pattern == id, \
+                  "LED pattern catalog order out of sync with LedPatternId")
+
+ASSERT_LED_PATTERN_SLOT(0,  LED_PATTERN_OFF);
+ASSERT_LED_PATTERN_SLOT(1,  LED_PATTERN_CHARGING);
+ASSERT_LED_PATTERN_SLOT(2,  LED_PATTERN_FULLY_CHARGED);
+ASSERT_LED_PATTERN_SLOT(3,  LED_PATTERN_SERIAL);
+ASSERT_LED_PATTERN_SLOT(4,  LED_PATTERN_LOW_BATTERY);
+ASSERT_LED_PATTERN_SLOT(5,  LED_PATTERN_ALERT_DEFAULT);
+ASSERT_LED_PATTERN_SLOT(6,  LED_PATTERN_RED_BLUE_CHASER);
+ASSERT_LED_PATTERN_SLOT(7,  LED_PATTERN_RAINBOW_FAST);
+ASSERT_LED_PATTERN_SLOT(8,  LED_PATTERN_RAINBOW_SLOW);
+ASSERT_LED_PATTERN_SLOT(9,  LED_PATTERN_WHITE_CHASER);
+ASSERT_LED_PATTERN_SLOT(10, LED_PATTERN_ADMIN_BROADCAST);
+
+#undef ASSERT_LED_PATTERN_SLOT
 
 char foldAscii(char value) {
     return value >= 'A' && value <= 'Z'

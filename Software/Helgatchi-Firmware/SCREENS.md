@@ -96,24 +96,26 @@ The horizontal scroll-snap carousel is
 1. `overview_panel`
 2. `helga_panel`
 3. `led_modes_panel`
-4. `devices_panel`
-5. `alerts_panel`
-6. `rules_panel`
-7. `games_panel`
-8. `settings_panel`
-9. `info_panel`
-10. `admin_panel`
-11. `power_panel`
+4. `party_panel`
+5. `devices_panel`
+6. `alerts_panel`
+7. `rules_panel`
+8. `games_panel`
+9. `settings_panel`
+10. `info_panel`
+11. `admin_panel`
+12. `power_panel`
 
-The `helga_panel` card is always present; admin lock state affects the admin
-entry, not Helga.
+The `helga_panel`, `led_modes_panel`, and `party_panel` cards are always
+present; admin lock state affects only `admin_panel`.
 
 To add a menu entry:
 
 1. Edit the Main Menu page in `Software/UI/Helgatchi UI.eez-project`.
 2. Add the panel to the EEZ `UINavigation` group in the intended focus order.
-3. Connect its `CLICKED` output to a Change Screen action targeting an existing
-   or new EEZ page, with the intended page-stack behavior.
+3. Connect `CLICKED` to a Change Screen action when EEZ owns the destination.
+   For an immediate runtime-owned action, leave the EEZ event unconnected and
+   register one LVGL callback after `ui_init()`.
 4. Run EEZ Studio Build and review the project and generated output.
 5. Add a runtime module or callback only if the destination needs dynamic
    behavior that the EEZ flow does not provide.
@@ -171,6 +173,25 @@ Automatic clears the RAM-only manual layer. Off is a valid black manual layer.
 Broadcast, foxhunt, and alert/party layers temporarily preempt manual output.
 Manual mode inhibits automatic dim/sleep; explicit screen-off remains available.
 Every reboot begins in Automatic.
+
+## Party menu
+
+The always-visible `party_panel` follows `led_modes_panel` in the Main Menu
+carousel. It has no Party page or EEZ Change Screen action. `PartyService`
+registers its `LV_EVENT_CLICKED` callback after UI creation.
+
+Center on the card immediately opens Overview and starts the existing Helga
+dance, rainbow LEDs, rhythmic haptics, cycling banner, and icon tint. This
+menu-launched session has no deadline and keeps the display awake.
+
+The first subsequent left, right, center-short, center-long, or center-hold
+action is consumed solely to stop Party and return to Main Menu. Existing
+focus persistence restores `party_panel`, and the exit action cannot also
+navigate, operate a widget, or request sleep.
+
+Serial, rule, and admin starts remain timed. `party on` without seconds still
+defaults to 20 seconds, and center-long stops an ordinary timed Party while
+remaining on Overview. Explicit stop commands can end either session mode.
 
 ## Settings
 
@@ -237,7 +258,8 @@ Center-long and center-hold actions are handled directly in
 | Left/right while the group is editing | `LV_KEY_LEFT` / `LV_KEY_RIGHT` |
 | Left/right in navigation mode | `LV_KEY_PREV` / `LV_KEY_NEXT` |
 | Center short | `LV_KEY_ENTER` |
-| Center long during party mode | Stop party mode and remain on Overview |
+| Any physical action during menu Party | Stop Party, consume the action, and return to Main Menu |
+| Center long during timed Party | Stop Party and remain on Overview |
 | Center long with a device-detail message box | Close the modal |
 | Center long on Tutorial | Return to Tutorial Splash Screen |
 | Center long on Overview | Go to Main Menu |
@@ -245,9 +267,10 @@ Center-long and center-hold actions are handled directly in
 | Center hold on Main Menu | Request sleep or screen-off |
 
 Main Menu and Tutorial Splash Screen ignore ordinary center-long back
-navigation. Before the table above is applied, an active manual Helga playback
-gets first refusal: any physical button action is consumed by the manual
-playback exit path described in the Helga section.
+navigation. Before the table above is applied, active manual Helga playback gets
+first refusal and consumes its exit action. A menu-launched Party session gets
+second refusal and consumes its exit action. Normal keypad and long-press
+routing runs only after both foreground modes decline the event.
 
 The open state of an LVGL dropdown is widget-local, so input routing checks
 `lv_dropdown_is_open()` separately from `lv_group_get_editing()`.

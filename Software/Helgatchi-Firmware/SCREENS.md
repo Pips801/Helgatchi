@@ -191,8 +191,9 @@ navigation are authored in the EEZ flow graph.
 Generated pages provide the static containers and screen objects; firmware
 modules supply live content and actions:
 
-- `alerts_screen.cpp` renders current/history alert cards and alert actions on
-  `objects.alerts`.
+- `alerts_screen.cpp` renders active, unacknowledged `AlertRecord` cards into
+  `objects.alert_container`. Acknowledging an alert removes its record and
+  card; there is no historical-alert store or view.
 - `devices_screen.cpp` maintains the device-list recycler in
   `objects.devices_container` and owns device-detail modal navigation.
 - `rules_screen.cpp` renders tag and individual-rule cards into
@@ -207,8 +208,10 @@ modules supply live content and actions:
 
 ## Physical keypad contract
 
-`UIController` queues a pressed/released LVGL keypad pair for each routed
-button action:
+`UIController` queues LVGL keypad keys only for left/right and center-short
+actions. `_kbd_read_cb()` emits each queued key as a pressed/released pair.
+Center-long and center-hold actions are handled directly in
+`UIController::onEvent()`. Current behavior is:
 
 | Physical action | Runtime behavior |
 |---|---|

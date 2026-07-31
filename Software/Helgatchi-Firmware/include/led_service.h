@@ -1,5 +1,6 @@
 #pragma once
 #include "led_pattern.h"
+#include "led_manual_state.h"
 #include "event_bus.h"
 #include <stdint.h>
 
@@ -28,6 +29,14 @@ public:
     // explicit programmatic triggers always fire.
     void playAlertPattern(LedPatternId pattern, uint32_t duration_ms);
 
+    // Runtime-only ambient override used by the LED Modes screen. The selected
+    // pattern is never persisted; functional broadcast/hunt/alert layers retain
+    // priority and reveal this pattern again when they end.
+    bool setManualPattern(LedPatternId pattern);
+    void clearManualPattern();
+    bool manualPatternActive() const { return _manual.active(); }
+    LedPatternId manualPattern() const { return _manual.pattern(); }
+
     // Top-priority broadcast indicator. AdminService toggles this while a
     // controller is transmitting a command; it preempts both the alert and
     // ambient layers and restores them untouched when cleared. It is
@@ -49,6 +58,7 @@ private:
     // Layer state
     LedPatternId _ambient   = LED_PATTERN_OFF;
     LedPatternId _alert     = LED_PATTERN_OFF;
+    LedManualState _manual;
     bool         _broadcast = false;   // controller transmitting → top-priority indicator
     uint32_t     _broadcast_start_ms = 0;  // millis() at broadcast start → phase-relative render
     uint32_t     _alert_until_ms      = 0;  // millis() when alert expires (0 = no expiry)

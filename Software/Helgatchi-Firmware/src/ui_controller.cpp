@@ -354,6 +354,15 @@ void UIController::onEvent(const Event& e) {
         return;
     }
 
+    if (g_party.handleMenuButton(e.id)) {
+        g_vibe.play(HAPTIC_BUMP);
+        eez_flow_set_screen(SCREEN_ID_MAIN_MENU,
+                            LV_SCR_LOAD_ANIM_FADE_IN,
+                            200,
+                            0);
+        return;
+    }
+
     lv_group_t* g = _indev_kbd ? lv_indev_get_group(_indev_kbd) : nullptr;
 
     switch (e.id) {

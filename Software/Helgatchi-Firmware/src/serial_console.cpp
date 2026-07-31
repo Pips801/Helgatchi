@@ -654,14 +654,17 @@ void SerialConsole::_cmdHelga(char* args) {
 // `party <subcmd>` — party mode (rainbow LEDs + haptics + dance anim + banner).
 void SerialConsole::_cmdParty(char* args) {
     if (!args) {
-        if (g_party.active())
+        if (g_party.menuActive()) {
+            Serial.println("party: ACTIVE (menu; until button)");
+        } else if (g_party.active()) {
             Serial.printf("party: ACTIVE (%lus left)\n",
                           (unsigned long)((g_party.remainingMs() + 999) / 1000));
-        else
+        } else {
             Serial.println("party: off");
+        }
         Serial.println("  party on [secs]               start party mode (default 20s; re-run extends)");
         Serial.println("  party off                     stop immediately");
-        Serial.println("  (long-press-back on the device also exits party mode)");
+        Serial.println("  (menu Party exits on any button; timed Party exits on long-press-back)");
         return;
     }
 

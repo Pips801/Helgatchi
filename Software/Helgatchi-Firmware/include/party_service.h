@@ -48,6 +48,11 @@ public:
     // resume immediately on receivers.
     void stop(bool arm_cooldown = true);
 
+    // Called by uiBringUpNow() when the UI stack finishes coming up, so a party
+    // that started during a headless scan window gets its visuals. No-op
+    // otherwise. See ui_boot.h.
+    void onUiUp();
+
     bool     active() const { return _active; }
     uint32_t remainingMs() const;
 
@@ -57,10 +62,12 @@ public:
 private:
     void _ensureBanner();               // lazily create the overlay banner label
     void _refreshColors();              // advance the hue; repaint banner + tint the status icons
+    void _stageUi();                    // visual half of start(); waits for the UI stack
     void _end(bool set_cooldown);       // tear down effects (no navigation); arm cooldown if asked
 
     EventBus* _bus              = nullptr;
     bool      _active           = false;
+    bool      _ui_staged        = false;   // _stageUi has run for the current party
     bool      _settled          = false;   // overview has become the active screen at least once
     uint32_t  _until_ms         = 0;
     uint32_t  _cooldown_until_ms = 0;      // rule triggers ignored until this millis()

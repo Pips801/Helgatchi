@@ -5,6 +5,7 @@
 #include "party_service.h"
 #include "led_service.h"
 #include "display_service.h"   // admin-mode top-bar icon refresh
+#include "ui_boot.h"           // a MESSAGE frame can land during a headless window
 #include "event_ids.h"
 #include "UI/screens.h"     // objects, groups
 #include "UI/eez-flow.h"    // eez_flow_pop_screen (bail out of the menu on lock)
@@ -131,6 +132,17 @@ void AdminService::begin(EventBus& bus) {
     _bus = &bus;
     _loadUnlock();
 
+    // Boot confirmation — proves the current firmware is running and shows this
+    // device's role. A receiver must be unlocked=no; a controller unlocked=YES.
+    Serial.printf("[admin] begin: unlocked=%s, dev-default-secret=%s\n",
+                  _unlocked ? "YES" : "no", secretIsDefault() ? "YES" : "no");
+}
+
+// Screen wiring, split out of begin() because the receiver side (frame drain,
+// HMAC verify, command execution) has to work during a headless scan window
+// where objects.* are all null — see ui_boot.h. Called from uiBringUpNow(),
+// which may be long after begin() if an alert brought the UI up mid-window.
+void AdminService::beginUi() {
     // Populate the on-device dropdowns from the single in-code sources so adding
     // a message or LED pattern automatically shows up here — no EEZ edit needed.
     if (objects.admin_message_dropdown) {
@@ -171,11 +183,6 @@ void AdminService::begin(EventBus& bus) {
     }
 
     syncCardVisibility();   // reflect the NVS-restored unlock state at boot
-
-    // Boot confirmation — proves the current firmware is running and shows this
-    // device's role. A receiver must be unlocked=no; a controller unlocked=YES.
-    Serial.printf("[admin] begin: unlocked=%s, dev-default-secret=%s\n",
-                  _unlocked ? "YES" : "no", secretIsDefault() ? "YES" : "no");
 }
 
 void AdminService::tick() {
@@ -236,8 +243,9 @@ void AdminService::lock() {
     g_display.refreshStatusIcons();   // hide the admin icon
     // If we're sitting on the (now-unreachable) admin menu, pop back to the
     // previous screen (the menu was pushed on entry), matching the long-press
-    // back gesture in UIController.
-    if (lv_screen_active() == objects.admin_menu)
+    // back gesture in UIController. Serial `admin lock` reaches this during a
+    // headless window, where there's no active screen to inspect.
+    if (uiIsUp() && lv_screen_active() == objects.admin_menu)
         eez_flow_pop_screen(LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);
 }
 
@@ -438,6 +446,18 @@ void AdminService::_advStop() {
 void AdminService::_showMessage(uint8_t idx, uint32_t dur_ms) {
     const char* text = messageText(idx);
     if (!text || !*text) return;
+
+    // A MESSAGE frame can land during a headless scan window, where the whole
+    // LVGL stack is unbuilt — and the box has to exist before _execute posts
+    // EV_UI_ACTIVITY, so waiting for loop() to service a deferred request is too
+    // late. tick() runs outside g_bus.dispatch(), the one context uiBringUpNow()
+    // must not be called from, so build it here. See ui_boot.h.
+    if (_bus) {
+        uiRequestBringUp();
+        uiBringUpNow(*_bus);
+    }
+    if (!uiIsUp()) return;   // no bus yet (pre-begin) — nothing to draw into
+
     if (_msgbox) _closeMessage(/*auto_close=*/true);   // replace any open box (no cooldown)
 
     lv_obj_t* mb = lv_msgbox_create(nullptr);          // NULL parent → modal on the top layer

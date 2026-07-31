@@ -8,6 +8,7 @@
 #include "power_manager.h"
 #include "power_menu_screen.h"
 #include "ui_controller.h"
+#include "ui_boot.h"        // `update` must paint before the flasher resets us
 #include "alerts_service.h"
 #include "scan_service.h"
 #include "vendor_lookup.h"
@@ -349,6 +350,13 @@ void SerialConsole::_cmdVer() {
 // waits for the ack, and only then resets the device into the bootloader so the
 // "updating" screen stays on the panel through the flash.
 void SerialConsole::_cmdUpdate() {
+    // The panel has to show this before the flasher resets us, so the UI stack
+    // can't wait for loop() to service a deferred request — build it here.
+    // tick() runs outside g_bus.dispatch(), which is the only context
+    // uiBringUpNow() must not be called from. See ui_boot.h.
+    uiRequestBringUp();
+    uiBringUpNow(*_bus);
+
     g_ui.showUpdatingScreen();
     Serial.println("{\"updating\":true}");
 }
@@ -443,12 +451,18 @@ void SerialConsole::_cmdStats() {
     // LVGL builtin allocator pool (LV_MEM_SIZE): consumption against capacity,
     // plus fragmentation. frag_pct rising means heavy churn (rare for static
     // UIs).
-    lv_mem_monitor_t lv_mon;
-    lv_mem_monitor(&lv_mon);
-    Serial.printf("lv_mem:     %s / %s used (frag %u%%)\n",
-                  fmt_bytes(b1, sizeof(b1), lv_mon.total_size - lv_mon.free_size),
-                  fmt_bytes(b2, sizeof(b2), lv_mon.total_size),
-                  (unsigned)lv_mon.frag_pct);
+    // The pool doesn't exist during a headless scan window — say so rather than
+    // calling into an uninitialized allocator. See ui_boot.h.
+    if (!uiIsUp()) {
+        Serial.println("lv_mem:     n/a (UI not built — headless scan window)");
+    } else {
+        lv_mem_monitor_t lv_mon;
+        lv_mem_monitor(&lv_mon);
+        Serial.printf("lv_mem:     %s / %s used (frag %u%%)\n",
+                      fmt_bytes(b1, sizeof(b1), lv_mon.total_size - lv_mon.free_size),
+                      fmt_bytes(b2, sizeof(b2), lv_mon.total_size),
+                      (unsigned)lv_mon.frag_pct);
+    }
 
     // Display info. Strip count comes from ground-truth flush_cb counter;
     // frame rate is strips/2 in current 120-row PARTIAL setup (1-2 strips

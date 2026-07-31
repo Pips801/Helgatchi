@@ -402,6 +402,21 @@ void AlertsScreen::begin(EventBus& bus) {
     }
 }
 
+void AlertsScreen::onUiUp(bool late) {
+    // Only a late bring-up needs this. At boot the alert store is empty (RTC
+    // alerts are cleared on cold boot) or, on a button wake, the operator asked
+    // for the screen themselves and shouldn't be yanked to Alerts.
+    if (!late) return;
+    if (!g_settings.getBool(SKEY_ALERT_FOCUS)) return;
+    if (_focus_consumed || g_alerts.count() == 0) return;
+
+    // Same push (not raw load) as the EV_ALERT_RAISED path, so long-press back
+    // returns to whatever screen was showing. begin() just ran, so the active
+    // screen is the boot default — the settings/alerts exemptions can't apply.
+    eez_flow_push_screen(SCREEN_ID_ALERTS, LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);
+    _focus_consumed = true;
+}
+
 void AlertsScreen::onEvent(const Event& e) {
     switch (e.id) {
         case EV_ALERT_RAISED: {

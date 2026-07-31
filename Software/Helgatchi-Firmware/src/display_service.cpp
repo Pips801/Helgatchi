@@ -6,6 +6,7 @@
 #include "admin_service.h"   // admin-mode indicator icon
 #include "scan_engine.h"     // g_scan_engine.scanInhibited()
 #include "scan_types.h"      // ScanDomain (SCAN_BLE / SCAN_WIFI)
+#include "ui_boot.h"         // uiIsUp() — headless windows have no flow runtime
 #include "UI/vars.h"
 #include "UI/screens.h"      // enum Colors (COLOR_ID_*), generated from theme colors
 #include "UI/eez-flow.h"
@@ -57,6 +58,11 @@ static uint32_t _batteryColor(uint8_t level) {
 // (serial/usb/charge) and the battery glyph are colored independently via
 // recolor markup: prefix by connection type, battery by charge level.
 static void _refreshBatteryStatus(uint16_t mv, uint8_t pct) {
+    // Same reasoning as refreshStatusIcons(): no EEZ flow runtime while headless.
+    // The pct/mv the caller passed is already cached on DisplayService, so
+    // begin() repaints the current value when the UI comes up.
+    if (!uiIsUp()) return;
+
     if (pct == 0xFF) {
         eez::flow::setGlobalVariable(FLOW_GLOBAL_VARIABLE_BATTERY_STATUS, eez::StringValue(""));
         return;
@@ -150,6 +156,12 @@ static void _refreshBatteryStatus(uint16_t mv, uint8_t pct) {
 }
 
 void DisplayService::refreshStatusIcons() {
+    // Nothing to paint into during a headless scan window, and the EEZ flow
+    // runtime this ends in doesn't exist yet. Callers (PartyService, AdminService,
+    // FoxhuntingScreen) don't have to check — state they set is already stored on
+    // this object, and begin() repaints from it when the UI comes up. See ui_boot.h.
+    if (!uiIsUp()) return;
+
     // Left-side status icons, in Settings-screen order: Bluetooth, WiFi, then
     // Bell when any alert is active. Each is wrapped in recolor markup so its
     // color is set independently — BT/WiFi blue while their radio is scanning,

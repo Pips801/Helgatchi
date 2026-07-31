@@ -3,6 +3,7 @@
 #include "hal.h"
 #include "vibe_service.h"
 #include "ui_controller.h"
+#include "ui_boot.h"         // deferred UI stack — _setDisplay asks for it
 #include "toast_service.h"   // always-on state changes on a plug/unplug edge
 #include "log_service.h"
 #include "scan_service.h"
@@ -790,8 +791,13 @@ void PowerManager::requestSleepOrScreenOff() {
 }
 
 void PowerManager::_setDisplay(DisplayState s) {
-    if (s == _disp_state) return;
-    _disp_state = s;
+    // Gate on _disp_applied, not the value alone: begin() seeds _disp_state to
+    // OFF before it decides anything, so the first _setDisplay(OFF) of a TIMER
+    // wake matched and early-returned — sleepDisplay() and setRenderEnabled(false)
+    // never ran, and LVGL rendered invisible frames for the whole silent window.
+    if (_disp_applied && s == _disp_state) return;
+    _disp_applied = true;
+    _disp_state   = s;
     // OFF: skip both the backlight AND LVGL rendering. Saves ~70 % CPU
     // during silent TIMER-wake scan windows, leaving the cycles for scanner
     // / rules engine work. ON/DIM resume rendering immediately.
@@ -801,11 +807,17 @@ void PowerManager::_setDisplay(DisplayState s) {
             g_ui.setRenderEnabled(false);
             break;
         case DisplayState::ON:
+            // Every path that lights the panel lands here — cold boot, button
+            // wake, an alert with SKEY_ALERT_WAKE_SCREEN, serial power commands
+            // — so this is the one place that has to ask for the UI stack a
+            // TIMER wake left unbuilt. Deferred; loop() services it. See ui_boot.h.
+            uiRequestBringUp();
             g_hal.wakeDisplay();
             g_ui.setRenderEnabled(true);
             g_logger.applyPerfMonitor();   // re-sync overlay visibility on wake
             break;
         case DisplayState::DIM:
+            uiRequestBringUp();
             g_hal.dimDisplay();
             g_ui.setRenderEnabled(true);
             g_logger.applyPerfMonitor();

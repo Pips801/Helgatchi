@@ -4,6 +4,8 @@
 #include "vibe_service.h"
 #include "overview_screen.h"
 #include "display_service.h"
+#include "ui_boot.h"        // a rule can fire party while the UI stack is down
+#include "power_manager.h"  // wakeScreen() — owns backlight + render gate + UI request
 #include "hal.h"
 #include "UI/screens.h"     // objects, SCREEN_ID_OVERVIEW
 #include "UI/eez-flow.h"    // eez_flow_set_screen
@@ -88,16 +90,37 @@ void PartyService::start(uint32_t duration_ms, bool from_rule) {
     _until_ms = now + duration_ms;
 
     if (_active) return;   // already running — just extended the timer above
-    _active  = true;
-    _settled = false;
+    _active    = true;
+    _settled   = false;
+    _ui_staged = false;
     _last_vibe_ms = _last_text_ms = _last_awake_ms = now;
 
-    // Always bring up the status page. A rule can fire party during a headless
-    // scan window with the screen off, so wake the panel too. set_screen clears
-    // the nav stack; backing out of the status page (long-press) is handled in
-    // UIController and always goes to the main menu. Skip the reload if the
-    // overview is already showing.
-    g_hal.wakeDisplay();
+    // Effects that don't need the UI start immediately, so a rule-fired party
+    // during a headless scan window is already lit and buzzing while the screen
+    // comes up.
+    g_leds.playAlertPattern(LED_PATTERN_RAINBOW_FAST, 0);   // 0 = until cleared
+
+    // Always bring up the status page, panel included. Go through PowerManager
+    // rather than g_hal.wakeDisplay() directly: it owns the backlight, LVGL's
+    // render gate and the UI-stack request together, and a rule can fire party
+    // during a headless scan window where all three are down. Waking the panel
+    // without re-enabling render would light a screen nothing draws to.
+    g_power.wakeScreen();
+
+    // The request above is deferred (we may be inside dispatch), so the visuals
+    // stage here if the UI is already up and from tick() otherwise. See ui_boot.h.
+    _stageUi();
+}
+
+// The visual half of start(), split out because it can't run until the UI
+// exists. Idempotent per party run — _ui_staged gates it.
+void PartyService::_stageUi() {
+    if (_ui_staged || !uiIsUp()) return;
+    _ui_staged = true;
+
+    // set_screen clears the nav stack; backing out of the status page
+    // (long-press) is handled in UIController and always goes to the main menu.
+    // Skip the reload if the overview is already showing.
     if (lv_screen_active() != objects.overview)
         eez_flow_set_screen(SCREEN_ID_OVERVIEW, LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);
 
@@ -107,12 +130,16 @@ void PartyService::start(uint32_t duration_ms, bool from_rule) {
     g_overview_screen.hold(true);
     g_overview_screen.play(HELGA_PARTY);
 
-    g_leds.playAlertPattern(LED_PATTERN_RAINBOW_FAST, 0);   // 0 = until cleared
-
     _ensureBanner();
     if (_banner) lv_obj_clear_flag((lv_obj_t*)_banner, LV_OBJ_FLAG_HIDDEN);   // show our banner
     if (OVERVIEW_TITLE) lv_obj_add_flag(OVERVIEW_TITLE, LV_OBJ_FLAG_HIDDEN);   // hide the bound title
     _refreshColors();   // paint banner + tint icons for frame 0
+}
+
+// Called by uiBringUpNow() once the stack is live — picks up a party that
+// started while headless. Harmless when no party is running.
+void PartyService::onUiUp() {
+    if (_active) _stageUi();
 }
 
 void PartyService::stop(bool arm_cooldown) {
@@ -125,7 +152,8 @@ void PartyService::stop(bool arm_cooldown) {
 // manual dismissals; a natural timeout passes false (the beacon is gone by then).
 void PartyService::_end(bool set_cooldown) {
     if (!_active) return;
-    _active = false;
+    _active    = false;
+    _ui_staged = false;
 
     g_leds.playAlertPattern(LED_PATTERN_OFF, 0);
     g_vibe.stop();
@@ -143,13 +171,20 @@ void PartyService::tick() {
     if (!_active) return;
     uint32_t now = millis();
 
-    const bool on_overview = (lv_screen_active() == objects.overview);
-    if (on_overview) _settled = true;
+    // Party may have started during a headless scan window; the visuals wait
+    // here for the UI stack. Until it's up, objects.overview is null and the
+    // screen-tracking below can't mean anything — LEDs and haptics run regardless.
+    _stageUi();
 
-    // Screen changed away from the overview by some other route — treat as a
-    // manual dismiss: end and arm cooldown. (Long-press exits are intercepted in
-    // UIController and keep us on the overview, so this is a safety net.)
-    if (_settled && !on_overview) { _end(true); return; }
+    if (_ui_staged) {
+        const bool on_overview = (lv_screen_active() == objects.overview);
+        if (on_overview) _settled = true;
+
+        // Screen changed away from the overview by some other route — treat as a
+        // manual dismiss: end and arm cooldown. (Long-press exits are intercepted in
+        // UIController and keep us on the overview, so this is a safety net.)
+        if (_settled && !on_overview) { _end(true); return; }
+    }
 
     // Duration elapsed — the beacon is gone (a present one refreshes the timer),
     // so end without cooldown. Stays on the status page.
@@ -159,7 +194,7 @@ void PartyService::tick() {
         _last_vibe_ms = now;
         g_vibe.play(PARTY_VIBE);
     }
-    if (now - _last_text_ms >= TEXT_INTERVAL_MS) {
+    if (_ui_staged && now - _last_text_ms >= TEXT_INTERVAL_MS) {
         _last_text_ms = now;
         _refreshColors();
     }

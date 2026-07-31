@@ -7,6 +7,7 @@
 #include "alerts_service.h"
 #include "devices_screen.h"
 #include "ui_controller.h"
+#include "ui_boot.h"        // uiIsUp() — LVGL counters are unreadable while headless
 #include "perf_stats.h"
 #include <Arduino.h>
 #include <lvgl.h>
@@ -288,8 +289,10 @@ void LogService::_emitPerfTelemetry() {
     const unsigned long now = millis();
 
     // --- Memory ---
-    lv_mem_monitor_t lv;
-    lv_mem_monitor(&lv);
+    // LVGL's allocator only exists once the UI stack is up (ui_boot.h); headless
+    // scan windows report zeros rather than calling into an uninitialized heap.
+    lv_mem_monitor_t lv = {};
+    if (uiIsUp()) lv_mem_monitor(&lv);
     // heap_* are INTERNAL SRAM. low is the since-boot low-water, blk the largest
     // contiguous free block — blk << free means the heap is fragmented (matters
     // for WiFi/LWIP, which need contiguous DMA-capable allocations).
@@ -341,7 +344,7 @@ void LogService::_emitPerfTelemetry() {
     const uint32_t ui_fps  = elapsed_ms
                              ? (uint32_t)((uint64_t)(frames - _last_frames) * 1000 / elapsed_ms) : 0;
     _last_frames = frames;
-    const uint32_t idle    = lv_timer_get_idle();
+    const uint32_t idle    = uiIsUp() ? lv_timer_get_idle() : 100;   // no UI == fully idle
     const uint32_t ui_cpu  = idle < 100 ? (100 - idle) : 0;   // matches the LVGL perf overlay
     uint32_t ui_render_us, ui_flush_us;
     g_ui.getRenderSplit(ui_render_us, ui_flush_us);   // worst-frame UI split (raster vs flush)
@@ -379,8 +382,10 @@ void LogService::_emitTeleplot() {
     const unsigned long now = millis();
 
     // Memory.
-    lv_mem_monitor_t lv;
-    lv_mem_monitor(&lv);
+    // LVGL's allocator only exists once the UI stack is up (ui_boot.h); headless
+    // scan windows report zeros rather than calling into an uninitialized heap.
+    lv_mem_monitor_t lv = {};
+    if (uiIsUp()) lv_mem_monitor(&lv);
 
     // Scan pressure (cb/pub/wifi are deltas since last line ≈ per second).
     const uint32_t cb  = g_scan_engine.callbacks();
@@ -408,7 +413,7 @@ void LogService::_emitTeleplot() {
     const uint32_t ui_fps = elapsed_ms
                             ? (uint32_t)((uint64_t)(frames - _last_frames) * 1000 / elapsed_ms) : 0;
     _last_frames = frames;
-    const uint32_t idle   = lv_timer_get_idle();
+    const uint32_t idle   = uiIsUp() ? lv_timer_get_idle() : 100;   // no UI == fully idle
     const uint32_t ui_cpu = idle < 100 ? (100 - idle) : 0;
 
     // Bus health (event-rate delta + cumulative queue drops).

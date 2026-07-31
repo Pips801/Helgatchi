@@ -17,6 +17,7 @@
 #include "party_service.h"
 #include "admin_service.h"
 #include "ui_controller.h"
+#include "ui_boot.h"
 #include "led_service.h"
 #include "vibe_service.h"
 #include "alerts_service.h"
@@ -57,7 +58,8 @@ void setup() {
     // cold boots pass straight through.
     PowerManager::checkWakeHoldOrResleep();
 
-    // Read once here; the boot-indicator block below reuses it.
+    // Wake cause decides how much of setup() is worth running. Read once here;
+    // the boot-indicator block below reuses it.
     const esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
 
     // Wait for a USB CDC host to attach so the boot log isn't lost — but only
@@ -90,20 +92,16 @@ void setup() {
     g_rules.begin(g_bus);  // must follow LittleFS mount + g_scan_service + g_alerts
     g_leds.begin(g_bus);   // depends on HAL (LED chain) + bus events from PowerManager
     g_vibe.begin(g_bus);   // haptic patterns; subscribes to button + alert events
-    g_ui.begin(g_bus);     // creates the LVGL display — auto-shows perf overlay
-    g_logger.attachLvglLog(); // route LVGL logs to serial (Render debug level) — must follow lv_init
-    g_display.begin(g_bus); // top-bar indicators — must follow g_ui (objects.* must exist)
-    g_settings_screen.begin(g_bus); // settings widget wiring — must follow g_ui
-    g_alerts_screen.begin(g_bus);   // alert cards UI — must follow g_ui + g_display + g_alerts
-    g_devices_screen.begin(g_bus);  // device cards UI — must follow g_ui + g_scan_service
-    g_foxhunting_screen.begin(g_bus); // foxhunt lock-on UI — must follow g_ui + g_scan_service + g_scan_engine
-    g_debug_screen.begin(g_bus);    // diagnostics view — must follow g_ui
-    g_rules_screen.begin(g_bus);    // rule cards UI — must follow g_ui + g_rules
-    g_overview_screen.begin(g_bus); // Helga character animation — must follow g_ui
-    g_party.begin(g_bus);           // party mode — must follow g_ui + g_overview_screen (references objects.*)
-    g_admin.begin(g_bus);           // admin mode — must follow g_scan_engine (BLE init + admin queue) + g_ui (objects.*)
-    g_power_menu_screen.begin(g_bus); // power menu buttons + sleep countdown — must follow g_ui
-    g_logger.applyPerfMonitor();   // re-hide unless level >= RENDERING_PERF
+    g_admin.begin(g_bus);  // admin receiver — must follow g_scan_engine (BLE init + admin queue)
+    g_party.begin(g_bus);  // party state — a rule can fire it during a headless window, so not UI-gated
+
+    // UI stack (LVGL + EEZ screens + every screen service) — deferred, see
+    // ui_boot.h. g_power.begin() above already resolved the display state from
+    // the wake cause, so a cold boot or button wake has requested it by now and
+    // this builds it in place; an autonomous scan wake leaves it down and pays
+    // none of it. Runs here so the ordering the screen begin()s depend on
+    // (g_alerts, g_scan_service, g_scan_engine, g_rules) is unchanged.
+    uiBringUpNow(g_bus);
 
     if (g_settings.getBool(SKEY_DEBUG_SERIAL_ENABLED)) {
         _printBootInfo();
@@ -139,6 +137,11 @@ void setup() {
 }
 
 void loop() {
+    // Service a deferred UI bring-up first, outside dispatch(): requests arrive
+    // from inside it (an alert waking the screen) and the screen begin()s
+    // subscribe to the bus, which dispatch() iterates live. No-op once up.
+    if (uiBringUpPending()) uiBringUpNow(g_bus);
+
     // Per-phase timing folded into g_loop_perf (worst tick per 1 s window). One
     // micros() read per phase — negligible — so it runs unconditionally;
     // LogService reports it only at DEBUG_PERF. See perf_stats.h.
@@ -154,7 +157,10 @@ void loop() {
     PERF_TIME(rules_us,   g_rules.tick());       // drain scan ring + match against loaded rules
     PERF_TIME(leds_us,    g_leds.tick());        // ~30 FPS LED pattern render (frame-skips internally)
     g_party.tick();                              // party mode: re-fire haptics, cycle banner colour, keep-awake (no-op when idle)
-    PERF_TIME(ui_us,      g_ui.tick());          // lv_timer_handler — drives LVGL rendering
+    // lv_timer_handler — drives LVGL rendering. Skipped entirely while the UI is
+    // down (headless scan window): lv_init() hasn't run, so there is nothing to
+    // tick and calling in would fault.
+    if (uiIsUp()) { PERF_TIME(ui_us, g_ui.tick()); }
     // Haptics no longer tick here — VibeService runs its step machine on a
     // one-shot esp_timer, immune to loop-cadence stalls (see vibe_service.h).
 

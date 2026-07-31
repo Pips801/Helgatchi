@@ -240,6 +240,9 @@ private:
 
     EventBus* _bus = nullptr;
     DisplayState _disp_state = DisplayState::OFF;
+    // False until _setDisplay has actually driven the panel once. Without it the
+    // seeded OFF in begin() makes the first real _setDisplay(OFF) a no-op.
+    bool         _disp_applied = false;
     uint32_t _last_inhibit_seen_ms = 0;  // hysteresis timestamp for _isInhibited
 
     // Timing

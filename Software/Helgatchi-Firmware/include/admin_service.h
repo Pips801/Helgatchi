@@ -33,6 +33,10 @@
 class AdminService : public IEventHandler {
 public:
     void begin(EventBus& bus);
+    // Screen wiring (dropdown contents, menu callbacks, card visibility). Split
+    // from begin() so the receiver side runs during headless scan windows;
+    // called from uiBringUpNow(). See ui_boot.h.
+    void beginUi();
     void tick();
     void onEvent(const Event& e) override;   // unused stub (driven by tick + direct calls)
 

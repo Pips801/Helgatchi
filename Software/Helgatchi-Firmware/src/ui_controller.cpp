@@ -323,6 +323,12 @@ uint32_t UIController::frameCount() const {
 }
 
 void UIController::showUpdatingScreen() {
+    // The flasher can send `update` during a headless scan window (USB attached
+    // with SLEEP_WHILE_USB on), where objects.device_updating is still null. The
+    // caller — SerialConsole, which ticks outside dispatch() — builds the stack
+    // first, so this only bails if that somehow didn't happen. See ui_boot.h.
+    if (!objects.device_updating) return;
+
     // Load the EEZ "device updating" screen, then force render+flush now so the
     // panel actually shows it before the web flasher resets us into the
     // bootloader (tick()/lv_timer_handler won't run again in time). The ST7789

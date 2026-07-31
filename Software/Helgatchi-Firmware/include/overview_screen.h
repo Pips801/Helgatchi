@@ -1,5 +1,6 @@
 #pragma once
 #include "event_bus.h"
+#include "helga_animation.h"
 
 // OverviewScreen
 //
@@ -27,23 +28,6 @@
 //
 // Initialize AFTER g_ui.begin() (objects.* must exist).
 
-enum HelgaAnim {
-    HELGA_IDLE,     // default resting loop
-    HELGA_IDLE2,
-    HELGA_IDLE3,
-    HELGA_IDLE4,
-    HELGA_IDLE5,
-    HELGA_SIT,      // sit / scoot loop
-    HELGA_WALK,     // walk cycle loop
-    HELGA_PARTY,    // party loop
-    HELGA_DANCE,    // dance loop
-    HELGA_SNIFF,    // sniff_start -> sniff_loop -> (exit) sniff_end
-    HELGA_ALERT,    // sniff_start -> sniff_alert -> (exit) sniff_end
-    HELGA_BRUSH,    // brushing loop
-    HELGA_SLEEP,
-    HELGA__COUNT
-};
-
 class OverviewScreen : public IEventHandler {
 public:
     void begin(EventBus& bus);
@@ -64,10 +48,3 @@ public:
 };
 
 extern OverviewScreen g_overview_screen;
-
-// Name registry for the serial console (`helga list` / `helga play`), mirroring
-// ledPatternByName / vibePatternByName. Names are the composite animations
-// above (each bundles its intro/loop/outro clips), not raw clip ranges.
-// helgaAnimByName returns HELGA__COUNT on an unknown name.
-const char* helgaAnimName(HelgaAnim id);
-HelgaAnim   helgaAnimByName(const char* name);

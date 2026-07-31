@@ -77,7 +77,7 @@ struct AnimDef {
     int8_t outro;
 };
 
-static const AnimDef ANIMS[HELGA__COUNT] = {
+static const AnimDef ANIMS[] = {
     /* HELGA_IDLE  */ { -1,                     CLIP_IDLE,          -1                  },
     /* HELGA_IDLE2 */ { -1,                     CLIP_IDLE_FIDGET,   -1                  },
     /* HELGA_IDLE3 */ { -1,                     CLIP_IDLE_SNEEZE,   -1                  },
@@ -92,38 +92,8 @@ static const AnimDef ANIMS[HELGA__COUNT] = {
     /* HELGA_BRUSH */ { -1,                     CLIP_BRUSH,         -1                  },
     /* HELGA_SLEEP */ { CLIP_SLEEP_START,       CLIP_SLEEP,         -1                  },
 };
-
-// Names for the serial console, index-matched to HelgaAnim / ANIMS.
-static const char* const s_anim_name[] = {
-    "idle",     // HELGA_IDLE
-    "fidget",   // HELGA_IDLE2
-    "sneeze",   // HELGA_IDLE3
-    "wag",      // HELGA_IDLE4
-    "head_tilt",// HELGA_IDLE5
-    "sit",      // HELGA_SIT
-    "walk",     // HELGA_WALK
-    "party",    // HELGA_PARTY
-    "dance",    // HELGA_DANCE
-    "sniff",    // HELGA_SNIFF
-    "alert",    // HELGA_ALERT
-    "brush",    // HELGA_BRUSH
-    "sleep",    // HELGA_SLEEP
-};
-static_assert(sizeof(s_anim_name) / sizeof(s_anim_name[0]) == HELGA__COUNT,
-              "s_anim_name out of sync with HelgaAnim");
-
-const char* helgaAnimName(HelgaAnim id) {
-    if (id >= HELGA__COUNT) return "?";
-    return s_anim_name[id];
-}
-
-HelgaAnim helgaAnimByName(const char* name) {
-    if (!name || !*name) return HELGA__COUNT;
-    for (uint8_t i = 0; i < HELGA__COUNT; i++) {
-        if (strcasecmp(name, s_anim_name[i]) == 0) return (HelgaAnim)i;
-    }
-    return HELGA__COUNT;
-}
+static_assert(sizeof(ANIMS) / sizeof(ANIMS[0]) == HELGA_ANIMATION_COUNT,
+              "animation definitions out of sync with HelgaAnim");
 
 // ---------------------------------------------------------------------------
 // Sequencer state

@@ -1,6 +1,7 @@
 #pragma once
 #include "event_bus.h"
 #include "helga_animation.h"
+#include "helga_playback_state.h"
 
 // OverviewScreen
 //
@@ -33,12 +34,16 @@ public:
     void begin(EventBus& bus);
     void onEvent(const Event& e) override;
 
-    // Request an animation. Always recorded as the desired state (even when the
-    // overview isn't showing) so it's replayed on the next screen load; when the
-    // overview IS showing it's driven live — if Helga is mid-animation the
-    // current animation's outro and the new animation's intro (if any) are
-    // sequenced first, then the new loop sustains.
+    // Request an automatic animation. This remains the serial/party/event path:
+    // the request is always recorded, including during manual playback, so the
+    // latest automatic state can resume later. Manual playback overrides only
+    // the visible animation.
     void play(HelgaAnim anim);
+
+    bool startManualPlayback(HelgaAnim animation);
+    bool stopManualPlayback();
+    bool handleManualPlaybackButton(EventId event_id);
+    bool manualPlaybackActive() const;
 
     // While held, bus events (scan/alert) no longer change the animation, so the
     // last play() sustains. Used by party mode to keep HELGA_PARTY on-screen for

@@ -4,6 +4,7 @@
 #include "power_manager.h"
 #include "vibe_service.h"
 #include "party_service.h"
+#include "overview_screen.h"
 #include "version.h"
 #include "UI/ui.h"
 #include "UI/screens.h"
@@ -347,6 +348,12 @@ void UIController::releaseKeypad() {
 // ---------------------------------------------------------------------------
 
 void UIController::onEvent(const Event& e) {
+    if (g_overview_screen.handleManualPlaybackButton(e.id)) {
+        g_vibe.play(HAPTIC_BUMP);
+        eez_flow_pop_screen(LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);
+        return;
+    }
+
     lv_group_t* g = _indev_kbd ? lv_indev_get_group(_indev_kbd) : nullptr;
 
     switch (e.id) {

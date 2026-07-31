@@ -57,9 +57,20 @@ void setup() {
     // cold boots pass straight through.
     PowerManager::checkWakeHoldOrResleep();
 
-    const uint32_t t0 = millis();
-    while (!Serial && (millis() - t0) < 2000) { delay(10); }
-    delay(200);
+    // Read once here; the boot-indicator block below reuses it.
+    const esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
+
+    // Wait for a USB CDC host to attach so the boot log isn't lost — but only
+    // when someone could be watching. A TIMER wake is an autonomous scan cycle
+    // running on battery with the screen off, where CDC never asserts, so this
+    // burned its full 2 s at 240 MHz on EVERY cycle: more than a third of the
+    // fixed per-cycle overhead, for a log nobody reads. Cold boot and button
+    // wakes still wait, so flashing and interactive debugging are unchanged.
+    if (wake_cause != ESP_SLEEP_WAKEUP_TIMER) {
+        const uint32_t t0 = millis();
+        while (!Serial && (millis() - t0) < 2000) { delay(10); }
+        delay(200);
+    }
 
     g_bus.begin();
     g_settings.begin(g_bus);
@@ -105,11 +116,10 @@ void setup() {
     // that triggered the reset, and a second haptic on the other side feels
     // like one long buzz. TIMER wakes (autonomous scan) also stay silent.
     {
-        esp_sleep_wakeup_cause_t cause  = esp_sleep_get_wakeup_cause();
         esp_reset_reason_t       reset  = esp_reset_reason();
         bool show_indicator =
             (reset == ESP_RST_POWERON) ||
-            (reset == ESP_RST_DEEPSLEEP && cause == ESP_SLEEP_WAKEUP_EXT1);
+            (reset == ESP_RST_DEEPSLEEP && wake_cause == ESP_SLEEP_WAKEUP_EXT1);
 
         if (show_indicator) {
             g_hal.setAllLEDs(30, 30, 30);

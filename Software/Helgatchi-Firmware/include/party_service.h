@@ -1,5 +1,6 @@
 #pragma once
 #include "event_bus.h"
+#include "party_navigation_state.h"
 #include <stdint.h>
 
 // PartyService — the "party mode" device state.
@@ -18,7 +19,8 @@
 // serial `party off`, or timeout — only tears down the effects and STAYS on the
 // status page; it never navigates. Backing out of the status page itself is
 // UIController's job (long-press on the overview → main menu). tick() also ends
-// the party if the screen changes away from the overview by any other route.
+// the party after any other screen change. Helga Menu is exempt while party
+// mode backgrounds across the expected return from manual Helga playback.
 //
 // The banner is a label this service owns and parents onto the overview top bar
 // at runtime. The EEZ-bound title label's *text* is reasserted every flow tick
@@ -61,7 +63,7 @@ private:
 
     EventBus* _bus              = nullptr;
     bool      _active           = false;
-    bool      _settled          = false;   // overview has become the active screen at least once
+    PartyNavigationState _navigation;
     uint32_t  _until_ms         = 0;
     uint32_t  _cooldown_until_ms = 0;      // rule triggers ignored until this millis()
     uint32_t  _last_vibe_ms     = 0;

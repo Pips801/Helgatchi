@@ -12,6 +12,7 @@
 #include "party_service.h"
 #include "admin_service.h"
 #include "event_payload.h"
+#include "overview_screen.h"
 #include <Arduino.h>
 #include <Preferences.h>
 #include <esp_sleep.h>
@@ -728,7 +729,7 @@ void PowerManager::_postCountdown(uint32_t now) {
 }
 
 bool PowerManager::_isInhibited() {
-    // Hysteresis: if either condition is currently true, latch the timestamp.
+    // Hysteresis: if any raw condition is currently true, latch the timestamp.
     // For a few seconds after that, keep returning true even if the raw checks
     // momentarily disagree. (USB hosts occasionally pause SOFs and CDC's
     // _connected flag can briefly drop during heavy traffic — without grace,
@@ -746,6 +747,8 @@ bool PowerManager::_isInhibited() {
     //   admin broadcasting → inhibit (deep sleep tears NimBLE down mid-burst)
     //   admin effect active → inhibit (let a received message/LED/beacon finish)
     //   hunting → inhibit (lock-on must keep tracking; sleep would drop the radio)
+    //   manual Helga playback → display/sleep inhibit (keeps the display awake; no post-playback grace)
+    const bool manual_playback = g_overview_screen.manualPlaybackActive();
     bool raw = ((bool)Serial && !_sleep_w_serial)
             || (g_hal.usbAttached() && !_sleep_while_usb)
             || (_is_charging && (!_sleep_while_charging || _always_on))
@@ -756,6 +759,9 @@ bool PowerManager::_isInhibited() {
 
     if (raw) {
         _last_inhibit_seen_ms = millis();
+        return true;
+    }
+    if (manual_playback) {
         return true;
     }
     if (_last_inhibit_seen_ms != 0 &&

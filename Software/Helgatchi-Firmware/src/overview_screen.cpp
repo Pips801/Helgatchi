@@ -3,6 +3,8 @@
 #include "scan_types.h"
 #include "party_service.h"
 #include "UI/screens.h"
+#include "UI/eez-flow.h"
+#include <Arduino.h>
 #include <lvgl.h>
 #include <esp_random.h>
 #include <cstdio>
@@ -77,7 +79,7 @@ struct AnimDef {
     int8_t outro;
 };
 
-static const AnimDef ANIMS[HELGA__COUNT] = {
+static const AnimDef ANIMS[] = {
     /* HELGA_IDLE  */ { -1,                     CLIP_IDLE,          -1                  },
     /* HELGA_IDLE2 */ { -1,                     CLIP_IDLE_FIDGET,   -1                  },
     /* HELGA_IDLE3 */ { -1,                     CLIP_IDLE_SNEEZE,   -1                  },
@@ -92,38 +94,8 @@ static const AnimDef ANIMS[HELGA__COUNT] = {
     /* HELGA_BRUSH */ { -1,                     CLIP_BRUSH,         -1                  },
     /* HELGA_SLEEP */ { CLIP_SLEEP_START,       CLIP_SLEEP,         -1                  },
 };
-
-// Names for the serial console, index-matched to HelgaAnim / ANIMS.
-static const char* const s_anim_name[] = {
-    "idle",     // HELGA_IDLE
-    "fidget",   // HELGA_IDLE2
-    "sneeze",   // HELGA_IDLE3
-    "wag",      // HELGA_IDLE4
-    "head_tilt",// HELGA_IDLE5
-    "sit",      // HELGA_SIT
-    "walk",     // HELGA_WALK
-    "party",    // HELGA_PARTY
-    "dance",    // HELGA_DANCE
-    "sniff",    // HELGA_SNIFF
-    "alert",    // HELGA_ALERT
-    "brush",    // HELGA_BRUSH
-    "sleep",    // HELGA_SLEEP
-};
-static_assert(sizeof(s_anim_name) / sizeof(s_anim_name[0]) == HELGA__COUNT,
-              "s_anim_name out of sync with HelgaAnim");
-
-const char* helgaAnimName(HelgaAnim id) {
-    if (id >= HELGA__COUNT) return "?";
-    return s_anim_name[id];
-}
-
-HelgaAnim helgaAnimByName(const char* name) {
-    if (!name || !*name) return HELGA__COUNT;
-    for (uint8_t i = 0; i < HELGA__COUNT; i++) {
-        if (strcasecmp(name, s_anim_name[i]) == 0) return (HelgaAnim)i;
-    }
-    return HELGA__COUNT;
-}
+static_assert(sizeof(ANIMS) / sizeof(ANIMS[0]) == HELGA_ANIMATION_COUNT,
+              "animation definitions out of sync with HelgaAnim");
 
 // ---------------------------------------------------------------------------
 // Sequencer state
@@ -143,9 +115,7 @@ static int8_t  _current = -1;  // clip currently playing
 static int8_t  _active  = -1;  // HelgaAnim whose loop is sustained (for outro lookup)
 static int8_t  _target  = -1;  // HelgaAnim we're transitioning to
 static bool    _running = false;
-static int8_t  _desired = HELGA_IDLE;  // last animation the bus/API asked for,
-                                       // tracked even while the overview is closed
-                                       // so opening it resumes the right state
+static HelgaPlaybackState _playback;
 static bool    _held    = false;       // when set, ignore bus-driven state changes
                                        // (scan/alert) so a caller-owned animation
                                        // (e.g. party mode) sustains — see hold()
@@ -192,7 +162,9 @@ static void _completedCb(lv_anim_t* /*a*/) {
         _startClip(ANIMS[_active].loop);
         return;
     }
-    if (_active == HELGA_IDLE && esp_random() % IDLE_VARIANT_ODDS == 0) {
+    if (!_playback.manualActive() &&
+        _active == HELGA_IDLE &&
+        esp_random() % IDLE_VARIANT_ODDS == 0) {
         _variant_oneshot = true;
         _startClip(IDLE_VARIANT_CLIPS[esp_random() %
                    (sizeof(IDLE_VARIANT_CLIPS) / sizeof(IDLE_VARIANT_CLIPS[0]))]);
@@ -312,6 +284,24 @@ static void _updateStatusText() {
     lv_label_set_text(objects.helga_status_text, buf);
 }
 
+static void _syncManualStatusVisibility() {
+    if (!objects.helga_status_text) return;
+    if (_playback.manualActive()) {
+        lv_obj_add_flag(objects.helga_status_text, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_remove_flag(objects.helga_status_text, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static void _resumeAutomaticAfterManual() {
+    _syncManualStatusVisibility();
+    if (objects.helga && lv_screen_active() == objects.overview) {
+        _request(_playback.automaticAnimation());
+    }
+    _status_state = ST_INVALID;
+    _updateStatusText();
+}
+
 // ---------------------------------------------------------------------------
 // Screen lifecycle
 // ---------------------------------------------------------------------------
@@ -324,9 +314,12 @@ static void _enterOverview() {
     _current = _active = _target = -1;
     _running = false;
     _variant_oneshot = false;
-    lv_animimg_set_completed_cb(objects.helga, _completedCb);
-    _request((HelgaAnim)_desired);
+    if (objects.helga) {
+        lv_animimg_set_completed_cb(objects.helga, _completedCb);
+        _request(_playback.visibleAnimation());
+    }
 
+    _syncManualStatusVisibility();
     _status_state = ST_INVALID;   // force a fresh status line (and re-roll) on load
     _updateStatusText();
 }
@@ -334,7 +327,7 @@ static void _enterOverview() {
 static void _leaveOverview() {
     // Stop the frame anim so nothing animates off-screen. lv_anim_delete doesn't
     // fire the completion cb, so the sequencer stays put; the next load resets it.
-    lv_animimg_delete(objects.helga);
+    if (objects.helga) lv_animimg_delete(objects.helga);
     _running = false;
 }
 
@@ -350,10 +343,10 @@ static void _screenEventCb(lv_event_t* e) {
 // Public API + lifecycle
 // ---------------------------------------------------------------------------
 
-// Record the requested animation, and drive it live only while the overview is
-// showing. Bus events call this whether or not the screen is open, so _desired
-// always reflects the latest event; _enterOverview replays it on the next load.
-// Off-screen we touch nothing but _desired — no animimg work, no rendering.
+// Record the requested automatic animation, and drive it live only while the
+// overview is showing without a manual override. Bus events call this whether
+// or not the screen is open, so the automatic state always reflects the latest
+// event; _enterOverview replays the currently visible state on the next load.
 static void _apply(HelgaAnim anim) {
     // "Resting" resolves by battery: an idle request becomes sleep when the
     // battery is low, so every path that settles Helga (scan stop, party end,
@@ -361,8 +354,12 @@ static void _apply(HelgaAnim anim) {
     // battery. Charging/missing sentinels read as not-low, so plugging in wakes
     // her on the next battery event.
     if (anim == HELGA_IDLE && _isLowBatt()) anim = HELGA_SLEEP;
-    _desired = anim;
-    if (objects.helga && lv_screen_active() == objects.overview) _request(anim);
+    if (!_playback.setAutomatic(anim)) return;
+    if (objects.helga &&
+        lv_screen_active() == objects.overview &&
+        !_playback.manualActive()) {
+        _request(anim);
+    }
     // Party start/stop drives the sprite via play() directly (bypassing onEvent),
     // so refresh the status line here too — _computeStatus reads g_party.active().
     _updateStatusText();
@@ -370,6 +367,40 @@ static void _apply(HelgaAnim anim) {
 
 void OverviewScreen::play(HelgaAnim anim) {
     _apply(anim);
+}
+
+bool OverviewScreen::startManualPlayback(HelgaAnim animation) {
+    if (!helgaAnimationInfo(animation)) return false;
+    if (!objects.overview || !objects.helga) {
+        Serial.println("[overview] manual playback widgets are unavailable");
+        return false;
+    }
+
+    _playback.startManual(animation);
+    if (lv_screen_active() == objects.overview) {
+        _request(animation);
+        _syncManualStatusVisibility();
+    } else {
+        eez_flow_push_screen(SCREEN_ID_OVERVIEW,
+                             LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);
+    }
+    return true;
+}
+
+bool OverviewScreen::stopManualPlayback() {
+    if (!_playback.stopManual()) return false;
+    _resumeAutomaticAfterManual();
+    return true;
+}
+
+bool OverviewScreen::handleManualPlaybackButton(EventId event_id) {
+    if (!_playback.consumeExitButton(event_id)) return false;
+    _resumeAutomaticAfterManual();
+    return true;
+}
+
+bool OverviewScreen::manualPlaybackActive() const {
+    return _playback.manualActive();
 }
 
 // Hold/release the animation against bus-driven changes. While held, onEvent
@@ -455,12 +486,16 @@ void OverviewScreen::onEvent(const Event& e) {
         case CMD_SCAN_START:  play(HELGA_SNIFF); break;
         case CMD_SCAN_STOP:   play(HELGA_IDLE);  break;
         case EV_ALERT_RAISED: play(HELGA_ALERT); break;
-        case EV_BATTERY_UPDATED:
+        case EV_BATTERY_UPDATED: {
             // Flip a resting Helga between idle and sleep as the battery
             // crosses the low mark (_apply resolves which); a sniffing or
             // alerting Helga is left alone until the scan window settles her.
-            if (_desired == HELGA_IDLE || _desired == HELGA_SLEEP) play(HELGA_IDLE);
+            const HelgaAnim automatic = _playback.automaticAnimation();
+            if (automatic == HELGA_IDLE || automatic == HELGA_SLEEP) {
+                play(HELGA_IDLE);
+            }
             break;
+        }
         default: break;
     }
 }

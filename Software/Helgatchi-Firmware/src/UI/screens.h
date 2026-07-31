@@ -27,7 +27,8 @@ enum ScreensEnum {
     SCREEN_ID_ADMIN_MENU = 14,
     SCREEN_ID_FOXHUNTING_MENU = 15,
     SCREEN_ID_RULES = 16,
-    _SCREEN_ID_LAST = 16
+    SCREEN_ID_HELGA_MENU = 17,
+    _SCREEN_ID_LAST = 17
 };
 
 typedef struct _objects_t {
@@ -47,6 +48,7 @@ typedef struct _objects_t {
     lv_obj_t *admin_menu;
     lv_obj_t *foxhunting_menu;
     lv_obj_t *rules;
+    lv_obj_t *helga_menu;
     lv_obj_t *obj0;
     lv_obj_t *obj0__top_bar;
     lv_obj_t *obj0__left_text;
@@ -116,43 +118,50 @@ typedef struct _objects_t {
     lv_obj_t *obj13__left_text;
     lv_obj_t *obj13__top_bar_center_text;
     lv_obj_t *obj13__right_text;
+    lv_obj_t *helga_top_bar;
+    lv_obj_t *helga_top_bar__top_bar;
+    lv_obj_t *helga_top_bar__left_text;
+    lv_obj_t *helga_top_bar__top_bar_center_text;
+    lv_obj_t *helga_top_bar__right_text;
     lv_obj_t *main_menu_scrolling_container;
     lv_obj_t *overview_panel;
     lv_obj_t *obj14;
-    lv_obj_t *devices_panel;
+    lv_obj_t *helga_panel;
     lv_obj_t *obj15;
+    lv_obj_t *devices_panel;
+    lv_obj_t *obj16;
     lv_obj_t *alerts_panel;
     lv_obj_t *rules_panel;
     lv_obj_t *games_panel;
     lv_obj_t *settings_panel;
     lv_obj_t *info_panel;
     lv_obj_t *admin_panel;
-    lv_obj_t *obj16;
-    lv_obj_t *power_panel;
     lv_obj_t *obj17;
+    lv_obj_t *power_panel;
     lv_obj_t *obj18;
     lv_obj_t *obj19;
     lv_obj_t *obj20;
     lv_obj_t *obj21;
     lv_obj_t *obj22;
-    lv_obj_t *splash_screen_tutorial;
     lv_obj_t *obj23;
-    lv_obj_t *start_tutorial_button;
+    lv_obj_t *splash_screen_tutorial;
     lv_obj_t *obj24;
+    lv_obj_t *start_tutorial_button;
     lv_obj_t *obj25;
     lv_obj_t *obj26;
     lv_obj_t *obj27;
-    lv_obj_t *end_tutorial_button;
     lv_obj_t *obj28;
+    lv_obj_t *end_tutorial_button;
     lv_obj_t *obj29;
     lv_obj_t *obj30;
     lv_obj_t *obj31;
+    lv_obj_t *obj32;
     lv_obj_t *screen_brightness_dropdown;
     lv_obj_t *led_brightness_dropdown;
     lv_obj_t *vibrate_on_alert_switch;
     lv_obj_t *le_ds_on_alert_switch;
     lv_obj_t *wake_screen_on_alert_switch;
-    lv_obj_t *obj32;
+    lv_obj_t *obj33;
     lv_obj_t *focus_on_alert_page_switch;
     lv_obj_t *scan_mode_dropdown;
     lv_obj_t *wi_fi_scanning_switch;
@@ -176,7 +185,6 @@ typedef struct _objects_t {
     lv_obj_t *ship_device_button;
     lv_obj_t *restart_tutorial_container;
     lv_obj_t *restart_tutorial_button;
-    lv_obj_t *obj33;
     lv_obj_t *obj34;
     lv_obj_t *obj35;
     lv_obj_t *obj36;
@@ -184,17 +192,18 @@ typedef struct _objects_t {
     lv_obj_t *obj38;
     lv_obj_t *obj39;
     lv_obj_t *obj40;
+    lv_obj_t *obj41;
     lv_obj_t *device_info;
     lv_obj_t *version_info;
     lv_obj_t *hardware_specs_container;
     lv_obj_t *software_specs_container;
     lv_obj_t *credits_container;
-    lv_obj_t *obj41;
+    lv_obj_t *obj42;
     lv_obj_t *alert_container;
     lv_obj_t *no_alerts_label;
     lv_obj_t *devices_container;
     lv_obj_t *no_devices_label;
-    lv_obj_t *obj42;
+    lv_obj_t *obj43;
     lv_obj_t *system___health_container;
     lv_obj_t *power_container;
     lv_obj_t *scanning_container;
@@ -205,9 +214,9 @@ typedef struct _objects_t {
     lv_obj_t *sleep_countdown_text;
     lv_obj_t *restart_button;
     lv_obj_t *power_off_;
-    lv_obj_t *obj43;
     lv_obj_t *obj44;
     lv_obj_t *obj45;
+    lv_obj_t *obj46;
     lv_obj_t *power_action_text;
     lv_obj_t *admin_command_container;
     lv_obj_t *admin_command_dropdown;
@@ -229,7 +238,8 @@ typedef struct _objects_t {
     lv_obj_t *no_tags_label;
     lv_obj_t *individual_rules_header;
     lv_obj_t *no_rulesets_label;
-    lv_obj_t *obj46;
+    lv_obj_t *helga_animation_panel;
+    lv_obj_t *helga_animation_dropdown;
     lv_obj_t *obj47;
     lv_obj_t *obj48;
     lv_obj_t *obj49;
@@ -243,6 +253,7 @@ typedef struct _objects_t {
     lv_obj_t *obj57;
     lv_obj_t *obj58;
     lv_obj_t *obj59;
+    lv_obj_t *obj60;
 } objects_t;
 
 extern objects_t objects;
@@ -294,6 +305,9 @@ void tick_screen_foxhunting_menu();
 
 void create_screen_rules();
 void tick_screen_rules();
+
+void create_screen_helga_menu();
+void tick_screen_helga_menu();
 
 void create_user_widget_top_bar(lv_obj_t *parent_obj, void *flowState, int startWidgetIndex);
 void tick_user_widget_top_bar(void *flowState, int startWidgetIndex);

@@ -1,180 +1,250 @@
 # Screens
 
-This document describes the actual UI screens, their SquareLine Studio
-implementation, and the wiring between SLS-exported widgets and firmware
-behavior. The earlier revision was a design intent — this one tracks what
-exists, what doesn't, and the conventions in use.
+This document describes the current EEZ Studio pages, generated LVGL objects,
+and firmware code that supplies runtime behavior.
 
----
+## Source of truth and generation workflow
 
-## Source of truth
+- **EEZ Studio project**: `Software/UI/Helgatchi UI.eez-project`.
+- **Generated destination**: EEZ Studio Build writes
+  `Software/Helgatchi-Firmware/src/UI/`.
+- **Runtime wiring**: screen-specific firmware modules under
+  `Software/Helgatchi-Firmware/src/`, with input and display setup in
+  `Software/Helgatchi-Firmware/src/ui_controller.cpp`.
 
-- **SLS project** (external): `Helgatchi-UI`, SLS 1.6.0, targeting LVGL 9.3, "Arduino with TFT_eSPI" board template, "Force exported names to lower case" enabled, "Custom variable prefix" `uic`.
-- **Exported files**: `src/UI/*.{c,h}` — *do not edit by hand, re-export overwrites.*
-- **Firmware wiring**: `src/ui_controller.cpp`. All buttons / settings / battery / dim / haptic hooks live here.
+Files under `Software/Helgatchi-Firmware/src/UI/` are generated. Do not edit
+them directly. Make page, user-widget, group, style, and flow changes in the
+EEZ Studio project, invoke Build, then review the generated diff and compile
+the firmware.
 
-Whenever the SLS project is re-exported, widget pointer names may change. The compiler will catch most of these as undeclared identifiers in `_bindings[]` / `_actions[]` / batteryLabels[] in `ui_controller.cpp`.
+Generated object names are exposed through `objects` in `src/UI/screens.h`.
+Runtime code attaches callbacks to those objects after `g_ui.begin()` has
+called `ui_init()` and created the generated screens.
 
----
+## Current generated screen inventory
 
-## Screens that exist today
+`src/UI/screens.h` currently defines these 17 EEZ pages and screen IDs:
 
-| # | Screen | SLS object | Status |
-|---|---|---|---|
-| 1 | Splash | `ui_screen_splash_screen` | ✅ Implemented |
-| 2 | Status | `ui_screen_status_screen` | ✅ Renders top bar, no body content yet |
-| 3 | Menu | `ui_screen_menu_screen` | ✅ Horizontal carousel, only Settings panel exists |
-| 4 | Settings | `ui_screen_settings_screen` | ✅ Most-developed screen — actual settings widgets bound to NVS |
+| # | EEZ page | Generated screen ID |
+|---:|---|---|
+| 1 | Main Menu | `SCREEN_ID_MAIN_MENU` |
+| 2 | Tutorial Splash Screen | `SCREEN_ID_TUTORIAL_SPLASH_SCREEN` |
+| 3 | Tutorial | `SCREEN_ID_TUTORIAL` |
+| 4 | Settings | `SCREEN_ID_SETTINGS` |
+| 5 | Info | `SCREEN_ID_INFO` |
+| 6 | Screen Template | `SCREEN_ID_SCREEN_TEMPLATE` |
+| 7 | Alerts | `SCREEN_ID_ALERTS` |
+| 8 | Devices | `SCREEN_ID_DEVICES` |
+| 9 | Device Updating | `SCREEN_ID_DEVICE_UPDATING` |
+| 10 | Debug Info | `SCREEN_ID_DEBUG_INFO` |
+| 11 | Overview | `SCREEN_ID_OVERVIEW` |
+| 12 | Power Menu | `SCREEN_ID_POWER_MENU` |
+| 13 | Power Action Screen | `SCREEN_ID_POWER_ACTION_SCREEN` |
+| 14 | Admin Menu | `SCREEN_ID_ADMIN_MENU` |
+| 15 | Foxhunting Menu | `SCREEN_ID_FOXHUNTING_MENU` |
+| 16 | Rules | `SCREEN_ID_RULES` |
+| 17 | Helga Menu | `SCREEN_ID_HELGA_MENU` |
 
-Screens deferred to later milestones: **Scan, Devices, Device Detail, Rules, Alerts, About**. Each will follow the same pattern as Settings (top bar component + content panel + binding table).
+These are generated screens, not a list of future placeholders. Runtime
+modules populate and control dynamic content on pages such as Alerts, Devices,
+Overview, Rules, Settings, Debug Info, and the power screens.
 
----
+## Reusable top bar
 
-## Top bar component
+The EEZ project defines `Top Bar` as a reusable user widget and instances it
+across the applicable pages. Its left and right expressions read the EEZ global
+variables `status_icons` and `battery_status`; the center text is supplied by
+each user-widget instance.
 
-Built once in SLS as a Component, instanced on Status / Menu / Settings (purple in the Hierarchy panel — they share the same Component definition and update together if edited).
+`DisplayService` updates those EEZ global variables from scan, alert, USB,
+serial, charging, and battery state. EEZ Flow propagates the values to every
+top-bar instance. To add or change a top bar, edit the page and `Top Bar` user
+widget in EEZ Studio and run Build. Add runtime code only when the new page
+needs behavior beyond the existing global expressions.
 
-Three labels per instance, named consistently across screens:
-- `top_bar_left_text` — left-side status indicator (currently shows "zzz" placeholder on Menu, free text per screen)
-- `top_bar_center_text` — screen title
-- `top_bar_right_text` — battery percentage
+## Startup and navigation ownership
 
-The right-text labels are tracked in `_batteryLabels[]` in `ui_controller.cpp`. On `EV_BATTERY_UPDATED` they all get rewritten with the formatted percentage / "CHRG" / "FULL" / "??". A cached `_last_batt_*` is also re-applied when a screen loads, so a freshly-loaded screen paints immediately instead of waiting up to 30 s for the next battery sample.
+`UIController::begin()` initializes LVGL and the display, then calls
+`ui_init()`. EEZ creates all pages and loads Main Menu as the default. Firmware
+then creates the keypad input and attaches it to `groups.UINavigation`. On first
+boot or after the tutorial flag is reset, firmware loads
+`objects.tutorial_splash_screen` instead.
 
-To add the top bar to a new screen: drop the Component instance in SLS → re-export → add the new screen's `top_bar_right_text_*` pointer to `_batteryLabels[]`.
+Page-card and button navigation authored in the EEZ flow graph uses Change
+Screen actions and the EEZ page stack. Firmware uses
+`eez_flow_set_screen()`, `eez_flow_push_screen()`, and
+`eez_flow_pop_screen()` when navigation depends on runtime state.
 
----
+Each generated page's `LV_EVENT_SCREEN_LOAD_START` handler clears and
+repopulates the single `groups.UINavigation` group with the objects assigned to
+that group in EEZ Studio. The keypad input remains attached to this group.
+Navigation order therefore comes from the explicit EEZ group order, not from a
+runtime traversal of the widget tree.
 
-## Splash → Status
+Main Menu is the one page with extra focus persistence in `ui_controller.cpp`:
+firmware saves the focused card on unload and restores it after the generated
+load handler rebuilds `groups.UINavigation`. Screen-specific modules register
+their own load/unload callbacks as needed; there is no universal firmware
+screen callback that owns all pages.
 
-The splash → status transition is **defined in SLS itself**, not in C:
-- Trigger: `LV_EVENT_SCREEN_LOADED` on splash
-- Action: `Change Screen` to Status with `FADE_OUT`, 500 ms, **3000 ms delay**
+## Main Menu
 
-The C side just calls `ui_init()` (loads splash) and lets LVGL handle the rest. This is the canonical SLS pattern — when something can be a CLICKED-event-driven screen change, prefer doing it in SLS.
+The horizontal scroll-snap carousel is
+`main_menu_scrolling_container`. Its generated navigation order is:
 
-The 3 second delay needs `lv_tick_set_cb(_tick_cb)` to be registered (LVGL 9.x removed `LV_TICK_CUSTOM`, so without this the delay never elapses). `UIController::begin()` does this before `lv_display_create`.
+1. `overview_panel`
+2. `helga_panel`
+3. `devices_panel`
+4. `alerts_panel`
+5. `rules_panel`
+6. `games_panel`
+7. `settings_panel`
+8. `info_panel`
+9. `admin_panel`
+10. `power_panel`
 
----
+The `helga_panel` card is always present; admin lock state affects the admin
+entry, not Helga.
 
-## Menu screen
+To add a menu entry:
 
-Horizontal scroll-snap carousel (`ui_menu_screen_container_container5`). Each child panel is one menu entry. Currently only `panel_settings_pannel` (sic — SLS-generated typo) exists, with `lv_image_settings_image`, label, and a `Clicked → Change Screen → Settings` event defined in SLS.
+1. Edit the Main Menu page in `Software/UI/Helgatchi UI.eez-project`.
+2. Add the panel to the EEZ `UINavigation` group in the intended focus order.
+3. Connect its `CLICKED` output to a Change Screen action targeting an existing
+   or new EEZ page, with the intended page-stack behavior.
+4. Run EEZ Studio Build and review the project and generated output.
+5. Add a runtime module or callback only if the destination needs dynamic
+   behavior that the EEZ flow does not provide.
 
-Keypad navigation: `_grp_menu` is populated by iterating the carousel container's children, so adding a new menu panel in SLS (Devices, Rules, Alerts, etc.) auto-shows up in the focus cycle without code changes. LVGL's group focus auto-scrolls the snap container.
+## Helga Menu
 
-Adding a new menu entry:
-1. In SLS: copy the Settings panel inside `container_container5`, rename, give it its own `Clicked → Change Screen → <target>` event
-2. Re-export
-3. (No C change needed for the menu screen itself)
-4. Build / register the target screen separately
+The always-visible `helga_panel` card opens the Helga screen from the Main Menu
+carousel, whether admin mode is locked or unlocked. The `helga_menu` page
+contains only `helga_animation_dropdown`; there is no preview widget.
 
----
+The dropdown is populated at runtime with these display names, in this exact
+order:
 
-## Settings screen
+1. Idle
+2. Idle Fidget
+3. Idle Sneeze
+4. Idle Wag
+5. Idle Head Tilt
+6. Sit
+7. Walk
+8. Party
+9. Dance
+10. Sniff
+11. Alert
+12. Brush
+13. Sleep
 
-The most-developed screen — every other future screen will follow this pattern.
+Press center to open the dropdown, use left/right to choose an option, and press
+center again to commit it. Committing the already-selected option also starts
+playback; a changed selection is not required.
 
-### Layout
-A top bar + a vertical scrollable panel (`panel_panel2`) of section labels and option containers. Each option container has a label and one widget (switch/dropdown/slider/button).
+Manual playback runs the chosen animation full-screen on Overview. Automatic
+status text is hidden during manual playback. The first subsequent physical
+button action (left, right, center-short, center-long, or center-hold) is
+consumed solely to stop playback and return to Helga Menu, so that action does
+not also navigate or operate the dropdown. On return, the prior dropdown
+selection is retained and the dropdown has focus.
 
-### Bound settings (`_bindings[]` in `ui_controller.cpp`)
+Display dimming, display-off, and deep sleep are inhibited only while manual
+playback is active. After manual playback exits, normal power behavior resumes;
+ordinary Overview entry again shows the latest automatic animation and status.
 
-Each entry is `{ &ui_<widget>, SKEY_<X> }` — the polymorphic `_readWidget` / `_writeWidget` handles the widget type at runtime, so a switch, dropdown, slider, etc. all work via the same path.
+## Settings
 
-Currently bound:
-| Widget | SLS pointer | SettingsKey |
-|---|---|---|
-| Brightness dropdown | `ui_settings_screen_dropdown_brightness` | `SKEY_SCREEN_BRIGHTNESS` |
-| Performance Mode dropdown | `ui_settings_screen_dropdown_performance_mode` | `SKEY_PERF_MODE` |
-| Debug over Serial switch | `ui_settings_screen_switch_debug_over_serial` | `SKEY_DEBUG_SERIAL_ENABLED` |
-| Debug Level dropdown | `ui_settings_screen_dropdown_debug_level` | `SKEY_DEBUG_LEVEL` |
-| Sleep with Serial switch | `ui_settings_screen_switch_sleep_while_serial` | `SKEY_DEBUG_SLEEP_WITH_SERIAL` |
-| Sleep with USB switch | `ui_settings_screen_switch_sleep_while_usb` | `SKEY_SLEEP_WHILE_USB` |
+The Settings page is authored in EEZ Studio and exposes its widgets through
+`objects` in the generated header. `SettingsScreen::begin()` registers
+`LV_EVENT_VALUE_CHANGED` callbacks after UI creation. `_populate()` paints
+current values from `SettingsService` on screen load and on
+`EV_SETTINGS_CHANGED`, while `_inhibit` prevents that paint from feeding back
+as user changes.
 
-### Custom (non-1:1) bindings
+Current dropdown strings generated from the EEZ project are:
 
-Some widgets don't map directly to a single SKEY:
-- **BLE / WiFi scanning switches** combine into `SKEY_SCAN_MODE` via bit-OR (BLE = bit 0, WiFi = bit 1). Custom `_onScanBitsChanged` rebuilds the combined value from both switch states on any change. `_refreshScanBits()` in the other direction.
-- **Show debug options switch** (`show_debug_options_switch`, `SKEY_DEBUG_ENABLED`): gates the visibility of the debug rows (`debug_over_serial_container`, `debug_level_container`, `device_info_container`, `reset_device_container`, `restart_tutorial_container`) via `_applyDebugVisibility()`. Default off; switching OFF also resets the [DEBUG] keys to defaults (cascade in SettingsService), and the factory reset re-hides everything. Keypad nav skips the hidden rows automatically (lv_group ignores objects with a hidden ancestor).
+- Screen and LED brightness: `Low\nMedium\nHigh\nMax`.
+- Performance mode: `Power Saver\nBalanced\nPerformance\nAlways-on`.
+- Debug level: `Info\nHigh\nRender\nScan\nPerf\nTeleplot`.
 
-### Action buttons
+The callbacks write screen-brightness, LED-brightness, and debug-level indexes
+directly. As currently generated, screen-brightness indexes 0 through 3
+therefore select `SCREEN_BRIGHTNESS_MIN` through `SCREEN_BRIGHTNESS_HIGH`;
+`SCREEN_BRIGHTNESS_MAX` has no dropdown index. LED-brightness indexes cover its
+four-value enum, and debug-level indexes cover its six-value enum. Performance
+mode uses the explicit `kPerfToIdx` and `kIdxToPerf` translation in
+`settings_screen.cpp`; it must not be treated as a direct enum-index mapping.
 
-Sleep and reboot moved to the power menu screen (which also owns the sleep
-countdown text via `EV_SLEEP_COUNTDOWN_UPDATED`). The remaining settings-screen
-buttons live in the debug section:
-| Button | Behavior |
+The BLE and Wi-Fi switches combine into the `SKEY_SCAN_MODE` bitmask. Other
+switch callbacks write their corresponding alert, scan, debug, serial, USB, and
+charging settings. `show_debug_options_switch` controls visibility of the debug
+rows; hidden ancestors are skipped by LVGL group focus.
+
+`reset_device_button` and `ship_device_button` are wired in
+`settings_screen.cpp` to the Power Action flow. Debug Info and Restart Tutorial
+navigation are authored in the EEZ flow graph.
+
+## Dynamic runtime pages
+
+Generated pages provide the static containers and screen objects; firmware
+modules supply live content and actions:
+
+- `alerts_screen.cpp` renders active, unacknowledged `AlertRecord` cards into
+  `objects.alert_container`. Acknowledging an alert removes its record and
+  card; there is no historical-alert store or view.
+- `devices_screen.cpp` maintains the device-list recycler in
+  `objects.devices_container` and owns device-detail modal navigation.
+- `rules_screen.cpp` renders tag and individual-rule cards into
+  `objects.rules_container`.
+- `overview_screen.cpp` drives the Helga animation object and status label on
+  `objects.overview`.
+- `debug_screen.cpp`, `admin_service.cpp`, `foxhunting_screen.cpp`, and
+  `power_menu_screen.cpp` attach behavior to their corresponding generated
+  pages.
+- `UIController::showUpdatingScreen()` loads `objects.device_updating` and
+  forces a refresh before web flashing resets the device.
+
+## Physical keypad contract
+
+`UIController` queues LVGL keypad keys only for left/right and center-short
+actions. `_kbd_read_cb()` emits each queued key as a pressed/released pair.
+Center-long and center-hold actions are handled directly in
+`UIController::onEvent()`. Current behavior is:
+
+| Physical action | Runtime behavior |
 |---|---|
-| `reset_device_button` | C-wired: `g_power_menu_screen.beginAction(CMD_POWER_FACTORY_RESET)` — shows the Power Action screen ("Wiping device...", cancellable during the hold), then factory wipe (settings/rules/alerts/admin) + reboot; comes back up like a first boot. The wipe+shipping-sleep variant `CMD_POWER_SHIPPING_RESET` is serial-only (`power shipping`) for the assembly line. |
-| `debug_screen_button` | EEZ-flow navigation to the Debug Info screen |
-| `restart_tutorial_button` | EEZ-flow navigation to the tutorial |
+| Left/right with dropdown open | `LV_KEY_UP` / `LV_KEY_DOWN` |
+| Left/right while the group is editing | `LV_KEY_LEFT` / `LV_KEY_RIGHT` |
+| Left/right in navigation mode | `LV_KEY_PREV` / `LV_KEY_NEXT` |
+| Center short | `LV_KEY_ENTER` |
+| Center long during party mode | Stop party mode and remain on Overview |
+| Center long with a device-detail message box | Close the modal |
+| Center long on Tutorial | Return to Tutorial Splash Screen |
+| Center long on Overview | Go to Main Menu |
+| Center long on other stacked pages | Pop the EEZ page stack |
+| Center hold on Main Menu | Request sleep or screen-off |
 
-### Dropdown options must match the enum
-SLS stores dropdown options as a `\n`-separated string and saves the index. **The index is the value stored in NVS.** If your dropdown options aren't in enum order, you'll silently store wrong values — we've eaten this bug twice (extra "Off" leading the Debug Level dropdown, slider range 50..255 vs enum 0..3 for brightness).
+Main Menu and Tutorial Splash Screen ignore ordinary center-long back
+navigation. Before the table above is applied, an active manual Helga playback
+gets first refusal: any physical button action is consumed by the manual
+playback exit path described in the Helga section.
 
-Current required option strings:
-- Brightness: `Min\nLow\nMedium\nHigh\nMax` (matches `ScreenBrightness` enum)
-- Performance Mode: `Performance\nBalanced\nPower Saver` (matches `PerfMode` enum, missing DYNAMIC by intent)
-- Debug Level: `Info\nHigh\nRender\nScan\nPerf\nTeleplot` (index = `DebugLevel` enum value, 1:1). Perf = human-readable telemetry, Teleplot = `>k:v` graphing stream.
+The open state of an LVGL dropdown is widget-local, so input routing checks
+`lv_dropdown_is_open()` separately from `lv_group_get_editing()`.
 
----
+## Cross-cutting display behavior
 
-## Keypad input contract
+Every physical button event posts `EV_UI_ACTIVITY`; serial input also posts
+activity. `PowerManager` uses it to update the last-activity time and wake the
+display.
 
-UIController converts physical button events into LVGL keys with these conventions:
+`UIController::tick()` skips EEZ Flow and LVGL timer work when rendering is
+disabled. `PowerManager` enables rendering for ON/DIM display states and
+disables it for OFF.
 
-| Action | Default (nav mode) | In edit mode | Dropdown open |
-|---|---|---|---|
-| LEFT | `LV_KEY_PREV` (prev focused widget) | `LV_KEY_LEFT` (decrement value) | `LV_KEY_UP` (prev option) |
-| RIGHT | `LV_KEY_NEXT` (next focused widget) | `LV_KEY_RIGHT` (increment value) | `LV_KEY_DOWN` (next option) |
-| CENTER short on Status | open Menu (direct screen change, bypasses LVGL) | — | — |
-| CENTER short elsewhere | `LV_KEY_ENTER` | `LV_KEY_ENTER` (commit edit) | `LV_KEY_ENTER` (select option) |
-| CENTER long | back to Status (panic-out) | — | — |
-
-**Common mistakes**:
-- Sending `LV_KEY_LEFT/RIGHT` for navigation. Switches interpret those as direct toggle and you'll never get past the first switch in the focus group.
-- Forgetting that `lv_dropdown_is_open()` is widget-local state, not group editing state. `lv_group_get_editing()` returns false even with a dropdown list visible. Both checks needed.
-
-### Group population
-`_populateGroupFromSubtree()` recursively walks a screen's widget tree and adds anything `lv_obj_check_type` recognises as interactive (switch, checkbox, dropdown, roller, slider, arc, button) to the group **in DOM order**. So the focus cycle matches the order children appear in SLS's Hierarchy panel — drag widgets there to reorder navigation.
-
----
-
-## Screen lifecycle hooks
-
-`_scr_evt_cb` (registered for all four screens via `_registerScreenLogging`) handles three things on every screen transition:
-
-1. **Logging** — `[t] SCREEN_LOAD_START / LOADED / UNLOAD_START / UNLOADED  <name>` to serial when debug serial is on.
-2. **Group switching** — on `LV_EVENT_SCREEN_LOAD_START`, set the keypad indev's group to the screen's group (or NULL for splash/status).
-3. **Settings refresh** — on Settings screen load, repaint widget values from `g_settings`.
-
-Plus battery label re-paint (`_refreshBatteryLabels`) on every screen-load so the right-text shows the latest reading immediately.
-
----
-
-## What's not implemented
-
-- **Scan screen** — needs to surface scan state, lock-on, scan mode toggle. Future commands: `CMD_SCAN_START`, `CMD_SCAN_STOP`, `CMD_SCAN_LOCKON_START/STOP`. Will subscribe to `EV_SCAN_STATE_CHANGED` for the toggle status.
-- **Devices screen** — paged list. Needs Entity Store + AppState before this is meaningful. Pagination + per-row rendering will be the main UI work.
-- **Device Detail screen** — view one entity, optionally `CMD_RULE_ADD_CUSTOM` from it.
-- **Rules screen** — toggle rule packs (`CMD_RULE_PACK_ENABLE/DISABLE`), wipe customs.
-- **Alerts screen** — list active + history, ack (`CMD_ALERT_ACK`) / snooze (`CMD_ALERT_SNOOZE`).
-- **About screen** — firmware version, build info, ruleset version.
-
-The pattern for each is identical to Settings: SLS top-bar instance + content layout + add the appropriate widgets to either `_bindings[]` (state) or `_actions[]` (commands). Screen-load hook for any data that needs paint-on-entry.
-
----
-
-## Cross-cutting
-
-### `EV_UI_ACTIVITY` is used as the activity heartbeat
-Every button press posts it. Every character typed in the serial console posts it. PowerManager updates `_last_activity_ms` and forces display ON. If a future input source (touch, gesture) is added, fire `EV_UI_ACTIVITY` from there too.
-
-### Render is gated by display state
-`UIController::tick()` is a no-op when `_render_enabled` is false. PowerManager flips it from `_setDisplay`: `OFF → false`, `ON/DIM → true`. This saves ~70 % CPU during silent TIMER-wake scan windows.
-
-### LVGL FPS overlay
-Compiled in via `LV_USE_PERF_MONITOR=1`, but visibility is runtime-toggled by `LogService::applyPerfMonitor()` based on `DebugLevel`. Reapplied on:
-- After `g_ui.begin()` (display-create auto-shows the overlay; we have to actively re-hide if level < PERF)
-- On every `EV_SETTINGS_CHANGED` that crosses the PERF threshold
-- On `_setDisplay(ON/DIM)` (covers wake-from-silent-scan transitions)
+The LVGL performance monitor is compiled in, while
+`LogService::applyPerfMonitor()` controls its runtime visibility from the debug
+level. The setting is reapplied after UI initialization, on relevant settings
+changes, and when the display returns to an enabled state.

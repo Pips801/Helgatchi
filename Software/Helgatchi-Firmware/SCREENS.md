@@ -9,11 +9,11 @@ exists, what doesn't, and the conventions in use.
 
 ## Source of truth
 
-- **SLS project** (external): `Helgatchi-UI`, SLS 1.6.0, targeting LVGL 9.3, "Arduino with TFT_eSPI" board template, "Force exported names to lower case" enabled, "Custom variable prefix" `uic`.
-- **Exported files**: `src/UI/*.{c,h}` — *do not edit by hand, re-export overwrites.*
-- **Firmware wiring**: `src/ui_controller.cpp`. All buttons / settings / battery / dim / haptic hooks live here.
+- **EEZ Studio project**: `Software/UI/Helgatchi UI.eez-project`.
+- **Generated files**: EEZ Studio generates `Software/Helgatchi-Firmware/src/UI/`. These files must not be edited directly; regenerate them from the EEZ Studio project instead.
+- **Firmware wiring**: `Software/Helgatchi-Firmware/src/ui_controller.cpp`. Button, settings, battery, dim, and haptic hooks live here.
 
-Whenever the SLS project is re-exported, widget pointer names may change. The compiler will catch most of these as undeclared identifiers in `_bindings[]` / `_actions[]` / batteryLabels[] in `ui_controller.cpp`.
+Whenever the EEZ Studio project is regenerated, widget pointer names may change. The compiler will catch most of these as undeclared identifiers in `_bindings[]` / `_actions[]` / batteryLabels[] in `ui_controller.cpp`.
 
 ---
 
@@ -23,7 +23,7 @@ Whenever the SLS project is re-exported, widget pointer names may change. The co
 |---|---|---|---|
 | 1 | Splash | `ui_screen_splash_screen` | ✅ Implemented |
 | 2 | Status | `ui_screen_status_screen` | ✅ Renders top bar, no body content yet |
-| 3 | Menu | `ui_screen_menu_screen` | ✅ Horizontal carousel, only Settings panel exists |
+| 3 | Menu | `ui_screen_menu_screen` | ✅ Horizontal carousel, including the always-visible Helga card |
 | 4 | Settings | `ui_screen_settings_screen` | ✅ Most-developed screen — actual settings widgets bound to NVS |
 
 Screens deferred to later milestones: **Scan, Devices, Device Detail, Rules, Alerts, About**. Each will follow the same pattern as Settings (top bar component + content panel + binding table).
@@ -59,7 +59,9 @@ The 3 second delay needs `lv_tick_set_cb(_tick_cb)` to be registered (LVGL 9.x r
 
 ## Menu screen
 
-Horizontal scroll-snap carousel (`ui_menu_screen_container_container5`). Each child panel is one menu entry. Currently only `panel_settings_pannel` (sic — SLS-generated typo) exists, with `lv_image_settings_image`, label, and a `Clicked → Change Screen → Settings` event defined in SLS.
+Horizontal scroll-snap carousel (`ui_menu_screen_container_container5`). Each
+child panel is one menu entry. The Helga entry is the always-visible
+`helga_panel`, whose EEZ flow opens `helga_menu`.
 
 Keypad navigation: `_grp_menu` is populated by iterating the carousel container's children, so adding a new menu panel in SLS (Devices, Rules, Alerts, etc.) auto-shows up in the focus cycle without code changes. LVGL's group focus auto-scrolls the snap container.
 
@@ -68,6 +70,46 @@ Adding a new menu entry:
 2. Re-export
 3. (No C change needed for the menu screen itself)
 4. Build / register the target screen separately
+
+---
+
+## Helga menu
+
+The always-visible `helga_panel` card opens the Helga screen from the main-menu
+carousel, whether admin mode is locked or unlocked. The `helga_menu` screen
+contains only `helga_animation_dropdown`; there is no preview widget.
+
+The dropdown is populated at runtime with these display names, in this exact
+order:
+
+1. Idle
+2. Idle Fidget
+3. Idle Sneeze
+4. Idle Wag
+5. Idle Head Tilt
+6. Sit
+7. Walk
+8. Party
+9. Dance
+10. Sniff
+11. Alert
+12. Brush
+13. Sleep
+
+Press center to open the dropdown, use left/right to choose an option, and press
+center again to commit it. Committing the already-selected option also starts
+playback; a changed selection is not required.
+
+Manual playback runs the chosen animation full-screen on Overview. Automatic
+status text is hidden during manual playback. The first subsequent physical
+button action (left, right, center-short, center-long, or center-hold) is
+consumed solely to stop playback and return to the Helga menu, so that action
+does not also navigate or operate the dropdown. On return, the prior dropdown
+selection is retained and the dropdown has focus.
+
+Display dimming, display-off, and deep sleep are inhibited only while manual
+playback is active. After manual playback exits, normal power behavior resumes;
+ordinary Overview entry again shows the latest automatic animation and status.
 
 ---
 

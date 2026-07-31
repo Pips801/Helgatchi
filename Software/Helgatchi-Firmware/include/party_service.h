@@ -45,6 +45,9 @@ public:
     // Ends and consumes the first physical action only while menu mode is active.
     bool handleMenuButton(EventId event_id);
 
+    // Silently consumes the HOLD continuation of a menu-exiting CENTER_LONG.
+    bool consumeMenuExitFollowup(EventId event_id);
+
     void stop(bool arm_cooldown = true);
 
     bool active() const { return _session.active(); }
@@ -64,7 +67,7 @@ private:
     EventBus* _bus = nullptr;
     PartyNavigationState _navigation;
     PartySessionState _session;
-    uint32_t _cooldown_until_ms = 0;
+    PartyCooldownState _cooldown;
     uint32_t _last_vibe_ms = 0;
     uint32_t _last_text_ms = 0;
     uint32_t _last_awake_ms = 0;

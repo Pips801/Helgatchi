@@ -83,9 +83,9 @@ void PartyService::start(uint32_t duration_ms, bool from_rule) {
     const uint32_t now = millis();
 
     if (from_rule) {
-        if (_cooldown_until_ms != 0 && now < _cooldown_until_ms) return;
+        if (_cooldown.active(now, COOLDOWN_MS)) return;
     } else {
-        _cooldown_until_ms = 0;
+        _cooldown.clear();
     }
 
     if (duration_ms == 0) duration_ms = DEFAULT_DURATION_MS;
@@ -97,7 +97,7 @@ void PartyService::start(uint32_t duration_ms, bool from_rule) {
 
 void PartyService::startMenu() {
     const uint32_t now = millis();
-    _cooldown_until_ms = 0;
+    _cooldown.clear();
 
     const bool was_active = _session.active();
     _session.startMenu();
@@ -136,6 +136,10 @@ bool PartyService::handleMenuButton(EventId event_id) {
     return true;
 }
 
+bool PartyService::consumeMenuExitFollowup(EventId event_id) {
+    return _session.consumeMenuExitFollowup(event_id);
+}
+
 void PartyService::stop(bool arm_cooldown) {
     _end(arm_cooldown);
 }
@@ -160,7 +164,7 @@ void PartyService::_teardownEffects(bool set_cooldown) {
     }
 
     if (set_cooldown) {
-        _cooldown_until_ms = millis() + COOLDOWN_MS;
+        _cooldown.arm(millis());
     }
 }
 

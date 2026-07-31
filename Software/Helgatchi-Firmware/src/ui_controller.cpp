@@ -348,6 +348,8 @@ void UIController::releaseKeypad() {
 // ---------------------------------------------------------------------------
 
 void UIController::onEvent(const Event& e) {
+    if (g_party.consumeMenuExitFollowup(e.id)) return;
+
     if (g_overview_screen.handleManualPlaybackButton(e.id)) {
         g_vibe.play(HAPTIC_BUMP);
         eez_flow_pop_screen(LV_SCR_LOAD_ANIM_FADE_IN, 200, 0);

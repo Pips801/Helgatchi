@@ -17,6 +17,20 @@ bool isPhysicalButton(EventId event_id) {
 
 }  // namespace
 
+void PartyCooldownState::arm(uint32_t now_ms) {
+    _armed = true;
+    _started_ms = now_ms;
+}
+
+void PartyCooldownState::clear() {
+    _armed = false;
+    _started_ms = 0;
+}
+
+bool PartyCooldownState::active(uint32_t now_ms, uint32_t duration_ms) const {
+    return _armed && (uint32_t)(now_ms - _started_ms) < duration_ms;
+}
+
 void PartySessionState::startTimed(uint32_t now_ms, uint32_t duration_ms) {
     if (menu()) return;
     _mode = PartySessionMode::TIMED;
@@ -38,8 +52,21 @@ bool PartySessionState::stop() {
 
 bool PartySessionState::consumeMenuExitButton(EventId event_id) {
     if (!menu() || !isPhysicalButton(event_id)) return false;
+    if (event_id == EV_BTN_CENTER_LONG) _suppress_center_hold = true;
     _clear();
     return true;
+}
+
+bool PartySessionState::consumeMenuExitFollowup(EventId event_id) {
+    if (!_suppress_center_hold) return false;
+    if (event_id == EV_BTN_CENTER_HOLD) {
+        _suppress_center_hold = false;
+        return true;
+    }
+    if (event_id == EV_BTN_CENTER_SHORT || event_id == EV_BTN_CENTER_LONG) {
+        _suppress_center_hold = false;
+    }
+    return false;
 }
 
 bool PartySessionState::expired(uint32_t now_ms) const {

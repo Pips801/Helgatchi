@@ -86,6 +86,54 @@ void test_each_physical_button_consumes_menu_session_once() {
     }
 }
 
+void test_menu_center_long_suppresses_its_followup_hold_once() {
+    PartySessionState state;
+    state.startMenu();
+
+    TEST_ASSERT_TRUE(state.consumeMenuExitButton(EV_BTN_CENTER_LONG));
+    TEST_ASSERT_FALSE(state.active());
+    TEST_ASSERT_TRUE(state.consumeMenuExitFollowup(EV_BTN_CENTER_HOLD));
+    TEST_ASSERT_FALSE(state.consumeMenuExitFollowup(EV_BTN_CENTER_HOLD));
+}
+
+void test_distinct_center_action_clears_stale_hold_suppression() {
+    const EventId distinct_center_events[] = {
+        EV_BTN_CENTER_SHORT,
+        EV_BTN_CENTER_LONG,
+    };
+
+    for (size_t i = 0;
+         i < sizeof(distinct_center_events) / sizeof(distinct_center_events[0]);
+         ++i) {
+        PartySessionState state;
+        state.startMenu();
+        TEST_ASSERT_TRUE(state.consumeMenuExitButton(EV_BTN_CENTER_LONG));
+
+        TEST_ASSERT_FALSE(state.consumeMenuExitFollowup(distinct_center_events[i]));
+        TEST_ASSERT_FALSE(state.consumeMenuExitFollowup(EV_BTN_CENTER_HOLD));
+    }
+}
+
+void test_party_cooldown_is_millis_wrap_safe() {
+    PartyCooldownState cooldown;
+    cooldown.arm(0xFFFFFFF0u);
+
+    TEST_ASSERT_TRUE(cooldown.active(0xFFFFFFF0u, 300000u));
+    TEST_ASSERT_TRUE(cooldown.active(0x000493CFu, 300000u));
+    TEST_ASSERT_FALSE(cooldown.active(0x000493D0u, 300000u));
+}
+
+void test_party_cooldown_clear_disarms_zero_deadline_collision() {
+    PartyCooldownState cooldown;
+    TEST_ASSERT_FALSE(cooldown.active(0xFFFB6C20u, 300000u));
+
+    cooldown.arm(0xFFFB6C20u);
+    TEST_ASSERT_TRUE(cooldown.active(0xFFFB6C20u, 300000u));
+
+    cooldown.clear();
+    TEST_ASSERT_FALSE(cooldown.active(0xFFFB6C20u, 300000u));
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -94,5 +142,9 @@ int main(int, char**) {
     RUN_TEST(test_timed_expiry_is_millis_wrap_safe);
     RUN_TEST(test_menu_session_has_no_deadline_and_ignores_timed_retriggers);
     RUN_TEST(test_each_physical_button_consumes_menu_session_once);
+    RUN_TEST(test_menu_center_long_suppresses_its_followup_hold_once);
+    RUN_TEST(test_distinct_center_action_clears_stale_hold_suppression);
+    RUN_TEST(test_party_cooldown_is_millis_wrap_safe);
+    RUN_TEST(test_party_cooldown_clear_disarms_zero_deadline_collision);
     return UNITY_END();
 }

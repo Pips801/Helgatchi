@@ -1,6 +1,7 @@
 #include <unity.h>
 #include <string.h>
 #include "led_manual_state.h"
+#include "led_menu_model.h"
 #include "led_pattern.h"
 
 extern "C" void setUp() {}
@@ -136,6 +137,47 @@ void test_manual_state_selects_layer_precedence() {
                           state.renderSource(true, true, true));
 }
 
+void test_menu_maps_automatic_and_every_pattern() {
+    LedMenuModel model;
+    LedMenuChoice choice{};
+
+    TEST_ASSERT_EQUAL_UINT32(LED_PATTERN_CATALOG_COUNT + 1,
+                             LED_MENU_OPTION_COUNT);
+    TEST_ASSERT_EQUAL_UINT32(0, model.selectedIndex());
+
+    TEST_ASSERT_TRUE(model.commit(0, choice));
+    TEST_ASSERT_TRUE(choice.automatic);
+    TEST_ASSERT_EQUAL_INT(LED_PATTERN_OFF, choice.pattern);
+
+    for (size_t dropdown_index = 1;
+         dropdown_index < LED_MENU_OPTION_COUNT;
+         ++dropdown_index) {
+        TEST_ASSERT_TRUE(model.commit(dropdown_index, choice));
+        TEST_ASSERT_FALSE(choice.automatic);
+        TEST_ASSERT_EQUAL_INT(
+            ledPatternAt(dropdown_index - 1)->pattern,
+            choice.pattern
+        );
+        TEST_ASSERT_EQUAL_UINT32(dropdown_index, model.selectedIndex());
+    }
+}
+
+void test_menu_retains_selection_and_rejects_invalid_commit() {
+    LedMenuModel model;
+    LedMenuChoice choice{};
+
+    TEST_ASSERT_TRUE(model.commit(8, choice));
+    TEST_ASSERT_EQUAL_INT(LED_PATTERN_RAINBOW_FAST, choice.pattern);
+    TEST_ASSERT_EQUAL_UINT32(8, model.selectedIndex());
+
+    TEST_ASSERT_TRUE(model.commit(8, choice));
+    TEST_ASSERT_EQUAL_INT(LED_PATTERN_RAINBOW_FAST, choice.pattern);
+    TEST_ASSERT_EQUAL_UINT32(8, model.selectedIndex());
+
+    TEST_ASSERT_FALSE(model.commit(LED_MENU_OPTION_COUNT, choice));
+    TEST_ASSERT_EQUAL_UINT32(8, model.selectedIndex());
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -144,5 +186,7 @@ int main(int, char**) {
     RUN_TEST(test_led_catalog_rejects_invalid_values);
     RUN_TEST(test_manual_state_starts_restarts_replaces_and_clears);
     RUN_TEST(test_manual_state_selects_layer_precedence);
+    RUN_TEST(test_menu_maps_automatic_and_every_pattern);
+    RUN_TEST(test_menu_retains_selection_and_rejects_invalid_commit);
     return UNITY_END();
 }

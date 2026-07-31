@@ -575,6 +575,211 @@
                   "groupIndex": 0
                 },
                 {
+                  "objID": "18024192-434d-4937-a3a8-30d75b8636e3",
+                  "type": "LVGLPanelWidget",
+                  "left": 14,
+                  "top": 28,
+                  "width": 100,
+                  "height": 100,
+                  "customInputs": [],
+                  "customOutputs": [],
+                  "style": {
+                    "objID": "0f077db2-34ab-4abf-a0ae-811d09d32276",
+                    "useStyle": "default",
+                    "conditionalStyles": [],
+                    "childStyles": []
+                  },
+                  "hiddenInEditor": false,
+                  "timeline": [],
+                  "eventHandlers": [
+                    {
+                      "objID": "965fbdef-1223-4aa7-b876-ae42c648a583",
+                      "eventName": "CLICKED",
+                      "handlerType": "flow",
+                      "userData": 0
+                    }
+                  ],
+                  "identifier": "Helga Panel",
+                  "leftUnit": "px",
+                  "topUnit": "px",
+                  "widthUnit": "%",
+                  "heightUnit": "%",
+                  "children": [
+                    {
+                      "objID": "f2e63e08-39ad-45ba-98cc-892dcfc8ed21",
+                      "type": "LVGLLabelWidget",
+                      "left": 0,
+                      "top": 0,
+                      "width": 50,
+                      "height": 49,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "c329a272-f510-4d76-b909-79766dccdf9b",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "hiddenInEditor": false,
+                      "timeline": [],
+                      "eventHandlers": [],
+                      "identifier": "",
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "content",
+                      "heightUnit": "content",
+                      "children": [],
+                      "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+                      "hiddenFlagType": "literal",
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedStateType": "literal",
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "fd0eee91-8519-44d8-a3e4-082ade3ba2a0",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "text_font": "MONTSERRAT_44",
+                              "text_color": "#fafafa"
+                            }
+                          }
+                        }
+                      },
+                      "group": "",
+                      "groupIndex": 0,
+                      "text": "LVGL.LV_SYMBOL_PLAY",
+                      "textType": "expression",
+                      "longMode": "WRAP",
+                      "recolor": false,
+                      "previewValue": ""
+                    },
+                    {
+                      "objID": "13dac79f-5a53-4fc7-b018-5cbbea431548",
+                      "type": "LVGLLabelWidget",
+                      "left": 0,
+                      "top": 0,
+                      "width": 71,
+                      "height": 24,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "5aa6b616-401e-4b08-865c-87741383ecf8",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "hiddenInEditor": false,
+                      "timeline": [],
+                      "eventHandlers": [],
+                      "identifier": "",
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "content",
+                      "heightUnit": "content",
+                      "children": [],
+                      "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+                      "hiddenFlagType": "literal",
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedStateType": "literal",
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "9283d9eb-fb2c-482b-bece-619e75f196c7",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "text_font": "MONTSERRAT_22"
+                            }
+                          }
+                        }
+                      },
+                      "group": "",
+                      "groupIndex": 0,
+                      "text": "Helga",
+                      "textType": "translated-literal",
+                      "longMode": "WRAP",
+                      "recolor": false
+                    },
+                    {
+                      "objID": "cc540ae9-713b-4f50-a3bc-dbf88cf3466c",
+                      "type": "LVGLLabelWidget",
+                      "left": 0,
+                      "top": 0,
+                      "width": 90,
+                      "height": 32,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "53eab419-0e7c-450d-bd59-0e247f1295c0",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "hiddenInEditor": false,
+                      "timeline": [],
+                      "eventHandlers": [],
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "%",
+                      "heightUnit": "content",
+                      "children": [],
+                      "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+                      "hiddenFlagType": "literal",
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedStateType": "literal",
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "8593f5cd-f8cd-4601-8e2a-294f540ca6fd",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "text_align": "CENTER"
+                            }
+                          }
+                        }
+                      },
+                      "group": "",
+                      "groupIndex": 0,
+                      "text": "Play Helga's animations!",
+                      "textType": "literal",
+                      "longMode": "WRAP",
+                      "recolor": false
+                    }
+                  ],
+                  "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE|SCROLL_ON_FOCUS",
+                  "hiddenFlag": false,
+                  "hiddenFlagType": "literal",
+                  "clickableFlag": true,
+                  "clickableFlagType": "literal",
+                  "flagScrollbarMode": "",
+                  "flagScrollDirection": "",
+                  "scrollSnapX": "",
+                  "scrollSnapY": "",
+                  "checkedStateType": "literal",
+                  "disabledStateType": "literal",
+                  "states": "FOCUS_KEY",
+                  "useStyle": "Default Main Menu Panel",
+                  "localStyles": {
+                    "objID": "4ad9c5ff-a72f-4721-81c4-19c83623e37c"
+                  },
+                  "group": "UINavigation",
+                  "groupIndex": 0
+                },
+                {
                   "objID": "e453cf28-0e83-4091-eb75-3306370c8fe9",
                   "type": "LVGLPanelWidget",
                   "left": 14,
@@ -2449,6 +2654,32 @@
               "useStackType": "literal"
             }
           ]
+        },
+        {
+          "objID": "da15e5ee-16d5-40ec-a6a7-420cabbe644d",
+          "type": "LVGLActionComponent",
+          "left": 1120,
+          "top": 249,
+          "width": 310,
+          "height": 52,
+          "customInputs": [],
+          "customOutputs": [],
+          "actions": [
+            {
+              "objID": "abb74027-d9db-4926-abce-c8924d73d526",
+              "action": "changeScreen",
+              "screen": "Helga Menu",
+              "screenType": "literal",
+              "fadeMode": "FADE_IN",
+              "fadeModeType": "literal",
+              "speed": 200,
+              "speedType": "literal",
+              "delay": 0,
+              "delayType": "literal",
+              "useStack": true,
+              "useStackType": "literal"
+            }
+          ]
         }
       ],
       "connectionLines": [
@@ -2520,6 +2751,13 @@
           "source": "d5778cff-0032-425c-be8e-adb110f62366",
           "output": "CLICKED",
           "target": "22796968-d4a2-466e-d163-0890e1e494e4",
+          "input": "@seqin"
+        },
+        {
+          "objID": "862f887b-50f3-4ed8-8a9a-f6a900f241a3",
+          "source": "18024192-434d-4937-a3a8-30d75b8636e3",
+          "output": "CLICKED",
+          "target": "da15e5ee-16d5-40ec-a6a7-420cabbe644d",
           "input": "@seqin"
         }
       ],
@@ -13828,6 +14066,313 @@
       "componentGroups": [],
       "userProperties": [],
       "name": "Rules",
+      "left": 0,
+      "top": 0,
+      "width": 280,
+      "height": 240,
+      "isUsedAsUserWidget": false,
+      "createAtStart": true,
+      "deleteOnScreenUnload": false
+    },
+    {
+      "objID": "82817852-f3f8-4d86-9eee-c6147ed37588",
+      "components": [
+        {
+          "objID": "06f6d20c-b394-4112-aa69-ddcca89e7634",
+          "type": "LVGLScreenWidget",
+          "left": 0,
+          "top": 0,
+          "width": 280,
+          "height": 240,
+          "customInputs": [],
+          "customOutputs": [],
+          "style": {
+            "objID": "5e1f6b6b-1c96-427b-b657-cce70ce05a21",
+            "useStyle": "default",
+            "conditionalStyles": [],
+            "childStyles": []
+          },
+          "timeline": [],
+          "eventHandlers": [],
+          "leftUnit": "px",
+          "topUnit": "px",
+          "widthUnit": "px",
+          "heightUnit": "px",
+          "children": [
+            {
+              "objID": "aa9cc3ab-c443-47ce-957d-ac25b936e8cf",
+              "type": "LVGLUserWidgetWidget",
+              "left": 0,
+              "top": 0,
+              "width": 280,
+              "height": 36,
+              "customInputs": [],
+              "customOutputs": [],
+              "style": {
+                "objID": "e64ab1e4-cd82-491c-bda8-0860f549ad09",
+                "useStyle": "default",
+                "conditionalStyles": [],
+                "childStyles": []
+              },
+              "timeline": [],
+              "eventHandlers": [],
+              "identifier": "Helga Top Bar",
+              "leftUnit": "px",
+              "topUnit": "px",
+              "widthUnit": "px",
+              "heightUnit": "px",
+              "children": [],
+              "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE|FLOATING",
+              "hiddenFlagType": "literal",
+              "clickableFlag": true,
+              "clickableFlagType": "literal",
+              "flagScrollbarMode": "",
+              "flagScrollDirection": "",
+              "scrollSnapX": "",
+              "scrollSnapY": "",
+              "checkedStateType": "literal",
+              "disabledStateType": "literal",
+              "states": "",
+              "localStyles": {
+                "objID": "5d071f59-3e03-47e2-b0c0-a438842efbbe"
+              },
+              "group": "",
+              "groupIndex": 0,
+              "userWidgetPageName": "Top Bar",
+              "userPropertyValues": {
+                "objID": "094870a8-9f57-4e88-90b3-5580445fd6bf",
+                "values": {
+                  "8f67d5f5-77f9-4677-d408-a2ab6e0881a0": "\"Helga\""
+                }
+              }
+            },
+            {
+              "objID": "57021c2b-f723-4085-80dc-1f1472851efd",
+              "type": "LVGLPanelWidget",
+              "left": 0,
+              "top": 0,
+              "width": 100,
+              "height": 85,
+              "customInputs": [],
+              "customOutputs": [],
+              "style": {
+                "objID": "1652c8e7-f05d-4c44-b1e2-8bca3f284ff2",
+                "useStyle": "default",
+                "conditionalStyles": [],
+                "childStyles": []
+              },
+              "hiddenInEditor": false,
+              "timeline": [],
+              "eventHandlers": [],
+              "identifier": "",
+              "leftUnit": "px",
+              "topUnit": "px",
+              "widthUnit": "%",
+              "heightUnit": "%",
+              "children": [
+                {
+                  "objID": "5cca15a8-6144-4e22-825b-fe7dab425782",
+                  "type": "LVGLContainerWidget",
+                  "left": 0,
+                  "top": 0,
+                  "width": 100,
+                  "height": 36,
+                  "customInputs": [],
+                  "customOutputs": [],
+                  "style": {
+                    "objID": "2f036863-db82-4039-a008-924abd5171c4",
+                    "useStyle": "default",
+                    "conditionalStyles": [],
+                    "childStyles": []
+                  },
+                  "hiddenInEditor": false,
+                  "timeline": [],
+                  "eventHandlers": [],
+                  "identifier": "Helga Animation Panel",
+                  "leftUnit": "px",
+                  "topUnit": "px",
+                  "widthUnit": "%",
+                  "heightUnit": "content",
+                  "children": [
+                    {
+                      "objID": "f3ce1833-9099-40ed-8991-82197d6faf78",
+                      "type": "LVGLLabelWidget",
+                      "left": 0,
+                      "top": 0,
+                      "width": 50,
+                      "height": 16,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "ee508494-013a-4f54-9073-58a8e4bef710",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "hiddenInEditor": false,
+                      "timeline": [],
+                      "eventHandlers": [],
+                      "identifier": "",
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "content",
+                      "heightUnit": "content",
+                      "children": [],
+                      "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+                      "hiddenFlagType": "literal",
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedStateType": "literal",
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "af82136d-5c2f-4810-82eb-2d1c1c99b26d",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "align": "LEFT_MID"
+                            }
+                          }
+                        }
+                      },
+                      "group": "",
+                      "groupIndex": 0,
+                      "text": "Helga",
+                      "textType": "literal",
+                      "longMode": "WRAP",
+                      "recolor": false
+                    },
+                    {
+                      "objID": "2f8b643b-e8c7-466a-8530-3104c14b085a",
+                      "type": "LVGLDropdownWidget",
+                      "left": 0,
+                      "top": 0,
+                      "width": 45,
+                      "height": 36,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "12e4c850-13d5-4433-becb-8d0d17dceb42",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "hiddenInEditor": false,
+                      "timeline": [],
+                      "eventHandlers": [],
+                      "identifier": "Helga Animation Dropdown",
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "%",
+                      "heightUnit": "content",
+                      "children": [],
+                      "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_ON_FOCUS|SCROLL_WITH_ARROW|SNAPPABLE|OVERFLOW_VISIBLE",
+                      "hiddenFlag": false,
+                      "hiddenFlagType": "literal",
+                      "clickableFlag": true,
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedState": false,
+                      "checkedStateType": "literal",
+                      "disabledState": false,
+                      "disabledStateType": "literal",
+                      "states": "FOCUS_KEY",
+                      "useStyle": "Focused - Dropdown",
+                      "localStyles": {
+                        "objID": "eed38c54-0d26-4115-a22b-5d293fd08db5"
+                      },
+                      "group": "UINavigation",
+                      "groupIndex": 0,
+                      "options": "Idle",
+                      "optionsType": "literal",
+                      "selected": 0,
+                      "selectedType": "literal",
+                      "direction": "bottom"
+                    }
+                  ],
+                  "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE|OVERFLOW_VISIBLE",
+                  "hiddenFlagType": "literal",
+                  "clickableFlag": true,
+                  "clickableFlagType": "literal",
+                  "flagScrollbarMode": "",
+                  "flagScrollDirection": "",
+                  "scrollSnapX": "",
+                  "scrollSnapY": "",
+                  "checkedStateType": "literal",
+                  "disabledStateType": "literal",
+                  "states": "",
+                  "localStyles": {
+                    "objID": "217267db-5a81-4814-9d77-4ed649fb6f1f"
+                  },
+                  "group": "",
+                  "groupIndex": 0
+                }
+              ],
+              "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+              "hiddenFlagType": "literal",
+              "clickableFlag": true,
+              "clickableFlagType": "literal",
+              "flagScrollbarMode": "auto",
+              "flagScrollDirection": "ver",
+              "scrollSnapX": "none",
+              "scrollSnapY": "center",
+              "checkedStateType": "literal",
+              "disabledStateType": "literal",
+              "states": "",
+              "localStyles": {
+                "objID": "3014bb46-e903-49f3-a5a6-2ef744342e4c",
+                "definition": {
+                  "MAIN": {
+                    "DEFAULT": {
+                      "radius": 20,
+                      "layout": "FLEX",
+                      "flex_flow": "COLUMN",
+                      "flex_cross_place": "CENTER",
+                      "pad_top": 5,
+                      "pad_bottom": 5,
+                      "pad_left": 12,
+                      "align": "BOTTOM_MID",
+                      "pad_right": 12
+                    }
+                  },
+                  "SCROLLBAR": {
+                    "DEFAULT": {
+                      "pad_top": 4,
+                      "pad_bottom": 4,
+                      "pad_left": 6,
+                      "pad_right": 6
+                    }
+                  }
+                }
+              },
+              "group": "",
+              "groupIndex": 0
+            }
+          ],
+          "widgetFlags": "CLICKABLE|PRESS_LOCK|CLICK_FOCUSABLE|GESTURE_BUBBLE|SNAPPABLE|SCROLLABLE|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER",
+          "hiddenFlagType": "literal",
+          "clickableFlag": true,
+          "clickableFlagType": "literal",
+          "checkedStateType": "literal",
+          "disabledStateType": "literal",
+          "states": "",
+          "localStyles": {
+            "objID": "59872f1e-fd6f-4691-9714-eace674e5a62"
+          },
+          "groupIndex": 0
+        }
+      ],
+      "connectionLines": [],
+      "localVariables": [],
+      "componentGroups": [],
+      "userProperties": [],
+      "name": "Helga Menu",
       "left": 0,
       "top": 0,
       "width": 280,

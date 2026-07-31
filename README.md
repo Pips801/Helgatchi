@@ -1,3 +1,6 @@
+This is an awesome project by 801labs.  I've been hacking around on it with AI.  At this time, I've added:
+- a menu that lets you display any of Helga's animations
+
 # Helgatchi
 Handheld BLE + WiFi Hunter
 

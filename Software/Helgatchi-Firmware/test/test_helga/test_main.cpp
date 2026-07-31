@@ -1,5 +1,6 @@
 #include <unity.h>
 #include "helga_animation.h"
+#include "helga_menu_model.h"
 #include "helga_playback_state.h"
 
 extern "C" void setUp() {}
@@ -120,6 +121,23 @@ void test_each_physical_button_consumes_manual_playback_once() {
     }
 }
 
+void test_menu_selection_persists_and_same_option_recommits() {
+    HelgaMenuModel model;
+    TEST_ASSERT_EQUAL_UINT32(0, model.selectedIndex());
+
+    const HelgaAnimationInfo* sit = model.commit(5);
+    TEST_ASSERT_NOT_NULL(sit);
+    TEST_ASSERT_EQUAL_INT(HELGA_SIT, sit->animation);
+    TEST_ASSERT_EQUAL_UINT32(5, model.selectedIndex());
+
+    const HelgaAnimationInfo* sit_again = model.commit(5);
+    TEST_ASSERT_EQUAL_PTR(sit, sit_again);
+    TEST_ASSERT_EQUAL_UINT32(5, model.selectedIndex());
+
+    TEST_ASSERT_NULL(model.commit(HELGA_ANIMATION_COUNT));
+    TEST_ASSERT_EQUAL_UINT32(5, model.selectedIndex());
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -129,5 +147,6 @@ int main(int, char**) {
     RUN_TEST(test_manual_playback_overrides_visible_animation_only);
     RUN_TEST(test_manual_playback_rejects_invalid_animations);
     RUN_TEST(test_each_physical_button_consumes_manual_playback_once);
+    RUN_TEST(test_menu_selection_persists_and_same_option_recommits);
     return UNITY_END();
 }

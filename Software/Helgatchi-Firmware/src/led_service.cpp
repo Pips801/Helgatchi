@@ -1,4 +1,6 @@
 #include "led_service.h"
+
+#ifndef LED_CATALOG_ONLY
 #include "hal.h"
 #include "settings_service.h"
 #include "power_manager.h"
@@ -6,9 +8,7 @@
 #include "event_payload.h"
 #include <Arduino.h>
 #include <FastLED.h>
-#include <strings.h>   // strcasecmp
-
-LedService g_leds;
+#endif
 
 // ---------------------------------------------------------------------------
 // Name registry — string identifiers for each LedPatternId. Used by the
@@ -19,40 +19,83 @@ LedService g_leds;
 // fails the build if entries drift out of sync.
 // ---------------------------------------------------------------------------
 
-static const char* const s_led_name[] = {
-    "off",                  // LED_PATTERN_OFF
-    "charging",             // LED_PATTERN_CHARGING
-    "fully_charged",        // LED_PATTERN_FULLY_CHARGED
-    "serial",               // LED_PATTERN_SERIAL
-    "low_battery",          // LED_PATTERN_LOW_BATTERY
-    "alert",                // LED_PATTERN_ALERT_DEFAULT
-    "red_blue",             // LED_PATTERN_RED_BLUE_CHASER
-    "rainbow_fast",         // LED_PATTERN_RAINBOW_FAST
-    "rainbow_slow",         // LED_PATTERN_RAINBOW_SLOW
-    "white_chaser",         // LED_PATTERN_WHITE_CHASER
-    "admin_broadcast",      // LED_PATTERN_ADMIN_BROADCAST
-};
-static_assert(sizeof(s_led_name) / sizeof(s_led_name[0]) == LED_PATTERN_COUNT,
-              "s_led_name out of sync with LedPatternId");
+namespace {
 
-const char* ledPatternName(LedPatternId id) {
-    if (id >= LED_PATTERN_COUNT) return "?";
-    return s_led_name[id];
+const LedPatternInfo LED_PATTERNS[] = {
+    { LED_PATTERN_OFF,             "off",             "Off" },
+    { LED_PATTERN_CHARGING,        "charging",        "Charging" },
+    { LED_PATTERN_FULLY_CHARGED,   "fully_charged",   "Fully Charged" },
+    { LED_PATTERN_SERIAL,          "serial",          "Serial" },
+    { LED_PATTERN_LOW_BATTERY,     "low_battery",     "Low Battery" },
+    { LED_PATTERN_ALERT_DEFAULT,   "alert",           "Alert" },
+    { LED_PATTERN_RED_BLUE_CHASER, "red_blue",        "Red/Blue" },
+    { LED_PATTERN_RAINBOW_FAST,    "rainbow_fast",    "Rainbow Fast" },
+    { LED_PATTERN_RAINBOW_SLOW,    "rainbow_slow",    "Rainbow Slow" },
+    { LED_PATTERN_WHITE_CHASER,    "white_chaser",    "White Chaser" },
+    { LED_PATTERN_ADMIN_BROADCAST, "admin_broadcast", "Admin Broadcast" },
+};
+
+static_assert(sizeof(LED_PATTERNS) / sizeof(LED_PATTERNS[0]) ==
+                  LED_PATTERN_CATALOG_COUNT,
+              "LED pattern catalog out of sync with LedPatternId");
+
+char foldAscii(char value) {
+    return value >= 'A' && value <= 'Z'
+        ? static_cast<char>(value + ('a' - 'A'))
+        : value;
+}
+
+bool equalsIgnoreCase(const char* lhs, const char* rhs) {
+    if (!lhs || !rhs) return false;
+    while (*lhs && *rhs) {
+        if (foldAscii(*lhs) != foldAscii(*rhs)) return false;
+        ++lhs;
+        ++rhs;
+    }
+    return *lhs == '\0' && *rhs == '\0';
+}
+
+}  // namespace
+
+const LedPatternInfo* ledPatternAt(size_t index) {
+    return index < LED_PATTERN_CATALOG_COUNT ? &LED_PATTERNS[index] : nullptr;
+}
+
+const LedPatternInfo* ledPatternInfo(LedPatternId pattern) {
+    const size_t index = static_cast<size_t>(pattern);
+    return index < LED_PATTERN_CATALOG_COUNT ? &LED_PATTERNS[index] : nullptr;
+}
+
+const char* ledPatternName(LedPatternId pattern) {
+    const LedPatternInfo* info = ledPatternInfo(pattern);
+    return info ? info->command_name : "?";
+}
+
+const char* ledPatternDisplayName(LedPatternId pattern) {
+    const LedPatternInfo* info = ledPatternInfo(pattern);
+    return info ? info->display_name : "?";
 }
 
 LedPatternId ledPatternByName(const char* name) {
     if (!name || !*name) return LED_PATTERN_COUNT;
-    for (uint8_t i = 0; i < LED_PATTERN_COUNT; i++) {
-        if (strcasecmp(name, s_led_name[i]) == 0) return (LedPatternId)i;
+    for (size_t i = 0; i < LED_PATTERN_CATALOG_COUNT; ++i) {
+        if (equalsIgnoreCase(name, LED_PATTERNS[i].command_name)) {
+            return LED_PATTERNS[i].pattern;
+        }
     }
     return LED_PATTERN_COUNT;
 }
 
 void ledPatternForEach(LedPatternVisitor fn, void* user) {
     if (!fn) return;
-    for (uint8_t i = 0; i < LED_PATTERN_COUNT; i++)
-        fn((LedPatternId)i, s_led_name[i], user);
+    for (size_t i = 0; i < LED_PATTERN_CATALOG_COUNT; ++i) {
+        fn(LED_PATTERNS[i].pattern, LED_PATTERNS[i].command_name, user);
+    }
 }
+
+#ifndef LED_CATALOG_ONLY
+
+LedService g_leds;
 
 static constexpr uint32_t FRAME_PERIOD_MS = 33;     // ~30 FPS render cap
 static constexpr uint32_t ALERT_DEFAULT_MS = 3000;  // default alert duration when raised via the bus
@@ -449,3 +492,5 @@ void LedService::_recomputeAmbient() {
     else if (_is_low_batt) next = LED_PATTERN_LOW_BATTERY;
     _ambient = next;
 }
+
+#endif  // LED_CATALOG_ONLY

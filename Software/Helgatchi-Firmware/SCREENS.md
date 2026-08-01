@@ -23,7 +23,7 @@ called `ui_init()` and created the generated screens.
 
 ## Current generated screen inventory
 
-`src/UI/screens.h` currently defines these 18 EEZ pages and screen IDs:
+`src/UI/screens.h` currently defines these 19 EEZ pages and screen IDs:
 
 | # | EEZ page | Generated screen ID |
 |---:|---|---|
@@ -45,6 +45,7 @@ called `ui_init()` and created the generated screens.
 | 16 | Rules | `SCREEN_ID_RULES` |
 | 17 | Helga Menu | `SCREEN_ID_HELGA_MENU` |
 | 18 | LED Modes Menu | `SCREEN_ID_LED_MODES_MENU` |
+| 19 | Vibes Menu | `SCREEN_ID_VIBES_MENU` |
 
 These are generated screens, not a list of future placeholders. Runtime
 modules populate and control dynamic content on pages such as Alerts, Devices,
@@ -105,9 +106,10 @@ The horizontal scroll-snap carousel is
 10. `info_panel`
 11. `admin_panel`
 12. `power_panel`
+13. `vibes_panel`
 
-The `helga_panel`, `led_modes_panel`, and `party_panel` cards are always
-present; admin lock state affects only `admin_panel`.
+The `helga_panel`, `led_modes_panel`, `party_panel`, and `vibes_panel` cards
+are always present; admin lock state affects only `admin_panel`.
 
 To add a menu entry:
 
@@ -173,6 +175,28 @@ Automatic clears the RAM-only manual layer. Off is a valid black manual layer.
 Broadcast, foxhunt, and alert/party layers temporarily preempt manual output.
 Manual mode inhibits automatic dim/sleep; explicit screen-off remains available.
 Every reboot begins in Automatic.
+
+## Vibes Menu
+
+The always-visible `vibes_panel` is the final Main Menu card, immediately
+after `power_panel`. It opens `vibes_menu` with stack navigation. The page
+contains only `vibe_pattern_dropdown`.
+
+Firmware populates the dropdown from the haptic catalog with these options, in
+this exact order: Tick Light, Tick, Bump, Double Tap, and Long Buzz. `Off` is
+intentionally omitted. Committing an option starts that pattern immediately in
+terminator-to-step-zero repeat mode, with no added loop-boundary delay.
+
+While repetition is active, left/right immediately select the previous/next
+pattern, wrap between Long Buzz and Tick Light, and restart the selected
+pattern. Center-short is consumed silently. Center-long stops the motor
+immediately, remains on Vibes Menu, and suppresses the paired center-hold so
+that hold cannot navigate or request sleep. The selection is boot-local:
+reopening the page retains it, while rebooting resets it to Tick Light.
+
+Repeat mode owns haptic output: incidental one-shot haptics are ignored, while
+an explicit `vibe off` stops playback. Repeating playback inhibits automatic
+display dimming and sleep; normal power behavior resumes when it stops.
 
 ## Party menu
 
@@ -258,6 +282,9 @@ Center-long and center-hold actions are handled directly in
 | Left/right while the group is editing | `LV_KEY_LEFT` / `LV_KEY_RIGHT` |
 | Left/right in navigation mode | `LV_KEY_PREV` / `LV_KEY_NEXT` |
 | Center short | `LV_KEY_ENTER` |
+| Left/right during active Vibes repetition | Select and immediately restart the previous/next pattern, wrapping at either end |
+| Center short during active Vibes repetition | Consume silently |
+| Center long during active Vibes repetition | Stop immediately, remain on Vibes Menu, and suppress the paired center-hold |
 | Any physical action during menu Party | Stop Party, consume the action, and return to Main Menu |
 | Center long during timed Party | Stop Party and remain on Overview |
 | Center long with a device-detail message box | Close the modal |
@@ -267,10 +294,11 @@ Center-long and center-hold actions are handled directly in
 | Center hold on Main Menu | Request sleep or screen-off |
 
 Main Menu and Tutorial Splash Screen ignore ordinary center-long back
-navigation. Before the table above is applied, active manual Helga playback gets
-first refusal and consumes its exit action. A menu-launched Party session gets
-second refusal and consumes its exit action. Normal keypad and long-press
-routing runs only after both foreground modes decline the event.
+navigation. Before the table above is applied, active Vibes playback and its
+paired-hold guard get first refusal. A menu-launched Party session gets second
+refusal, and active manual Helga playback gets third refusal; each consumes its
+exit action. Normal keypad and long-press routing runs only after all three
+foreground modes decline the event.
 
 The open state of an LVGL dropdown is widget-local, so input routing checks
 `lv_dropdown_is_open()` separately from `lv_group_get_editing()`.

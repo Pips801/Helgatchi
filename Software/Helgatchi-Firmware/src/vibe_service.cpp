@@ -4,7 +4,6 @@
 #include "alerts_service.h"
 #include "event_payload.h"
 #include <Arduino.h>
-#include <strings.h>   // strcasecmp
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
@@ -17,63 +16,29 @@ VibeService g_vibe;
 static SemaphoreHandle_t s_vibe_lock = nullptr;
 
 // ---------------------------------------------------------------------------
-// Name registry — string identifiers for each HapticPatternId. Order must
-// match the enum; the static_assert catches drift at compile time.
-// ---------------------------------------------------------------------------
-
-static const char* const s_vibe_name[] = {
-    "off",           // HAPTIC_OFF
-    "tick_light",    // HAPTIC_TICK_LIGHT
-    "tick",          // HAPTIC_TICK
-    "bump",          // HAPTIC_BUMP
-    "double_tap",    // HAPTIC_DOUBLE_TAP
-    "long_buzz",     // HAPTIC_LONG_BUZZ
-};
-static_assert(sizeof(s_vibe_name) / sizeof(s_vibe_name[0]) == HAPTIC_PATTERN_COUNT,
-              "s_vibe_name out of sync with HapticPatternId");
-
-const char* vibePatternName(HapticPatternId id) {
-    if (id >= HAPTIC_PATTERN_COUNT) return "?";
-    return s_vibe_name[id];
-}
-
-HapticPatternId vibePatternByName(const char* name) {
-    if (!name || !*name) return HAPTIC_PATTERN_COUNT;
-    for (uint8_t i = 0; i < HAPTIC_PATTERN_COUNT; i++) {
-        if (strcasecmp(name, s_vibe_name[i]) == 0) return (HapticPatternId)i;
-    }
-    return HAPTIC_PATTERN_COUNT;
-}
-
-// ---------------------------------------------------------------------------
 // Pattern definitions
 //
 // Each pattern is an array of {intensity, duration_ms} steps terminated by
 // {0, 0}. Playback is driven by a one-shot esp_timer, NOT the main loop:
-// _armCurrentLocked() writes the current step's intensity to the motor and
-// arms the timer for that step's duration; the callback (_onTimer) advances to
-// the next step. At the {0, 0} terminator the motor is driven to 0 and
-// _current returns to OFF — so the off is always the last scheduled event and
-// can't be starved by a stalled render loop.
+// VibePlaybackState writes the current step's intensity through the HAL adapter
+// and arms the timer for that step's duration; the callback (_onTimer) advances
+// to the next step. At the {0, 0} terminator a one-shot drives the motor to 0
+// and returns to OFF; repeat mode restarts step zero immediately without
+// injecting an off write or delay.
 // ---------------------------------------------------------------------------
-
-struct Step {
-    uint8_t  intensity;
-    uint16_t duration_ms;
-};
 
 // Intensity numbers are uint8 PWM duty (0..255). For ERM motors, anything
 // below ~150 just whines without spinning — the eccentric mass needs enough
 // average voltage to overcome static friction. The "minor" feel of TICK_LIGHT
 // comes from a *short* duration, not a low duty cycle.
-static const Step PAT_TICK_LIGHT[] = { {255,  35}, {0, 0} };
-static const Step PAT_TICK[]       = { {220,  45}, {0, 0} };
-static const Step PAT_BUMP[]       = { {255,  70}, {0, 0} };
-static const Step PAT_DOUBLE_TAP[] = { {220,  40}, {0, 60}, {220, 40}, {0, 0} };
-static const Step PAT_LONG_BUZZ[]  = { {255, 500}, {0, 0} };
+static const VibeStep PAT_TICK_LIGHT[] = { {255,  35}, {0, 0} };
+static const VibeStep PAT_TICK[]       = { {220,  45}, {0, 0} };
+static const VibeStep PAT_BUMP[]       = { {255,  70}, {0, 0} };
+static const VibeStep PAT_DOUBLE_TAP[] = { {220,  40}, {0, 60}, {220, 40}, {0, 0} };
+static const VibeStep PAT_LONG_BUZZ[]  = { {255, 500}, {0, 0} };
 
 // Indexed by HapticPatternId. HAPTIC_OFF maps to nullptr — "no steps".
-static const Step* const PATTERNS[HAPTIC_PATTERN_COUNT] = {
+static const VibeStep* const PATTERNS[HAPTIC_PATTERN_COUNT] = {
     nullptr,            // HAPTIC_OFF
     PAT_TICK_LIGHT,     // HAPTIC_TICK_LIGHT
     PAT_TICK,           // HAPTIC_TICK
@@ -81,6 +46,21 @@ static const Step* const PATTERNS[HAPTIC_PATTERN_COUNT] = {
     PAT_DOUBLE_TAP,     // HAPTIC_DOUBLE_TAP
     PAT_LONG_BUZZ,      // HAPTIC_LONG_BUZZ
 };
+
+static bool startTimerOnce(void* context, uint64_t timeout_us) {
+    esp_timer_handle_t* timer = static_cast<esp_timer_handle_t*>(context);
+    return timer && *timer &&
+           esp_timer_start_once(*timer, timeout_us) == ESP_OK;
+}
+
+static bool stopTimer(void* context) {
+    esp_timer_handle_t* timer = static_cast<esp_timer_handle_t*>(context);
+    return timer && *timer && esp_timer_stop(*timer) == ESP_OK;
+}
+
+static void writeMotor(void*, uint8_t intensity) {
+    g_hal.setVibrate(intensity);
+}
 
 // ---------------------------------------------------------------------------
 
@@ -138,62 +118,75 @@ void VibeService::onEvent(const Event& e) {
 
 void VibeService::play(HapticPatternId pattern) {
     if (pattern >= HAPTIC_PATTERN_COUNT) return;
-    if (pattern == HAPTIC_OFF) { stop(); return; }
 
-    const Step* steps = PATTERNS[pattern];
-    if (!steps || !_timer) return;
+    const VibeStep* steps = PATTERNS[pattern];
+    if (!s_vibe_lock) {
+        if (pattern == HAPTIC_OFF) stop();
+        return;
+    }
+    if (pattern != HAPTIC_OFF && (!steps || !_timer)) return;
 
     xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    esp_timer_stop(_timer);          // cancel the previous pattern's pending step
-    _current    = pattern;
-    _steps      = steps;
-    _step_index = 0;
-    _armCurrentLocked();             // drive step 0 + arm its timer
+    _playback.play(pattern, steps, _operations());
     xSemaphoreGive(s_vibe_lock);
+}
+
+bool VibeService::playRepeating(HapticPatternId pattern) {
+    if (pattern == HAPTIC_OFF || pattern >= HAPTIC_PATTERN_COUNT) {
+        return false;
+    }
+
+    const VibeStep* steps = PATTERNS[pattern];
+    if (!steps || !s_vibe_lock) return false;
+
+    xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
+    const bool started = _playback.playRepeating(
+        pattern, steps, _timer != nullptr, _operations()
+    );
+    xSemaphoreGive(s_vibe_lock);
+    return started;
+}
+
+bool VibeService::repeating() const {
+    if (!s_vibe_lock) return false;
+    xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
+    const bool value = _playback.repeating();
+    xSemaphoreGive(s_vibe_lock);
+    return value;
+}
+
+HapticPatternId VibeService::repeatingPattern() const {
+    if (!s_vibe_lock) return HAPTIC_OFF;
+    xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
+    const HapticPatternId value = _playback.repeatingPattern();
+    xSemaphoreGive(s_vibe_lock);
+    return value;
 }
 
 void VibeService::stop() {
-    if (!_timer) { g_hal.stopVibrate(); return; }
-
-    xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    esp_timer_stop(_timer);
-    _current    = HAPTIC_OFF;
-    _steps      = nullptr;
-    _step_index = 0;
-    g_hal.stopVibrate();
-    xSemaphoreGive(s_vibe_lock);
-}
-
-// Caller must hold s_vibe_lock. Drives the current step's intensity and arms
-// the timer for its duration, or — at the {0,0} terminator — stops the motor
-// and returns to OFF.
-void VibeService::_armCurrentLocked() {
-    const Step* steps = static_cast<const Step*>(_steps);
-    if (!steps) return;
-    const Step& s = steps[_step_index];
-
-    if (s.duration_ms == 0) {        // terminator — pattern complete
-        g_hal.stopVibrate();
-        _current    = HAPTIC_OFF;
-        _steps      = nullptr;
-        _step_index = 0;
+    if (!s_vibe_lock) {
+        _playback.stop(_operations());
         return;
     }
 
-    g_hal.setVibrate(s.intensity);
-    esp_timer_start_once(_timer, (uint64_t)s.duration_ms * 1000);
+    xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
+    _playback.stop(_operations());
+    xSemaphoreGive(s_vibe_lock);
+}
+
+VibePlaybackOperations VibeService::_operations() {
+    const VibePlaybackOperations operations = {
+        &_timer,
+        &startTimerOnce,
+        &stopTimer,
+        &writeMotor,
+    };
+    return operations;
 }
 
 void VibeService::_onTimer() {
     xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    // A concurrent play()/stop() can retire the pattern between this timer
-    // firing and us taking the lock; the guard drops those stale wakeups. The
-    // motor-off is always driven under the lock (here at the terminator, or by
-    // stop()), so it can never be left energized.
-    if (_current != HAPTIC_OFF && _steps != nullptr) {
-        _step_index++;
-        _armCurrentLocked();
-    }
+    _playback.onTimerExpired(_operations());
     xSemaphoreGive(s_vibe_lock);
 }
 

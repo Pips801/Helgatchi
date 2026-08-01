@@ -23,6 +23,60 @@ const ExpectedPattern EXPECTED_PATTERNS[] = {
     { HAPTIC_LONG_BUZZ,  "long_buzz",  "Long Buzz" },
 };
 
+struct FakeVibeOperations {
+    FakeVibeOperations()
+        : start_count(0), stop_count(0), motor_write_count(0),
+          stop_result(true) {
+        for (size_t i = 0; i < 4; ++i) start_results[i] = true;
+        for (size_t i = 0; i < 8; ++i) motor_writes[i] = 0;
+    }
+
+    static bool startTimerOnce(void* context, uint64_t) {
+        FakeVibeOperations* fake =
+            static_cast<FakeVibeOperations*>(context);
+        const size_t index = fake->start_count++;
+        return index < 4 ? fake->start_results[index] : true;
+    }
+
+    static bool stopTimer(void* context) {
+        FakeVibeOperations* fake =
+            static_cast<FakeVibeOperations*>(context);
+        ++fake->stop_count;
+        return fake->stop_result;
+    }
+
+    static void writeMotor(void* context, uint8_t intensity) {
+        FakeVibeOperations* fake =
+            static_cast<FakeVibeOperations*>(context);
+        if (fake->motor_write_count < 8) {
+            fake->motor_writes[fake->motor_write_count] = intensity;
+        }
+        ++fake->motor_write_count;
+    }
+
+    VibePlaybackOperations operations() {
+        const VibePlaybackOperations value = {
+            this,
+            &FakeVibeOperations::startTimerOnce,
+            &FakeVibeOperations::stopTimer,
+            &FakeVibeOperations::writeMotor,
+        };
+        return value;
+    }
+
+    bool start_results[4];
+    size_t start_count;
+    size_t stop_count;
+    uint8_t motor_writes[8];
+    size_t motor_write_count;
+    bool stop_result;
+};
+
+const VibeStep TEST_SINGLE_STEP[] = {
+    { 255, 35 },
+    { 0, 0 },
+};
+
 void test_vibe_catalog_preserves_ids_names_and_display_labels() {
     TEST_ASSERT_EQUAL_UINT32(
         sizeof(EXPECTED_PATTERNS) / sizeof(EXPECTED_PATTERNS[0]),
@@ -147,6 +201,113 @@ void test_timer_expiry_state_keeps_current_expiry_after_successful_stop() {
     TEST_ASSERT_TRUE(state.acceptsNextExpiry());
 }
 
+void test_repeating_initial_timer_arm_failure_fails_closed() {
+    FakeVibeOperations fake;
+    fake.start_results[0] = false;
+    VibePlaybackState state;
+
+    TEST_ASSERT_FALSE(state.playRepeating(
+        HAPTIC_BUMP, TEST_SINGLE_STEP, true, fake.operations()
+    ));
+
+    TEST_ASSERT_EQUAL_UINT32(1, fake.start_count);
+    TEST_ASSERT_EQUAL_UINT32(2, fake.motor_write_count);
+    TEST_ASSERT_EQUAL_UINT8(255, fake.motor_writes[0]);
+    TEST_ASSERT_EQUAL_UINT8(0, fake.motor_writes[1]);
+    TEST_ASSERT_FALSE(state.repeating());
+    TEST_ASSERT_TRUE(state.acceptsOneShot());
+    TEST_ASSERT_EQUAL_INT(HAPTIC_OFF, state.repeatingPattern());
+    const size_t start_count = fake.start_count;
+    const size_t motor_write_count = fake.motor_write_count;
+    TEST_ASSERT_TRUE(state.onTimerExpired(fake.operations()));
+    TEST_ASSERT_EQUAL_UINT32(start_count, fake.start_count);
+    TEST_ASSERT_EQUAL_UINT32(motor_write_count, fake.motor_write_count);
+}
+
+void test_repeating_boundary_timer_rearm_failure_fails_closed() {
+    FakeVibeOperations fake;
+    fake.start_results[0] = true;
+    fake.start_results[1] = false;
+    VibePlaybackState state;
+
+    TEST_ASSERT_TRUE(state.playRepeating(
+        HAPTIC_BUMP, TEST_SINGLE_STEP, true, fake.operations()
+    ));
+    TEST_ASSERT_TRUE(state.repeating());
+    TEST_ASSERT_FALSE(state.onTimerExpired(fake.operations()));
+
+    TEST_ASSERT_EQUAL_UINT32(2, fake.start_count);
+    TEST_ASSERT_EQUAL_UINT32(3, fake.motor_write_count);
+    TEST_ASSERT_EQUAL_UINT8(255, fake.motor_writes[0]);
+    TEST_ASSERT_EQUAL_UINT8(255, fake.motor_writes[1]);
+    TEST_ASSERT_EQUAL_UINT8(0, fake.motor_writes[2]);
+    TEST_ASSERT_FALSE(state.repeating());
+    TEST_ASSERT_TRUE(state.acceptsOneShot());
+    TEST_ASSERT_EQUAL_INT(HAPTIC_OFF, state.repeatingPattern());
+    const size_t start_count = fake.start_count;
+    const size_t motor_write_count = fake.motor_write_count;
+    TEST_ASSERT_TRUE(state.onTimerExpired(fake.operations()));
+    TEST_ASSERT_EQUAL_UINT32(start_count, fake.start_count);
+    TEST_ASSERT_EQUAL_UINT32(motor_write_count, fake.motor_write_count);
+}
+
+void test_incidental_off_cannot_bypass_repeat_ownership() {
+    FakeVibeOperations fake;
+    VibePlaybackState state;
+
+    TEST_ASSERT_TRUE(state.playRepeating(
+        HAPTIC_BUMP, TEST_SINGLE_STEP, true, fake.operations()
+    ));
+    const size_t start_count = fake.start_count;
+    const size_t stop_count = fake.stop_count;
+    const size_t motor_write_count = fake.motor_write_count;
+
+    state.play(HAPTIC_OFF, nullptr, fake.operations());
+
+    TEST_ASSERT_TRUE(state.repeating());
+    TEST_ASSERT_FALSE(state.acceptsOneShot());
+    TEST_ASSERT_EQUAL_INT(HAPTIC_BUMP, state.repeatingPattern());
+    TEST_ASSERT_EQUAL_UINT32(start_count, fake.start_count);
+    TEST_ASSERT_EQUAL_UINT32(stop_count, fake.stop_count);
+    TEST_ASSERT_EQUAL_UINT32(motor_write_count, fake.motor_write_count);
+}
+
+void test_incidental_off_preserves_inactive_one_shot_stop_behavior() {
+    FakeVibeOperations fake;
+    VibePlaybackState state;
+
+    TEST_ASSERT_TRUE(state.play(
+        HAPTIC_BUMP, TEST_SINGLE_STEP, fake.operations()
+    ));
+
+    state.play(HAPTIC_OFF, nullptr, fake.operations());
+
+    TEST_ASSERT_FALSE(state.repeating());
+    TEST_ASSERT_TRUE(state.acceptsOneShot());
+    TEST_ASSERT_EQUAL_INT(HAPTIC_OFF, state.repeatingPattern());
+    TEST_ASSERT_EQUAL_UINT8(0, fake.motor_writes[fake.motor_write_count - 1]);
+    const size_t start_count = fake.start_count;
+    const size_t motor_write_count = fake.motor_write_count;
+    TEST_ASSERT_TRUE(state.onTimerExpired(fake.operations()));
+    TEST_ASSERT_EQUAL_UINT32(start_count, fake.start_count);
+    TEST_ASSERT_EQUAL_UINT32(motor_write_count, fake.motor_write_count);
+}
+
+void test_explicit_stop_still_ends_active_repeat() {
+    FakeVibeOperations fake;
+    VibePlaybackState state;
+
+    TEST_ASSERT_TRUE(state.playRepeating(
+        HAPTIC_BUMP, TEST_SINGLE_STEP, true, fake.operations()
+    ));
+    state.stop(fake.operations());
+
+    TEST_ASSERT_FALSE(state.repeating());
+    TEST_ASSERT_TRUE(state.acceptsOneShot());
+    TEST_ASSERT_EQUAL_INT(HAPTIC_OFF, state.repeatingPattern());
+    TEST_ASSERT_EQUAL_UINT8(0, fake.motor_writes[fake.motor_write_count - 1]);
+}
+
 void test_vibe_menu_maps_only_active_patterns_and_retains_valid_commit() {
     const HapticPatternId expected[] = {
         HAPTIC_TICK_LIGHT, HAPTIC_TICK, HAPTIC_BUMP,
@@ -241,6 +402,11 @@ int main(int, char**) {
     RUN_TEST(test_repeat_state_rejects_unavailable_off_and_invalid_without_disturbing_playback);
     RUN_TEST(test_timer_expiry_state_consumes_dispatched_old_callbacks_before_new_sequence);
     RUN_TEST(test_timer_expiry_state_keeps_current_expiry_after_successful_stop);
+    RUN_TEST(test_repeating_initial_timer_arm_failure_fails_closed);
+    RUN_TEST(test_repeating_boundary_timer_rearm_failure_fails_closed);
+    RUN_TEST(test_incidental_off_cannot_bypass_repeat_ownership);
+    RUN_TEST(test_incidental_off_preserves_inactive_one_shot_stop_behavior);
+    RUN_TEST(test_explicit_stop_still_ends_active_repeat);
     RUN_TEST(test_vibe_menu_maps_only_active_patterns_and_retains_valid_commit);
     RUN_TEST(test_vibe_menu_left_and_right_switch_and_wrap);
     RUN_TEST(test_vibe_menu_center_short_is_noop_and_long_stops_with_paired_hold);

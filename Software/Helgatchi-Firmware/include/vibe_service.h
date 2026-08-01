@@ -55,16 +55,11 @@ public:
 private:
     static void _timerCb(void* arg);   // esp_timer callback trampoline → _onTimer()
     void _onTimer();                   // advance to the next step
-    void _armCurrentLocked();          // drive current step + arm its timer, or
-                                       // finish; caller must hold the vibe lock
+    VibePlaybackOperations _operations();
 
     EventBus*          _bus         = nullptr;
     esp_timer_handle_t _timer       = nullptr;
-    HapticPatternId    _current     = HAPTIC_OFF;
-    const void*        _steps       = nullptr;  // const Step* erased to keep header light
-    uint8_t            _step_index  = 0;
-    VibeTimerExpiryState _timer_expiries;
-    VibeRepeatState      _repeat;
+    VibePlaybackState  _playback;
 };
 
 extern VibeService g_vibe;

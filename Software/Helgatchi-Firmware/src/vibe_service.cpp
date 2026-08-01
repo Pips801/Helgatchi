@@ -20,30 +20,25 @@ static SemaphoreHandle_t s_vibe_lock = nullptr;
 //
 // Each pattern is an array of {intensity, duration_ms} steps terminated by
 // {0, 0}. Playback is driven by a one-shot esp_timer, NOT the main loop:
-// _armCurrentLocked() writes the current step's intensity to the motor and
-// arms the timer for that step's duration; the callback (_onTimer) advances to
-// the next step. At the {0, 0} terminator a one-shot drives the motor to 0 and
-// returns to OFF; repeat mode restarts step zero immediately without injecting
-// an off write or delay.
+// VibePlaybackState writes the current step's intensity through the HAL adapter
+// and arms the timer for that step's duration; the callback (_onTimer) advances
+// to the next step. At the {0, 0} terminator a one-shot drives the motor to 0
+// and returns to OFF; repeat mode restarts step zero immediately without
+// injecting an off write or delay.
 // ---------------------------------------------------------------------------
-
-struct Step {
-    uint8_t  intensity;
-    uint16_t duration_ms;
-};
 
 // Intensity numbers are uint8 PWM duty (0..255). For ERM motors, anything
 // below ~150 just whines without spinning — the eccentric mass needs enough
 // average voltage to overcome static friction. The "minor" feel of TICK_LIGHT
 // comes from a *short* duration, not a low duty cycle.
-static const Step PAT_TICK_LIGHT[] = { {255,  35}, {0, 0} };
-static const Step PAT_TICK[]       = { {220,  45}, {0, 0} };
-static const Step PAT_BUMP[]       = { {255,  70}, {0, 0} };
-static const Step PAT_DOUBLE_TAP[] = { {220,  40}, {0, 60}, {220, 40}, {0, 0} };
-static const Step PAT_LONG_BUZZ[]  = { {255, 500}, {0, 0} };
+static const VibeStep PAT_TICK_LIGHT[] = { {255,  35}, {0, 0} };
+static const VibeStep PAT_TICK[]       = { {220,  45}, {0, 0} };
+static const VibeStep PAT_BUMP[]       = { {255,  70}, {0, 0} };
+static const VibeStep PAT_DOUBLE_TAP[] = { {220,  40}, {0, 60}, {220, 40}, {0, 0} };
+static const VibeStep PAT_LONG_BUZZ[]  = { {255, 500}, {0, 0} };
 
 // Indexed by HapticPatternId. HAPTIC_OFF maps to nullptr — "no steps".
-static const Step* const PATTERNS[HAPTIC_PATTERN_COUNT] = {
+static const VibeStep* const PATTERNS[HAPTIC_PATTERN_COUNT] = {
     nullptr,            // HAPTIC_OFF
     PAT_TICK_LIGHT,     // HAPTIC_TICK_LIGHT
     PAT_TICK,           // HAPTIC_TICK
@@ -51,6 +46,21 @@ static const Step* const PATTERNS[HAPTIC_PATTERN_COUNT] = {
     PAT_DOUBLE_TAP,     // HAPTIC_DOUBLE_TAP
     PAT_LONG_BUZZ,      // HAPTIC_LONG_BUZZ
 };
+
+static bool startTimerOnce(void* context, uint64_t timeout_us) {
+    esp_timer_handle_t* timer = static_cast<esp_timer_handle_t*>(context);
+    return timer && *timer &&
+           esp_timer_start_once(*timer, timeout_us) == ESP_OK;
+}
+
+static bool stopTimer(void* context) {
+    esp_timer_handle_t* timer = static_cast<esp_timer_handle_t*>(context);
+    return timer && *timer && esp_timer_stop(*timer) == ESP_OK;
+}
+
+static void writeMotor(void*, uint8_t intensity) {
+    g_hal.setVibrate(intensity);
+}
 
 // ---------------------------------------------------------------------------
 
@@ -108,29 +118,16 @@ void VibeService::onEvent(const Event& e) {
 
 void VibeService::play(HapticPatternId pattern) {
     if (pattern >= HAPTIC_PATTERN_COUNT) return;
-    if (pattern == HAPTIC_OFF) {
-        stop();
+
+    const VibeStep* steps = PATTERNS[pattern];
+    if (!s_vibe_lock) {
+        if (pattern == HAPTIC_OFF) stop();
         return;
     }
-
-    const Step* steps = PATTERNS[pattern];
-    if (!steps || !_timer || !s_vibe_lock) return;
+    if (pattern != HAPTIC_OFF && (!steps || !_timer)) return;
 
     xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    if (!_repeat.acceptsOneShot()) {
-        xSemaphoreGive(s_vibe_lock);
-        return;
-    }
-
-    const bool had_playback = _current != HAPTIC_OFF && _steps != nullptr;
-    const bool stopped_before_expiry = esp_timer_stop(_timer) == ESP_OK;
-    if (had_playback) {
-        _timer_expiries.recordTimerStop(stopped_before_expiry);
-    }
-    _current = pattern;
-    _steps = steps;
-    _step_index = 0;
-    _armCurrentLocked();
+    _playback.play(pattern, steps, _operations());
     xSemaphoreGive(s_vibe_lock);
 }
 
@@ -139,32 +136,21 @@ bool VibeService::playRepeating(HapticPatternId pattern) {
         return false;
     }
 
-    const Step* steps = PATTERNS[pattern];
+    const VibeStep* steps = PATTERNS[pattern];
     if (!steps || !s_vibe_lock) return false;
 
     xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    if (!_repeat.start(pattern, _timer != nullptr)) {
-        xSemaphoreGive(s_vibe_lock);
-        return false;
-    }
-
-    const bool had_playback = _current != HAPTIC_OFF && _steps != nullptr;
-    const bool stopped_before_expiry = esp_timer_stop(_timer) == ESP_OK;
-    if (had_playback) {
-        _timer_expiries.recordTimerStop(stopped_before_expiry);
-    }
-    _current = pattern;
-    _steps = steps;
-    _step_index = 0;
-    _armCurrentLocked();
+    const bool started = _playback.playRepeating(
+        pattern, steps, _timer != nullptr, _operations()
+    );
     xSemaphoreGive(s_vibe_lock);
-    return true;
+    return started;
 }
 
 bool VibeService::repeating() const {
     if (!s_vibe_lock) return false;
     xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    const bool value = _repeat.active();
+    const bool value = _playback.repeating();
     xSemaphoreGive(s_vibe_lock);
     return value;
 }
@@ -172,84 +158,35 @@ bool VibeService::repeating() const {
 HapticPatternId VibeService::repeatingPattern() const {
     if (!s_vibe_lock) return HAPTIC_OFF;
     xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    const HapticPatternId value = _repeat.pattern();
+    const HapticPatternId value = _playback.repeatingPattern();
     xSemaphoreGive(s_vibe_lock);
     return value;
 }
 
 void VibeService::stop() {
     if (!s_vibe_lock) {
-        _repeat.stop();
-        _current = HAPTIC_OFF;
-        _steps = nullptr;
-        _step_index = 0;
-        g_hal.stopVibrate();
+        _playback.stop(_operations());
         return;
     }
 
     xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    if (_timer) {
-        const bool had_playback =
-            _current != HAPTIC_OFF && _steps != nullptr;
-        const bool stopped_before_expiry = esp_timer_stop(_timer) == ESP_OK;
-        if (had_playback) {
-            _timer_expiries.recordTimerStop(stopped_before_expiry);
-        }
-    }
-    _repeat.stop();
-    _current = HAPTIC_OFF;
-    _steps = nullptr;
-    _step_index = 0;
-    g_hal.stopVibrate();
+    _playback.stop(_operations());
     xSemaphoreGive(s_vibe_lock);
 }
 
-// Caller must hold s_vibe_lock. Drives the current step's intensity and arms
-// the timer for its duration. At the {0,0} terminator, completes a one-shot or
-// immediately restarts repeat playback.
-void VibeService::_armCurrentLocked() {
-    const Step* steps = static_cast<const Step*>(_steps);
-    if (!steps) return;
-    const Step* step = &steps[_step_index];
-
-    if (step->duration_ms == 0) {
-        if (_repeat.boundaryAction() == VibeBoundaryAction::RESTART) {
-            _step_index = 0;
-            step = &steps[0];
-            if (step->duration_ms == 0) {
-                _repeat.stop();
-                g_hal.stopVibrate();
-                _current = HAPTIC_OFF;
-                _steps = nullptr;
-                return;
-            }
-        } else {
-            g_hal.stopVibrate();
-            _current = HAPTIC_OFF;
-            _steps = nullptr;
-            _step_index = 0;
-            return;
-        }
-    }
-
-    g_hal.setVibrate(step->intensity);
-    esp_timer_start_once(_timer,
-                         static_cast<uint64_t>(step->duration_ms) * 1000);
+VibePlaybackOperations VibeService::_operations() {
+    const VibePlaybackOperations operations = {
+        &_timer,
+        &startTimerOnce,
+        &stopTimer,
+        &writeMotor,
+    };
+    return operations;
 }
 
 void VibeService::_onTimer() {
     xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    if (!_timer_expiries.acceptsNextExpiry()) {
-        xSemaphoreGive(s_vibe_lock);
-        return;
-    }
-    // Failed cancellation means an old expiry was already dispatched. Its
-    // debt is consumed above before it can advance a replacement sequence.
-    // The state guard still drops callbacks after an explicit stop.
-    if (_current != HAPTIC_OFF && _steps != nullptr) {
-        _step_index++;
-        _armCurrentLocked();
-    }
+    _playback.onTimerExpired(_operations());
     xSemaphoreGive(s_vibe_lock);
 }
 

@@ -578,14 +578,18 @@ void SerialConsole::_cmdVibe(char* args) {
             Serial.printf("unknown pattern '%s'  (try 'vibe list')\n", arg1);
             return;
         }
-        g_vibe.play(pat);
+        if (pat == HAPTIC_OFF) {
+            g_vibe.stop();
+        } else {
+            g_vibe.play(pat);
+        }
         Serial.printf("OK: %s\n", vibePatternName(pat));
         _toast("Vibe: %s", vibePatternName(pat));
         return;
     }
 
     if (sub && strcasecmp(sub, "off") == 0) {
-        g_vibe.play(HAPTIC_OFF);
+        g_vibe.stop();
         Serial.println("OK: motor off");
         _toast("Vibe off");
         return;

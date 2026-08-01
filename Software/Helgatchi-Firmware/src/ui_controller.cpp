@@ -5,6 +5,7 @@
 #include "vibe_service.h"
 #include "party_service.h"
 #include "overview_screen.h"
+#include "vibe_menu_screen.h"
 #include "version.h"
 #include "UI/ui.h"
 #include "UI/screens.h"
@@ -348,6 +349,8 @@ void UIController::releaseKeypad() {
 // ---------------------------------------------------------------------------
 
 void UIController::onEvent(const Event& e) {
+    if (g_vibe_menu_screen.handleButton(e.id)) return;
+
     if (g_party.consumeMenuExitFollowup(e.id)) return;
 
     if (g_overview_screen.handleManualPlaybackButton(e.id)) {

@@ -2,6 +2,7 @@ this is an awesome project by 801labs.  calling it "by-sysaaron" was kind of stu
 - a menu that lets you display any of Helga's animations
 - a menu that lets you change the LED mode
 - a menu that lets you trigger party mode
+- a "continuous vibes" mode (NOTE: only use with flared base antenna)
 
 # Helgatchi
 Handheld BLE + WiFi Hunter

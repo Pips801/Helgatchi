@@ -119,6 +119,33 @@ void test_repeat_state_rejects_unavailable_off_and_invalid_without_disturbing_pl
     TEST_ASSERT_EQUAL_INT(HAPTIC_DOUBLE_TAP, state.pattern());
 }
 
+void test_timer_expiry_state_consumes_dispatched_old_callbacks_before_new_sequence() {
+    VibeTimerExpiryState state;
+    uint8_t new_step_index = 0;
+
+    // Two old one-shot expiries were already dispatched when their active
+    // sequences were restarted. Both callbacks must be consumed as stale.
+    state.recordTimerStop(false);
+    state.recordTimerStop(false);
+
+    if (state.acceptsNextExpiry()) ++new_step_index;
+    TEST_ASSERT_EQUAL_UINT8(0, new_step_index);
+    if (state.acceptsNextExpiry()) ++new_step_index;
+    TEST_ASSERT_EQUAL_UINT8(0, new_step_index);
+
+    // The next callback belongs to the sequence currently armed at step zero.
+    if (state.acceptsNextExpiry()) ++new_step_index;
+    TEST_ASSERT_EQUAL_UINT8(1, new_step_index);
+}
+
+void test_timer_expiry_state_keeps_current_expiry_after_successful_stop() {
+    VibeTimerExpiryState state;
+
+    state.recordTimerStop(true);
+
+    TEST_ASSERT_TRUE(state.acceptsNextExpiry());
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -127,5 +154,7 @@ int main(int, char**) {
     RUN_TEST(test_vibe_catalog_rejects_invalid_values_without_aliasing_off);
     RUN_TEST(test_repeat_state_controls_one_shot_ownership_and_loop_boundary);
     RUN_TEST(test_repeat_state_rejects_unavailable_off_and_invalid_without_disturbing_playback);
+    RUN_TEST(test_timer_expiry_state_consumes_dispatched_old_callbacks_before_new_sequence);
+    RUN_TEST(test_timer_expiry_state_keeps_current_expiry_after_successful_stop);
     return UNITY_END();
 }

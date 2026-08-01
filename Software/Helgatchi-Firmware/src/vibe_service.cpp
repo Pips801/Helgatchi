@@ -122,7 +122,11 @@ void VibeService::play(HapticPatternId pattern) {
         return;
     }
 
-    esp_timer_stop(_timer);
+    const bool had_playback = _current != HAPTIC_OFF && _steps != nullptr;
+    const bool stopped_before_expiry = esp_timer_stop(_timer) == ESP_OK;
+    if (had_playback) {
+        _timer_expiries.recordTimerStop(stopped_before_expiry);
+    }
     _current = pattern;
     _steps = steps;
     _step_index = 0;
@@ -144,7 +148,11 @@ bool VibeService::playRepeating(HapticPatternId pattern) {
         return false;
     }
 
-    esp_timer_stop(_timer);
+    const bool had_playback = _current != HAPTIC_OFF && _steps != nullptr;
+    const bool stopped_before_expiry = esp_timer_stop(_timer) == ESP_OK;
+    if (had_playback) {
+        _timer_expiries.recordTimerStop(stopped_before_expiry);
+    }
     _current = pattern;
     _steps = steps;
     _step_index = 0;
@@ -180,7 +188,14 @@ void VibeService::stop() {
     }
 
     xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    if (_timer) esp_timer_stop(_timer);
+    if (_timer) {
+        const bool had_playback =
+            _current != HAPTIC_OFF && _steps != nullptr;
+        const bool stopped_before_expiry = esp_timer_stop(_timer) == ESP_OK;
+        if (had_playback) {
+            _timer_expiries.recordTimerStop(stopped_before_expiry);
+        }
+    }
     _repeat.stop();
     _current = HAPTIC_OFF;
     _steps = nullptr;
@@ -224,10 +239,13 @@ void VibeService::_armCurrentLocked() {
 
 void VibeService::_onTimer() {
     xSemaphoreTake(s_vibe_lock, portMAX_DELAY);
-    // A concurrent play()/stop() can retire the pattern between this timer
-    // firing and us taking the lock; the guard drops those stale wakeups. The
-    // motor-off is always driven under the lock (here at the terminator, or by
-    // stop()), so it can never be left energized.
+    if (!_timer_expiries.acceptsNextExpiry()) {
+        xSemaphoreGive(s_vibe_lock);
+        return;
+    }
+    // Failed cancellation means an old expiry was already dispatched. Its
+    // debt is consumed above before it can advance a replacement sequence.
+    // The state guard still drops callbacks after an explicit stop.
     if (_current != HAPTIC_OFF && _steps != nullptr) {
         _step_index++;
         _armCurrentLocked();

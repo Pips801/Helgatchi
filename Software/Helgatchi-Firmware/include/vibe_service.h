@@ -63,7 +63,8 @@ private:
     HapticPatternId    _current     = HAPTIC_OFF;
     const void*        _steps       = nullptr;  // const Step* erased to keep header light
     uint8_t            _step_index  = 0;
-    VibeRepeatState    _repeat;
+    VibeTimerExpiryState _timer_expiries;
+    VibeRepeatState      _repeat;
 };
 
 extern VibeService g_vibe;

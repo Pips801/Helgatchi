@@ -8,6 +8,15 @@ enum class VibeBoundaryAction : uint8_t {
     RESTART,
 };
 
+class VibeTimerExpiryState {
+public:
+    void recordTimerStop(bool stopped_before_expiry);
+    bool acceptsNextExpiry();
+
+private:
+    uint32_t _stale_expiries = 0;
+};
+
 class VibeRepeatState {
 public:
     bool start(HapticPatternId pattern, bool playback_available);

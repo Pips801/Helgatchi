@@ -1,6 +1,7 @@
 #include <unity.h>
 #include "vibe_pattern.h"
 #include "vibe_repeat_state.h"
+#include "vibe_menu_model.h"
 
 extern "C" void setUp() {}
 extern "C" void tearDown() {}
@@ -146,6 +147,90 @@ void test_timer_expiry_state_keeps_current_expiry_after_successful_stop() {
     TEST_ASSERT_TRUE(state.acceptsNextExpiry());
 }
 
+void test_vibe_menu_maps_only_active_patterns_and_retains_valid_commit() {
+    const HapticPatternId expected[] = {
+        HAPTIC_TICK_LIGHT, HAPTIC_TICK, HAPTIC_BUMP,
+        HAPTIC_DOUBLE_TAP, HAPTIC_LONG_BUZZ,
+    };
+    VibeMenuModel model;
+    TEST_ASSERT_EQUAL_UINT32(5, VIBE_MENU_OPTION_COUNT);
+    TEST_ASSERT_EQUAL_UINT32(0, model.selectedIndex());
+    for (size_t i = 0; i < VIBE_MENU_OPTION_COUNT; ++i) {
+        const VibePatternInfo* mapped = vibeMenuPatternAt(i);
+        TEST_ASSERT_NOT_NULL(mapped);
+        TEST_ASSERT_EQUAL_INT(expected[i], mapped->pattern);
+        const VibePatternInfo* committed = model.commit(i);
+        TEST_ASSERT_EQUAL_PTR(mapped, committed);
+        TEST_ASSERT_EQUAL_UINT32(i, model.selectedIndex());
+    }
+    const VibePatternInfo* same = model.commit(4);
+    TEST_ASSERT_EQUAL_INT(HAPTIC_LONG_BUZZ, same->pattern);
+    TEST_ASSERT_EQUAL_UINT32(4, model.selectedIndex());
+    TEST_ASSERT_NULL(vibeMenuPatternAt(VIBE_MENU_OPTION_COUNT));
+    TEST_ASSERT_NULL(model.commit(VIBE_MENU_OPTION_COUNT));
+    TEST_ASSERT_EQUAL_UINT32(4, model.selectedIndex());
+}
+
+void test_vibe_menu_left_and_right_switch_and_wrap() {
+    VibeMenuModel model;
+    VibeMenuDecision decision = model.handleButton(EV_BTN_LEFT, true);
+    TEST_ASSERT_TRUE(decision.consumed);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(VibeMenuAction::PLAY_SELECTED), static_cast<int>(decision.action));
+    TEST_ASSERT_EQUAL_INT(HAPTIC_LONG_BUZZ, decision.pattern);
+    TEST_ASSERT_EQUAL_UINT32(4, model.selectedIndex());
+    decision = model.handleButton(EV_BTN_RIGHT, true);
+    TEST_ASSERT_TRUE(decision.consumed);
+    TEST_ASSERT_EQUAL_INT(HAPTIC_TICK_LIGHT, decision.pattern);
+    TEST_ASSERT_EQUAL_UINT32(0, model.selectedIndex());
+    TEST_ASSERT_NOT_NULL(model.commit(2));
+    decision = model.handleButton(EV_BTN_RIGHT, true);
+    TEST_ASSERT_EQUAL_INT(HAPTIC_DOUBLE_TAP, decision.pattern);
+    TEST_ASSERT_EQUAL_UINT32(3, model.selectedIndex());
+    decision = model.handleButton(EV_BTN_LEFT, true);
+    TEST_ASSERT_EQUAL_INT(HAPTIC_BUMP, decision.pattern);
+    TEST_ASSERT_EQUAL_UINT32(2, model.selectedIndex());
+}
+
+void test_vibe_menu_center_short_is_noop_and_long_stops_with_paired_hold() {
+    VibeMenuModel model;
+    VibeMenuDecision decision = model.handleButton(EV_BTN_CENTER_SHORT, true);
+    TEST_ASSERT_TRUE(decision.consumed);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(VibeMenuAction::NONE), static_cast<int>(decision.action));
+    TEST_ASSERT_EQUAL_UINT32(0, model.selectedIndex());
+    decision = model.handleButton(EV_BTN_CENTER_LONG, true);
+    TEST_ASSERT_TRUE(decision.consumed);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(VibeMenuAction::STOP), static_cast<int>(decision.action));
+    decision = model.handleButton(EV_TICK_1S, false);
+    TEST_ASSERT_FALSE(decision.consumed);
+    decision = model.handleButton(EV_BTN_CENTER_HOLD, false);
+    TEST_ASSERT_TRUE(decision.consumed);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(VibeMenuAction::NONE), static_cast<int>(decision.action));
+    decision = model.handleButton(EV_BTN_CENTER_HOLD, false);
+    TEST_ASSERT_FALSE(decision.consumed);
+}
+
+void test_vibe_menu_independent_button_clears_stale_hold_guard() {
+    const EventId independent[] = { EV_BTN_LEFT, EV_BTN_RIGHT, EV_BTN_CENTER_SHORT, EV_BTN_CENTER_LONG };
+    for (size_t i = 0; i < sizeof(independent) / sizeof(independent[0]); ++i) {
+        VibeMenuModel model;
+        TEST_ASSERT_TRUE(model.handleButton(EV_BTN_CENTER_LONG, true).consumed);
+        VibeMenuDecision decision = model.handleButton(independent[i], false);
+        TEST_ASSERT_FALSE(decision.consumed);
+        TEST_ASSERT_FALSE(model.handleButton(EV_BTN_CENTER_HOLD, false).consumed);
+    }
+}
+
+void test_vibe_menu_direct_hold_stops_but_inactive_buttons_pass_through() {
+    VibeMenuModel model;
+    const VibeMenuDecision hold = model.handleButton(EV_BTN_CENTER_HOLD, true);
+    TEST_ASSERT_TRUE(hold.consumed);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(VibeMenuAction::STOP), static_cast<int>(hold.action));
+    const EventId inactive[] = { EV_BTN_LEFT, EV_BTN_RIGHT, EV_BTN_CENTER_SHORT, EV_BTN_CENTER_LONG, EV_BTN_CENTER_HOLD };
+    for (size_t i = 0; i < sizeof(inactive) / sizeof(inactive[0]); ++i) {
+        TEST_ASSERT_FALSE(model.handleButton(inactive[i], false).consumed);
+    }
+}
+
 }  // namespace
 
 int main(int, char**) {
@@ -156,5 +241,10 @@ int main(int, char**) {
     RUN_TEST(test_repeat_state_rejects_unavailable_off_and_invalid_without_disturbing_playback);
     RUN_TEST(test_timer_expiry_state_consumes_dispatched_old_callbacks_before_new_sequence);
     RUN_TEST(test_timer_expiry_state_keeps_current_expiry_after_successful_stop);
+    RUN_TEST(test_vibe_menu_maps_only_active_patterns_and_retains_valid_commit);
+    RUN_TEST(test_vibe_menu_left_and_right_switch_and_wrap);
+    RUN_TEST(test_vibe_menu_center_short_is_noop_and_long_stops_with_paired_hold);
+    RUN_TEST(test_vibe_menu_independent_button_clears_stale_hold_guard);
+    RUN_TEST(test_vibe_menu_direct_hold_stops_but_inactive_buttons_pass_through);
     return UNITY_END();
 }

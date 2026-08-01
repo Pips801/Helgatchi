@@ -4,7 +4,6 @@
 #include "alerts_service.h"
 #include "event_payload.h"
 #include <Arduino.h>
-#include <strings.h>   // strcasecmp
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
@@ -15,35 +14,6 @@ VibeService g_vibe;
 // file-static mutex is all we need. Held only across a few register writes and
 // esp_timer arm/stop calls — never across anything that blocks.
 static SemaphoreHandle_t s_vibe_lock = nullptr;
-
-// ---------------------------------------------------------------------------
-// Name registry — string identifiers for each HapticPatternId. Order must
-// match the enum; the static_assert catches drift at compile time.
-// ---------------------------------------------------------------------------
-
-static const char* const s_vibe_name[] = {
-    "off",           // HAPTIC_OFF
-    "tick_light",    // HAPTIC_TICK_LIGHT
-    "tick",          // HAPTIC_TICK
-    "bump",          // HAPTIC_BUMP
-    "double_tap",    // HAPTIC_DOUBLE_TAP
-    "long_buzz",     // HAPTIC_LONG_BUZZ
-};
-static_assert(sizeof(s_vibe_name) / sizeof(s_vibe_name[0]) == HAPTIC_PATTERN_COUNT,
-              "s_vibe_name out of sync with HapticPatternId");
-
-const char* vibePatternName(HapticPatternId id) {
-    if (id >= HAPTIC_PATTERN_COUNT) return "?";
-    return s_vibe_name[id];
-}
-
-HapticPatternId vibePatternByName(const char* name) {
-    if (!name || !*name) return HAPTIC_PATTERN_COUNT;
-    for (uint8_t i = 0; i < HAPTIC_PATTERN_COUNT; i++) {
-        if (strcasecmp(name, s_vibe_name[i]) == 0) return (HapticPatternId)i;
-    }
-    return HAPTIC_PATTERN_COUNT;
-}
 
 // ---------------------------------------------------------------------------
 // Pattern definitions

@@ -1,4 +1,5 @@
 #include "power_manager.h"
+#include "scan_power_policy.h"
 #include "settings_service.h"
 #include "hal.h"
 #include "vibe_service.h"
@@ -42,8 +43,9 @@ static constexpr uint32_t R4_EDGE_POLL_MS            =   250;  // charge-edge de
 //
 // Two sleep flavors re-armed on a failed hold:
 //   • shipping (_shipping_pending) — EXT1 only, never auto-wakes.
-//   • regular  — EXT1 + the scan-cycle timer (_deep_sleep_timer_us), so the
-//                autonomous scan cadence resumes.
+//   • regular  — EXT1 + the scan-cycle timer (_deep_sleep_timer_us) when a
+//                radio is enabled, so the autonomous scan cadence resumes.
+//                Zero-radio mode uses button-only sleep.
 //
 // TIMER wakes (silent scan cycle) and cold boot / soft reset skip the check
 // entirely — no button was involved.
@@ -498,19 +500,15 @@ void PowerManager::onEvent(const Event& e) {
 // Private
 // ---------------------------------------------------------------------------
 
-uint8_t PowerManager::_enabledRadioCount() const {
-    const uint32_t mode = g_settings.get(SKEY_SCAN_MODE) & 0x3u;
-    return (uint8_t)((mode & 1u) ? 1 : 0) + (uint8_t)((mode & 2u) ? 1 : 0);
-}
-
 uint32_t PowerManager::_scanWindowMs() const {
     // Radios are time-multiplexed, not concurrent: each enabled radio owns the
     // window for _scan_duration_s in turn (ScanEngine sequences them). Total
-    // window = duration × count. max(1) keeps the idle cadence unchanged when
-    // no radio is enabled (SCAN_MODE == 0).
-    uint8_t count = _enabledRadioCount();
-    if (count == 0) count = 1;
-    return (uint32_t)_scan_duration_s * 1000u * count;
+    // window = duration × count. With no enabled radio, the policy returns a
+    // zero-length window.
+    return scan_power_policy::windowMs(
+        g_settings.get(SKEY_SCAN_MODE),
+        _scan_duration_s
+    );
 }
 
 void PowerManager::_syncSettings() {
@@ -847,14 +845,20 @@ void PowerManager::_enterSleep() {
     _bus->dispatch();   // flush queue before losing power
 
     // Wake sources:
-    //   1. Timer — scheduled scan cycle. Stashed in RTC so a failed wake-hold
-    //      check (checkWakeHoldOrResleep) can re-arm the same cadence.
+    //   1. Timer — scheduled scan cycle when a radio is enabled. Stashed in RTC
+    //      so a failed wake-hold check (checkWakeHoldOrResleep) can re-arm the
+    //      same cadence. Zero-radio mode has no timer and is button-only sleep.
     //   2. GPIO6 (PIN_BTN_1) LOW — left or center press wakes the chip, but
     //      checkWakeHoldOrResleep then requires CENTER held to stay awake.
     //      GPIO43 (PIN_BTN_2) is not RTC-capable on ESP32-S3, so it can't be a
     //      wake source; it's only read after wake to confirm the center hold.
-    _deep_sleep_timer_us = (uint64_t)_sleep_duration_s * 1000000ULL;
-    esp_sleep_enable_timer_wakeup(_deep_sleep_timer_us);
+    _deep_sleep_timer_us = scan_power_policy::wakeIntervalUs(
+        g_settings.get(SKEY_SCAN_MODE),
+        _sleep_duration_s
+    );
+    if (_deep_sleep_timer_us > 0) {
+        esp_sleep_enable_timer_wakeup(_deep_sleep_timer_us);
+    }
 
     esp_sleep_enable_ext1_wakeup(1ULL << PIN_BTN_1, ESP_EXT1_WAKEUP_ANY_LOW);
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);

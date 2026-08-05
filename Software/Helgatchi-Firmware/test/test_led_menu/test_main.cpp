@@ -137,6 +137,26 @@ void test_manual_state_selects_layer_precedence() {
                           state.renderSource(true, true, true));
 }
 
+void test_manual_off_renders_without_requiring_awake_execution() {
+    LedManualState state;
+    TEST_ASSERT_FALSE(state.keepsAwake());
+
+    TEST_ASSERT_TRUE(state.set(LED_PATTERN_OFF, 100));
+    TEST_ASSERT_TRUE(state.active());
+    TEST_ASSERT_EQUAL_INT(LED_RENDER_MANUAL,
+                          state.renderSource(false, false, false));
+    TEST_ASSERT_FALSE(state.keepsAwake());
+
+    TEST_ASSERT_TRUE(state.set(LED_PATTERN_WHITE_CHASER, 200));
+    TEST_ASSERT_TRUE(state.keepsAwake());
+
+    TEST_ASSERT_FALSE(state.set(LED_PATTERN_COUNT, 300));
+    TEST_ASSERT_TRUE(state.keepsAwake());
+
+    TEST_ASSERT_TRUE(state.clear());
+    TEST_ASSERT_FALSE(state.keepsAwake());
+}
+
 void test_menu_maps_automatic_and_every_pattern() {
     LedMenuModel model;
     LedMenuChoice choice{};
@@ -186,6 +206,7 @@ int main(int, char**) {
     RUN_TEST(test_led_catalog_rejects_invalid_values);
     RUN_TEST(test_manual_state_starts_restarts_replaces_and_clears);
     RUN_TEST(test_manual_state_selects_layer_precedence);
+    RUN_TEST(test_manual_off_renders_without_requiring_awake_execution);
     RUN_TEST(test_menu_maps_automatic_and_every_pattern);
     RUN_TEST(test_menu_retains_selection_and_rejects_invalid_commit);
     return UNITY_END();

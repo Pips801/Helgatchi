@@ -17,6 +17,9 @@ public:
     bool clear();
 
     bool active() const { return _active; }
+    bool keepsAwake() const {
+        return _active && _pattern != LED_PATTERN_OFF;
+    }
     LedPatternId pattern() const { return _pattern; }
     uint32_t phaseElapsed(uint32_t now_ms) const {
         return _active ? now_ms - _phase_start_ms : 0;

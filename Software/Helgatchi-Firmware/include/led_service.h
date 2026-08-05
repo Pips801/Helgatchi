@@ -35,6 +35,7 @@ public:
     bool setManualPattern(LedPatternId pattern);
     void clearManualPattern();
     bool manualPatternActive() const { return _manual.active(); }
+    bool manualPatternKeepsAwake() const { return _manual.keepsAwake(); }
     LedPatternId manualPattern() const { return _manual.pattern(); }
 
     // Top-priority broadcast indicator. AdminService toggles this while a

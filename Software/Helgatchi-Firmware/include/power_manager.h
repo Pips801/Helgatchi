@@ -1,4 +1,5 @@
 #pragma once
+#include "display_state.h"
 #include "event_bus.h"
 
 // ---------------------------------------------------------------------------
@@ -215,8 +216,6 @@ private:
     uint8_t _enabledRadioCount() const;
     uint32_t _scanWindowMs() const;
 
-    enum class DisplayState : uint8_t { OFF, ON, DIM };
-
     void _syncSettings();
     void _sampleBattery();
     // A charge-state edge was just detected (threshold crossing or unplug
@@ -239,7 +238,7 @@ private:
     void _setDisplay(DisplayState s);
 
     EventBus* _bus = nullptr;
-    DisplayState _disp_state = DisplayState::OFF;
+    DisplayStateTracker _display_state;
     uint32_t _last_inhibit_seen_ms = 0;  // hysteresis timestamp for _isInhibited
 
     // Timing

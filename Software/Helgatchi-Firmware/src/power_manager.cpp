@@ -153,7 +153,6 @@ void PowerManager::begin(EventBus& bus) {
     _last_tick_ms     = _wake_ms;
     _user_active      = false;
     _scan_stop_posted = false;
-    _disp_state       = DisplayState::OFF;
     _last_usb_seen    = g_hal.usbAttached();
 
     // Decide what the display does based on what woke us:
@@ -800,8 +799,7 @@ void PowerManager::requestSleepOrScreenOff() {
 }
 
 void PowerManager::_setDisplay(DisplayState s) {
-    if (s == _disp_state) return;
-    _disp_state = s;
+    if (!_display_state.transitionTo(s)) return;
     // OFF: skip both the backlight AND LVGL rendering. Saves ~70 % CPU
     // during silent TIMER-wake scan windows, leaving the cycles for scanner
     // / rules engine work. ON/DIM resume rendering immediately.
@@ -839,7 +837,6 @@ void PowerManager::_enterSleep() {
     // their last state through deep sleep.
     g_hal.clearLEDs();
     g_hal.prepareForSleep();   // backlight off, LCD sleep, both pads held LOW
-    _disp_state = DisplayState::OFF;
 
     EventPayload p{};
     p.power.state = POWER_SLEEPING;
@@ -924,7 +921,6 @@ void PowerManager::_enterOffSleep(bool reset_tutorial) {
     // their last state through deep sleep.
     g_hal.clearLEDs();
     g_hal.prepareForSleep();   // backlight off, LCD sleep, both pads held LOW
-    _disp_state = DisplayState::OFF;
 
     // Mark us as shipping-pending so the next boot demands a long-press
     // before resuming normal operation.

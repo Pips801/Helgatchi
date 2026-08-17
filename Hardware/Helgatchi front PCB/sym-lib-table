@@ -1,6 +1,6 @@
 (sym_lib_table
 	(version 7)
-	(lib (name "Seeed_Studio_XIAO_Series") (type "KiCad") (uri "${KIPRJMOD}/Components/Seeed Studio XIAO Series/Seeed_Studio_XIAO_Series.kicad_sym") (options "") (descr ""))
 	(lib (name "WS2812") (type "KiCad") (uri "${KIPRJMOD}/Components/WS2812/WS2812.kicad_sym") (options "") (descr ""))
 	(lib (name "SK68XX-SIDE") (type "KiCad") (uri "${KIPRJMOD}/SK68XX-SIDE.kicad_sym") (options "") (descr ""))
+	(lib (name "Seeed_Studio_XIAO_Series Plus") (type "KiCad") (uri "C:/Users/me/Documents/GitHub/Helgatchi/Hardware/PCB Components/Seeed Studio XIAO ESP32S3 Plus/Seeed_Studio_XIAO_Series.kicad_sym") (options "") (descr ""))
 )

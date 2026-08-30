@@ -10,7 +10,7 @@
 	(title_block
 		(title "Waveshare 2.8\" touch display hat")
 		(date "2026-08-30")
-		(rev "R0")
+		(rev "R1")
 	)
 	(layers
 		(0 "F.Cu" signal)
@@ -94,7 +94,6 @@
 		)
 		(capping no)
 		(filling no)
-		(zone_defaults)
 		(pcbplotparams
 			(layerselection 0x00000000_00000000_55555555_5755f5ff)
 			(plot_on_all_layers_selection 0x00000000_00000000_00000000_00000000)

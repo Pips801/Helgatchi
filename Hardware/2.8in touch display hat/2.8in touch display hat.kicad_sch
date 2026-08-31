@@ -8114,7 +8114,7 @@
 				)
 			)
 		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.5mm"
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
 			(at 73.66 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -9055,7 +9055,7 @@
 				)
 			)
 		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.5mm"
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
 			(at 118.11 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -9382,7 +9382,7 @@
 				)
 			)
 		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.5mm"
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
 			(at 82.55 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -12146,7 +12146,7 @@
 				)
 			)
 		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.5mm"
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
 			(at 109.22 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -12539,7 +12539,7 @@
 				)
 			)
 		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.5mm"
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
 			(at 91.44 142.24 0)
 			(hide yes)
 			(show_name no)
@@ -12695,7 +12695,7 @@
 				)
 			)
 		)
-		(property "Footprint" "TestPoint:TestPoint_Pad_D1.5mm"
+		(property "Footprint" "TestPoint:TestPoint_Pad_D1.0mm"
 			(at 100.33 142.24 0)
 			(hide yes)
 			(show_name no)
